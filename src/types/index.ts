@@ -55,7 +55,6 @@ export type SegmentResult = {
 export type SessionUser = {
   phone: string;
   isAdmin: boolean;
-  provider: AuthProviderType;
   isAllowed: boolean;
 };
 
@@ -70,4 +69,15 @@ export type LoginLogRow = {
   phone: string;
   created_at: string;
   user_agent: string | null;
+};
+
+export type SignupRequestStatus = "pending" | "approved" | "rejected";
+
+export type SignupRequestRow = {
+  phone: string;
+  name: string;
+  status: SignupRequestStatus;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
 };

@@ -1,17 +1,11 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import {
-  AUTH_PROVIDER_COOKIE,
-  AUTH_TOKEN_COOKIE,
-  insertLoginLog,
-  sessionUserFromCookies,
-} from "@/lib/auth/allowlist";
+import { AUTH_PHONE_COOKIE, insertLoginLog, sessionUserFromCookies } from "@/lib/auth/allowlist";
 
 export async function POST(request: Request) {
   const store = await cookies();
-  const provider = store.get(AUTH_PROVIDER_COOKIE)?.value;
-  const token = store.get(AUTH_TOKEN_COOKIE)?.value;
-  const user = await sessionUserFromCookies({ provider, token });
+  const phone = store.get(AUTH_PHONE_COOKIE)?.value;
+  const user = await sessionUserFromCookies({ phone });
 
   if (!user) {
     return NextResponse.json({ message: "로그인이 필요합니다." }, { status: 401 });

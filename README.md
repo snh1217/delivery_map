@@ -19,9 +19,9 @@ npm run build
 
 ## 주요 기능
 
-- 전화번호 OTP 로그인 (`AUTH_PROVIDER=supabase|firebase`)
+- 회원가입 요청(이름+전화번호) -> 관리자 승인 -> 전화번호 로그인
 - allowlist 기반 접근 제어 (`is_active=true` 사용자만 허용)
-- ADMIN_PHONE 관리자 기능 (allowlist 추가/활성 토글/로그 조회)
+- ADMIN_PHONE 관리자 기능 (회원가입 요청 승인/반려, allowlist 추가/활성 토글, 로그 조회)
 - 출발지: 내 위치 GPS (권한 거부 시 서울시청 fallback)
 - 도착지 다중 입력 + 지오코딩 Top5 후보 선택
 - 팬(부채꼴) 권역 계산 + 동(short2) 자동 생성
@@ -43,7 +43,7 @@ npm run build
 
 핵심 키:
 
-- `AUTH_PROVIDER` (`supabase` 기본)
+- `AUTH_PROVIDER` (현재 로그인 흐름에서는 사용 안 함, 기존 OTP 백업 구조 호환용)
 - `ADMIN_PHONE`
 - `NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID`
 - `NAVER_MAPS_CLIENT_ID`
@@ -63,6 +63,15 @@ create table if not exists public.allowlist (
   phone text primary key,
   is_active boolean not null default true,
   created_at timestamptz not null default now()
+);
+
+create table if not exists public.signup_requests (
+  phone text primary key,
+  name text not null,
+  status text not null default 'pending',
+  created_at timestamptz not null default now(),
+  reviewed_at timestamptz null,
+  reviewed_by text null
 );
 
 create table if not exists public.login_logs (
