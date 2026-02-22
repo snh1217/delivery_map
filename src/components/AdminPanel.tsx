@@ -53,18 +53,24 @@ export function AdminPanel() {
     if (!q) {
       return rows;
     }
-
     return rows.filter((row) => row.phone.includes(q));
   }, [rows, search]);
 
+  const pendingRequests = useMemo(() => requests.filter((row) => row.status === "pending"), [requests]);
+
   const filteredRequests = useMemo(() => {
     const q = search.trim();
+    const base = pendingRequests;
     if (!q) {
-      return requests;
+      return base;
     }
+    return base.filter((row) => row.phone.includes(q) || row.name.includes(q));
+  }, [pendingRequests, search]);
 
-    return requests.filter((row) => row.phone.includes(q) || row.name.includes(q));
-  }, [requests, search]);
+  const processedRequestCount = useMemo(
+    () => requests.filter((row) => row.status !== "pending").length,
+    [requests],
+  );
 
   const onAddAllowlist = async () => {
     const normalized = normalizePhoneNumber(phoneInput);
@@ -135,6 +141,11 @@ export function AdminPanel() {
         </button>
       </div>
 
+      <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        회원가입 요청 목록은 <span className="font-medium text-slate-800">승인 대기(pending)</span>만 표시합니다.
+        처리 완료 건({processedRequestCount}건)은 요청 목록에서 숨김 처리됩니다.
+      </div>
+
       <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
         <input
           className="h-11 rounded-lg border border-slate-300 px-3 text-sm"
@@ -154,7 +165,10 @@ export function AdminPanel() {
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
 
       <div className="mt-4 rounded-xl border border-slate-200 p-3">
-        <h3 className="text-sm font-semibold text-slate-700">회원가입 요청</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">회원가입 요청 (승인 대기)</h3>
+          <span className="text-xs text-slate-500">{filteredRequests.length}건</span>
+        </div>
         <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
           <table className="min-w-full text-xs">
             <thead className="bg-slate-100 text-slate-700">
@@ -177,14 +191,14 @@ export function AdminPanel() {
                     <div className="flex flex-wrap gap-1">
                       <button
                         type="button"
-                        className="rounded-md border border-slate-300 px-2 py-1"
+                        className="rounded-md border border-emerald-300 bg-emerald-50 px-2 py-1 text-emerald-700"
                         onClick={() => void onReviewRequest(row.phone, true)}
                       >
                         승인
                       </button>
                       <button
                         type="button"
-                        className="rounded-md border border-slate-300 px-2 py-1"
+                        className="rounded-md border border-rose-300 bg-rose-50 px-2 py-1 text-rose-700"
                         onClick={() => void onReviewRequest(row.phone, false)}
                       >
                         반려
@@ -196,7 +210,7 @@ export function AdminPanel() {
               {filteredRequests.length === 0 ? (
                 <tr>
                   <td className="px-3 py-3 text-slate-500" colSpan={5}>
-                    요청 내역이 없습니다.
+                    승인 대기 요청이 없습니다.
                   </td>
                 </tr>
               ) : null}
@@ -263,7 +277,7 @@ export function AdminPanel() {
       </div>
 
       <div className="mt-3 rounded-lg border border-slate-200 p-3">
-        <h3 className="mb-2 text-sm font-semibold text-slate-700">최근 로그인</h3>
+        <h3 className="mb-2 text-sm font-semibold text-slate-700">최근 로그인 로그</h3>
         <ul className="space-y-1 text-xs text-slate-600">
           {logs.map((log) => (
             <li key={log.id}>
