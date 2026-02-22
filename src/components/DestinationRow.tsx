@@ -97,6 +97,7 @@ export function DestinationRow({
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const onSearchRef = useRef(onSearch);
   const voiceBaseInputRef = useRef("");
   const voiceHasResultRef = useRef(false);
   const voiceLastMergedInputRef = useRef("");
@@ -109,6 +110,10 @@ export function DestinationRow({
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
 
+  useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
+
   const clearPendingVoiceAutoSearch = () => {
     if (autoSearchTimerRef.current !== null) {
       window.clearTimeout(autoSearchTimerRef.current);
@@ -119,7 +124,7 @@ export function DestinationRow({
 
   const runSearchNow = () => {
     clearPendingVoiceAutoSearch();
-    onSearch(row.id);
+    onSearchRef.current(row.id);
   };
 
   useEffect(() => {
@@ -223,7 +228,7 @@ export function DestinationRow({
       autoSearchTimerRef.current = window.setTimeout(() => {
         autoSearchTimerRef.current = null;
         setVoicePreviewText(null);
-        onSearch(row.id);
+        onSearchRef.current(row.id);
       }, 500);
     };
 
