@@ -33,6 +33,7 @@ export type SettingsState = {
   arcSteps: number;
   autoSearch: boolean;
   viewMode: "segment" | "all";
+  navigationApp: "naver" | "kakao";
 };
 
 export type DongCentroid = {

@@ -30,12 +30,14 @@ export function SettingsPanel({ settings, onChange }: Props) {
       onChange({ ...settings, halfAngleDeg: clamped });
       return;
     }
+
     if (key === "forwardBufferKm") {
       const clamped = Math.min(30, Math.max(0, parsed));
       setDraftForwardBuffer(String(clamped));
       onChange({ ...settings, forwardBufferKm: clamped });
       return;
     }
+
     const clamped = Math.min(30, Math.max(0, parsed));
     setDraftBackwardTail(String(clamped));
     onChange({ ...settings, backwardTailKm: clamped });
@@ -60,8 +62,8 @@ export function SettingsPanel({ settings, onChange }: Props) {
           <div>
             <h2 className="text-lg font-semibold text-slate-800">설정</h2>
             <p className="text-xs text-slate-500">
-              팬 반각 {settings.halfAngleDeg}도 / 전방 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리{" "}
-              {settings.backwardTailKm}km
+              팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리{" "}
+              {settings.backwardTailKm}km / 기본 길찾기 {settings.navigationApp === "naver" ? "네이버" : "카카오"}
             </p>
           </div>
           <span className="rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 group-open:hidden">
@@ -74,8 +76,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
 
         <div className="mt-3 border-t border-slate-100 pt-3">
           <p className="mb-3 text-xs text-slate-600">
-            팬(부채꼴) 계산값을 조절합니다. 기본값(반각 30도 / 버퍼 3km / 뒤 꼬리 5km)으로 시작하는 것을
-            권장합니다.
+            팬(부채꼴) 계산값과 기본 길찾기 앱을 설정합니다. `길찾기` 버튼은 아래 선택값(네이버/카카오)을 따라 동작합니다.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -135,25 +136,62 @@ export function SettingsPanel({ settings, onChange }: Props) {
             </label>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            <button
-              type="button"
-              className={`h-11 rounded-lg px-3 text-sm ${
-                settings.viewMode === "segment" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"
-              }`}
-              onClick={() => onChange({ ...settings, viewMode: "segment" })}
-            >
-              구간별 보기
-            </button>
-            <button
-              type="button"
-              className={`h-11 rounded-lg px-3 text-sm ${
-                settings.viewMode === "all" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"
-              }`}
-              onClick={() => onChange({ ...settings, viewMode: "all" })}
-            >
-              전체 보기
-            </button>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-sm font-medium text-slate-700">기본 길찾기 앱</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`h-10 rounded-lg text-sm ${
+                    settings.navigationApp === "naver"
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-300 bg-white text-slate-700"
+                  }`}
+                  onClick={() => onChange({ ...settings, navigationApp: "naver" })}
+                >
+                  네이버
+                </button>
+                <button
+                  type="button"
+                  className={`h-10 rounded-lg text-sm ${
+                    settings.navigationApp === "kakao"
+                      ? "bg-amber-500 text-white"
+                      : "border border-slate-300 bg-white text-slate-700"
+                  }`}
+                  onClick={() => onChange({ ...settings, navigationApp: "kakao" })}
+                >
+                  카카오
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="mb-2 text-sm font-medium text-slate-700">결과 보기 방식</div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className={`h-10 rounded-lg text-sm ${
+                    settings.viewMode === "segment"
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-300 bg-white text-slate-700"
+                  }`}
+                  onClick={() => onChange({ ...settings, viewMode: "segment" })}
+                >
+                  구간별 보기
+                </button>
+                <button
+                  type="button"
+                  className={`h-10 rounded-lg text-sm ${
+                    settings.viewMode === "all"
+                      ? "bg-slate-900 text-white"
+                      : "border border-slate-300 bg-white text-slate-700"
+                  }`}
+                  onClick={() => onChange({ ...settings, viewMode: "all" })}
+                >
+                  전체 보기
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </details>

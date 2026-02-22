@@ -17,6 +17,7 @@ type Props = {
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
   onNavigateKakao: (id: string) => void;
+  preferredNavigationApp: "naver" | "kakao";
 };
 
 export function DestinationRow({
@@ -31,6 +32,7 @@ export function DestinationRow({
   onSelectCandidate,
   onNavigate,
   onNavigateKakao,
+  preferredNavigationApp,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -147,14 +149,14 @@ export function DestinationRow({
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
       <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white disabled:opacity-50"
-          disabled={!canNavigate}
-          onClick={() => onNavigate(row.id)}
-        >
-          네이버앱 길찾기
-        </button>
+          <button
+            type="button"
+            className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white disabled:opacity-50"
+            disabled={!canNavigate}
+            onClick={() => onNavigate(row.id)}
+          >
+            기본 앱 길찾기 ({preferredNavigationApp === "naver" ? "네이버" : "카카오"})
+          </button>
         {naverLinks ? (
           <a
             className="flex h-11 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm"
@@ -179,7 +181,7 @@ export function DestinationRow({
             onNavigateKakao(row.id);
           }}
         >
-          카카오맵 길찾기 (준비)
+          카카오맵 길찾기
         </button>
         {kakaoLinks ? (
           <a
@@ -195,9 +197,7 @@ export function DestinationRow({
         )}
       </div>
 
-      <p className="mt-2 text-[11px] text-slate-500">
-        카카오내비는 다음 단계에서 카카오 JavaScript 키 등록 후 SDK 방식으로 연결 가능합니다.
-      </p>
+      <p className="mt-2 text-[11px] text-slate-500">카카오맵 길찾기/웹 열기를 바로 사용할 수 있습니다.</p>
     </div>
   );
 }

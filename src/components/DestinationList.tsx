@@ -29,6 +29,7 @@ type Props = {
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
   onNavigateKakao: (id: string) => void;
+  preferredNavigationApp: "naver" | "kakao";
 };
 
 export function DestinationList({
@@ -50,6 +51,7 @@ export function DestinationList({
   onSelectCandidate,
   onNavigate,
   onNavigateKakao,
+  preferredNavigationApp,
 }: Props) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -141,6 +143,7 @@ export function DestinationList({
             onSelectCandidate={onSelectCandidate}
             onNavigate={onNavigate}
             onNavigateKakao={onNavigateKakao}
+            preferredNavigationApp={preferredNavigationApp}
           />
         ))}
       </div>

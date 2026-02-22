@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   arcSteps: 72,
   autoSearch: false,
   viewMode: "segment",
+  navigationApp: "naver",
 };
 
 function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): SettingsState {
@@ -52,6 +53,7 @@ function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): Setti
     arcSteps: Number.isFinite(raw?.arcSteps) ? Math.min(128, Math.max(24, Number(raw?.arcSteps))) : 72,
     autoSearch: Boolean(raw?.autoSearch),
     viewMode: raw?.viewMode === "all" ? "all" : "segment",
+    navigationApp: raw?.navigationApp === "kakao" ? "kakao" : "naver",
   };
 }
 
@@ -226,6 +228,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const onNavigate = (id: string) => {
     const row = rows.find((item) => item.id === id);
     if (!row?.coord) {
+      return;
+    }
+
+    if (settings.navigationApp === "kakao") {
+      const result = openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
+      if (result.usedAppScheme) {
+        window.setTimeout(() => setStoreModal(result.links), 1300);
+      }
       return;
     }
 
@@ -611,6 +621,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onSelectCandidate={onSelectCandidate}
             onNavigate={onNavigate}
             onNavigateKakao={onNavigateKakao}
+            preferredNavigationApp={settings.navigationApp}
           />
 
           <ResultPanel
