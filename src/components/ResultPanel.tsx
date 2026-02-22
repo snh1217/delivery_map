@@ -16,6 +16,19 @@ type Props = {
   onComputeRoadRecommendation: () => void;
 };
 
+function formatMinutes(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "-";
+  }
+  const rounded = Math.round(value);
+  if (rounded < 60) {
+    return `${rounded}분`;
+  }
+  const h = Math.floor(rounded / 60);
+  const m = rounded % 60;
+  return `${h}시간 ${m}분`;
+}
+
 export function ResultPanel({
   segments,
   finalShortList,
@@ -31,12 +44,23 @@ export function ResultPanel({
   const text = useMemo(() => finalShortList.join(", "), [finalShortList]);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
+  const totals = useMemo(() => {
+    const totalKm = recommendedOrder.reduce((sum, item) => sum + (item.distanceKm || 0), 0);
+    const hasDuration = recommendedOrder.some((item) => typeof item.durationMin === "number");
+    const totalMin = hasDuration
+      ? recommendedOrder.reduce((sum, item) => sum + (Number.isFinite(item.durationMin ?? NaN) ? (item.durationMin ?? 0) : 0), 0)
+      : null;
+    return { totalKm: Number(totalKm.toFixed(1)), totalMin };
+  }, [recommendedOrder]);
+
   const onCopy = async () => {
     await navigator.clipboard.writeText(text);
   };
 
   const onShare = async () => {
-    if (!canShare) return;
+    if (!canShare) {
+      return;
+    }
     await navigator.share({ title: "퀵서비스 동 리스트", text });
   };
 
@@ -82,12 +106,21 @@ export function ResultPanel({
           </button>
           <span className="text-xs text-slate-500">
             {recommendationMode === "road"
-              ? "연쇄 경로(휴리스틱) 기준으로 네이버 경로 거리 사용"
+              ? "각 구간의 네이버 경로 거리/시간 기준 (대략값)"
               : "현재 위치 기준 직선거리로 빠르게 정렬"}
           </span>
         </div>
 
         {roadRecommendationError ? <p className="mt-2 text-xs text-rose-600">{roadRecommendationError}</p> : null}
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            총 거리: <span className="font-semibold text-slate-800">{totals.totalKm}km</span>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            총 예상 시간: <span className="font-semibold text-slate-800">{formatMinutes(totals.totalMin)}</span>
+          </div>
+        </div>
 
         <ol className="mt-2 space-y-2">
           {recommendedOrder.map((item) => (
@@ -103,8 +136,16 @@ export function ResultPanel({
                       {item.step}. 도착지 {item.rowIndex + 1}
                     </div>
                     <div className="mt-0.5 line-clamp-2 text-xs text-slate-600">{item.label}</div>
+                    <div className="mt-1 text-xs text-slate-500">
+                      구간 {item.distanceKm}km / {formatMinutes(item.durationMin)}
+                      {typeof item.cumulativeDurationMin === "number"
+                        ? ` · 누적 ${formatMinutes(item.cumulativeDurationMin)}`
+                        : ""}
+                    </div>
                   </div>
-                  <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">{item.distanceKm}km</div>
+                  <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">
+                    {item.distanceKm}km
+                  </div>
                 </div>
               </button>
             </li>

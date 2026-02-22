@@ -98,8 +98,13 @@ type Props = {
 
 type DirectionsApiResponse = {
   raw?: {
-    route?: Record<string, Array<{ summary?: { distance?: number } }>>;
+    route?: Record<string, Array<{ summary?: { distance?: number; duration?: number } }>>;
   };
+};
+
+type OrderedRouteStop = RoutePoint & {
+  rowId: string;
+  rowIndex: number;
 };
 
 export function DeliveryMapApp({ sessionUser }: Props) {
@@ -115,6 +120,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [roadRecommendationLoading, setRoadRecommendationLoading] = useState(false);
   const [roadRecommendationError, setRoadRecommendationError] = useState<string | null>(null);
   const [activeRouteBatchIndex, setActiveRouteBatchIndex] = useState<number | null>(null);
+  const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>([]);
+  const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(null);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -234,7 +241,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const segments = useMemo(() => {
     return calculateSegments({
       origin,
-        destinations: rows.map((row) => ({ label: row.label ?? row.input, coord: row.coord })),
+      destinations: rows.map((row) => ({ label: row.label ?? row.input, coord: row.coord })),
       settings,
       centroids,
     });
@@ -255,21 +262,25 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     [recommendationMode, roadRecommendedOrder, straightRecommendedOrder],
   );
 
-  const orderedRouteStops = useMemo<RoutePoint[]>(() => {
+  const orderedRouteStops = useMemo<OrderedRouteStop[]>(() => {
     return recommendedOrder
-      .map((item) => rows[item.rowIndex])
-      .filter((row): row is DestinationRowState & { coord: LatLng } => Boolean(row?.coord))
-      .map((row, idx) => ({
-        lat: row.coord.lat,
-        lon: row.coord.lon,
-        name: row.label ?? row.input ?? `도착지 ${idx + 1}`,
+      .map((item) => ({ rowIndex: item.rowIndex, row: rows[item.rowIndex] }))
+      .filter(
+        (item): item is { rowIndex: number; row: DestinationRowState & { coord: LatLng } } => Boolean(item.row?.coord),
+      )
+      .map((item, idx) => ({
+        lat: item.row.coord.lat,
+        lon: item.row.coord.lon,
+        name: item.row.label ?? item.row.input ?? `도착지 ${idx + 1}`,
+        rowId: item.row.id,
+        rowIndex: item.rowIndex,
       }));
   }, [recommendedOrder, rows]);
 
   const routeableStops = useMemo(() => orderedRouteStops.slice(0, 6), [orderedRouteStops]);
 
   const routeBatches = useMemo(() => {
-    const batches: Array<{ key: string; label: string; origin: LatLng; stops: RoutePoint[] }> = [];
+    const batches: Array<{ key: string; label: string; origin: LatLng; stops: OrderedRouteStop[] }> = [];
     if (orderedRouteStops.length === 0) {
       return batches;
     }
@@ -291,6 +302,35 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     return batches;
   }, [orderedRouteStops, origin]);
 
+  const removeRowsAfterRouteHandoff = (rowIds: string[], message: string) => {
+    if (rowIds.length === 0) {
+      return;
+    }
+
+    setRowsUndoStack((prev) => [...prev, rows]);
+    setRows((prev) => {
+      const next = prev.filter((row) => !rowIds.includes(row.id));
+      return next.length > 0 ? next : [createRow()];
+    });
+    setHighlightedRowIndex(null);
+    setLastAutoRemovedMessage(message);
+  };
+
+  const undoLastAutoRemove = () => {
+    setRowsUndoStack((prev) => {
+      if (prev.length === 0) {
+        return prev;
+      }
+      const next = [...prev];
+      const restored = next.pop();
+      if (restored) {
+        setRows(restored);
+        setLastAutoRemovedMessage("마지막 자동 제거를 되돌렸습니다.");
+      }
+      return next;
+    });
+  };
+
   const onNavigateAll = () => {
     if (routeableStops.length === 0) {
       return;
@@ -301,6 +341,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
+    removeRowsAfterRouteHandoff(
+      routeableStops.map((stop) => stop.rowId),
+      `전체 길찾기로 ${routeableStops.length}개 도착지를 전송하고 목록에서 숨겼습니다.`,
+    );
   };
 
   const onNavigateBatch = (batchIndex: number) => {
@@ -314,6 +358,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
+    removeRowsAfterRouteHandoff(
+      batch.stops.map((stop) => stop.rowId),
+      `${batch.label} 경로를 전송하고 해당 도착지를 목록에서 숨겼습니다.`,
+    );
   };
 
   const onComputeRoadRecommendation = async () => {
@@ -330,10 +378,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setRoadRecommendationError(null);
 
     try {
-      const cache = new Map<string, number>();
+      const cache = new Map<string, { km: number; min: number }>();
       const keyOf = (a: LatLng, b: LatLng) => `${a.lat.toFixed(6)},${a.lon.toFixed(6)}>${b.lat.toFixed(6)},${b.lon.toFixed(6)}`;
 
-      const getRoadKm = async (a: LatLng, b: LatLng) => {
+      const getRoadStat = async (a: LatLng, b: LatLng) => {
         const key = keyOf(a, b);
         const cached = cache.get(key);
         if (cached !== undefined) {
@@ -353,9 +401,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         const route = payload.raw?.route;
         const firstRouteGroup = route ? Object.values(route)[0] : undefined;
         const distanceMeters = firstRouteGroup?.[0]?.summary?.distance;
-        const km = typeof distanceMeters === "number" ? distanceMeters / 1000 : Number.POSITIVE_INFINITY;
-        cache.set(key, km);
-        return km;
+        const durationMs = firstRouteGroup?.[0]?.summary?.duration;
+        const stat = {
+          km: typeof distanceMeters === "number" ? distanceMeters / 1000 : Number.POSITIVE_INFINITY,
+          min: typeof durationMs === "number" ? durationMs / 60000 : Number.POSITIVE_INFINITY,
+        };
+        cache.set(key, stat);
+        return stat;
       };
 
       const unresolved = [...resolved];
@@ -366,7 +418,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         const candidates = await Promise.all(
           unresolved.map(async (item) => ({
             item,
-            km: await getRoadKm(current, item.coord),
+            km: (await getRoadStat(current, item.coord)).km,
           })),
         );
         candidates.sort((a, b) => a.km - b.km);
@@ -381,7 +433,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         let total = 0;
         let from = origin;
         for (const item of order) {
-          total += await getRoadKm(from, item.coord);
+          total += (await getRoadStat(from, item.coord)).km;
           from = item.coord;
         }
         return total;
@@ -408,19 +460,28 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         }
       }
 
+      const roundSafe = (value: number) => (Number.isFinite(value) ? Number(value.toFixed(1)) : undefined);
       let cumulative = 0;
+      let cumulativeMin = 0;
       let from = origin;
       const sorted = [] as RouteRecommendationItem[];
       for (let index = 0; index < improved.length; index += 1) {
         const item = improved[index];
-        const legKm = await getRoadKm(from, item.coord);
+        const leg = await getRoadStat(from, item.coord);
+        const legKm = leg.km;
+        const legMin = leg.min;
         cumulative += legKm;
+        if (Number.isFinite(legMin)) {
+          cumulativeMin += legMin;
+        }
         sorted.push({
           step: index + 1,
           rowIndex: item.rowIndex,
           label: item.label,
-          distanceKm: Number(legKm.toFixed(1)),
-          cumulativeKm: Number(cumulative.toFixed(1)),
+          distanceKm: Number.isFinite(legKm) ? Number(legKm.toFixed(1)) : 0,
+          cumulativeKm: Number.isFinite(cumulative) ? Number(cumulative.toFixed(1)) : 0,
+          durationMin: roundSafe(legMin),
+          cumulativeDurationMin: roundSafe(cumulativeMin),
         });
         from = item.coord;
       }
@@ -596,7 +657,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
       ) : null}
 
-      <div className="fixed bottom-4 right-4 z-30 lg:hidden">
+      {lastAutoRemovedMessage ? (
+        <div className="fixed bottom-4 left-4 z-30 max-w-[70vw] rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg lg:hidden">
+          <p>{lastAutoRemovedMessage}</p>
+          <button
+            type="button"
+            className="mt-2 h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium"
+            onClick={undoLastAutoRemove}
+            disabled={rowsUndoStack.length === 0}
+          >
+            되돌리기
+          </button>
+        </div>
+      ) : null}
+
+      <div className="fixed bottom-4 right-4 z-30 flex flex-col gap-2 lg:hidden">
+        <button
+          type="button"
+          className="flex h-12 items-center justify-center rounded-full bg-slate-900 px-4 text-xs font-semibold text-white shadow-lg disabled:opacity-50"
+          onClick={onNavigateAll}
+          disabled={routeableStops.length === 0}
+        >
+          전체 길찾기 {routeableStops.length > 0 ? `(${routeableStops.length})` : ""}
+        </button>
         <button
           type="button"
           className="flex h-14 items-center gap-2 rounded-full bg-cyan-700 px-4 text-sm font-semibold text-white shadow-lg disabled:opacity-50"

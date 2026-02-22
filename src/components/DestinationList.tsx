@@ -74,7 +74,7 @@ export function DestinationList({
       <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-col gap-2">
           <div className="text-xs text-slate-600">
-            전체 길찾기: 좌표 확정 {resolvedCount}개 / 네이버 경유지 지원 기준 자동 전달 {routeableCount}개
+            전체 길찾기 좌표 확정 {resolvedCount}개 / 네이버 경유지 자동 전달 {routeableCount}개
             {skippedCountForAllRoute > 0 ? ` (나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용)` : ""}
           </div>
 
@@ -115,7 +115,7 @@ export function DestinationList({
           {activeRouteBatchIndex !== null && routeBatchButtons.length > 1 ? (
             <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-800">
               {routeBatchButtons[activeRouteBatchIndex]
-                ? `${routeBatchButtons[activeRouteBatchIndex].label} 경로를 열었습니다. 다음 경로는 ${
+                ? `${routeBatchButtons[activeRouteBatchIndex].label} 경로를 열었습니다. 다음 경로: ${
                     routeBatchButtons[activeRouteBatchIndex + 1]?.label ?? "없음"
                   }`
                 : "분할 경로 안내"}

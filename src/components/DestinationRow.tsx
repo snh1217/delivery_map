@@ -79,7 +79,7 @@ export function DestinationRow({
       <div className="grid gap-2">
         <input
           className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
-          placeholder="주소 또는 구 동 입력"
+          placeholder="주소 또는 구/동 입력"
           value={row.input}
           onChange={(e) => onChangeInput(row.id, e.target.value)}
           onKeyDown={(e) => {
@@ -97,7 +97,7 @@ export function DestinationRow({
             disabled={!row.input.trim() || row.status === "loading"}
             onClick={() => onSearch(row.id)}
           >
-            {row.status === "loading" ? "검색중" : "검색/적용"}
+            {row.status === "loading" ? "검색 중..." : "검색/적용"}
           </button>
           <button
             type="button"
@@ -149,7 +149,7 @@ export function DestinationRow({
           disabled={!canNavigate}
           onClick={() => onNavigate(row.id)}
         >
-          네이버지도 길찾기
+          네이버앱 길찾기
         </button>
         {links ? (
           <a
@@ -158,7 +158,7 @@ export function DestinationRow({
             target="_blank"
             rel="noreferrer"
           >
-            웹지도로 열기
+            웹으로 열기
           </a>
         ) : (
           <div className="h-11 rounded-lg border border-slate-200" />

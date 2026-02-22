@@ -59,7 +59,6 @@ export function NaverMap({ origin, destinations, segments }: Props) {
 
   useEffect(() => {
     if (!ready || !rootRef.current || !window.naver?.maps) return;
-
     const naverMaps = window.naver.maps;
 
     if (!mapRef.current) {
@@ -98,7 +97,6 @@ export function NaverMap({ origin, destinations, segments }: Props) {
 
     destinations.forEach((dest, idx) => {
       if (!dest.coord) return;
-
       const marker = new naverMaps.Marker({
         map,
         position: new naverMaps.LatLng(dest.coord.lat, dest.coord.lon),
@@ -119,7 +117,6 @@ export function NaverMap({ origin, destinations, segments }: Props) {
       });
       markerLabel.open(map, marker);
       overlaysRef.current.push(markerLabel);
-
       bounds.extend(new naverMaps.LatLng(dest.coord.lat, dest.coord.lon));
     });
 

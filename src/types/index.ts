@@ -58,6 +58,8 @@ export type RouteRecommendationItem = {
   label: string;
   distanceKm: number;
   cumulativeKm: number;
+  durationMin?: number;
+  cumulativeDurationMin?: number;
 };
 
 export type RouteRecommendationMode = "straight" | "road";
