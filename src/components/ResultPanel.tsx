@@ -1,15 +1,16 @@
-﻿"use client";
+"use client";
 
 import { useMemo } from "react";
-import type { SegmentResult } from "@/types";
+import type { RouteRecommendationItem, SegmentResult } from "@/types";
 
 type Props = {
   segments: SegmentResult[];
   finalShortList: string[];
   viewMode: "segment" | "all";
+  recommendedOrder: RouteRecommendationItem[];
 };
 
-export function ResultPanel({ segments, finalShortList, viewMode }: Props) {
+export function ResultPanel({ segments, finalShortList, viewMode, recommendedOrder }: Props) {
   const text = useMemo(() => finalShortList.join(", "), [finalShortList]);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -31,6 +32,35 @@ export function ResultPanel({ segments, finalShortList, viewMode }: Props) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-2 text-lg font-semibold text-slate-800">결과</h2>
+
+      <div className="mb-3 rounded-xl border border-slate-200 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-700">추천 방문 순서 (직선거리 기준)</h3>
+          <span className="text-xs text-slate-500">{recommendedOrder.length}개 확정</span>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          실제 도로 경로와 다를 수 있습니다. 빠른 입력 검토용 추천 순서입니다.
+        </p>
+        <ol className="mt-2 space-y-2">
+          {recommendedOrder.map((item) => (
+            <li key={`${item.rowIndex}-${item.step}`} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+              <div className="text-sm font-medium text-slate-800">
+                {item.step}. 도착지 {item.rowIndex + 1}
+              </div>
+              <div className="text-xs text-slate-600">{item.label}</div>
+              <div className="mt-1 text-xs text-slate-500">
+                이전 지점 기준 {item.distanceKm}km / 누적 {item.cumulativeKm}km
+              </div>
+            </li>
+          ))}
+          {recommendedOrder.length === 0 ? (
+            <li className="rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-500">
+              좌표가 확정된 도착지가 있으면 추천 순서를 표시합니다.
+            </li>
+          ) : null}
+        </ol>
+      </div>
+
       <textarea
         className="h-28 w-full rounded-lg border border-slate-300 p-2 text-sm"
         readOnly

@@ -9,7 +9,7 @@
   union,
 } from "@turf/turf";
 import type { Feature, MultiPolygon, Polygon } from "geojson";
-import type { DongCentroid, LatLng, SegmentResult, SettingsState } from "@/types";
+import type { DongCentroid, LatLng, RouteRecommendationItem, SegmentResult, SettingsState } from "@/types";
 
 function toCoord(value: LatLng): [number, number] {
   return [value.lon, value.lat];
@@ -123,6 +123,47 @@ export function calculateSegments(params: {
 
 export function makeFinalShortList(results: SegmentResult[]) {
   return [...new Set(results.flatMap((segment) => segment.dongs.map((d) => d.short2)))];
+}
+
+export function recommendVisitOrder(params: {
+  origin: LatLng;
+  destinations: Array<{ label: string; coord?: LatLng }>;
+}): RouteRecommendationItem[] {
+  const unresolved = params.destinations
+    .map((dest, rowIndex) => ({ rowIndex, label: dest.label, coord: dest.coord }))
+    .filter((dest): dest is { rowIndex: number; label: string; coord: LatLng } => Boolean(dest.coord));
+
+  const result: RouteRecommendationItem[] = [];
+  let current = params.origin;
+  let cumulativeKm = 0;
+
+  while (unresolved.length > 0) {
+    let bestIndex = 0;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    unresolved.forEach((candidate, idx) => {
+      const km = distance(point(toCoord(current)), point(toCoord(candidate.coord)), {
+        units: "kilometers",
+      });
+      if (km < bestDistance) {
+        bestDistance = km;
+        bestIndex = idx;
+      }
+    });
+
+    const [next] = unresolved.splice(bestIndex, 1);
+    cumulativeKm += bestDistance;
+    result.push({
+      step: result.length + 1,
+      rowIndex: next.rowIndex,
+      label: next.label,
+      distanceKm: Number(bestDistance.toFixed(1)),
+      cumulativeKm: Number(cumulativeKm.toFixed(1)),
+    });
+    current = next.coord;
+  }
+
+  return result;
 }
 
 export function polygonPaths(geometry: Polygon | MultiPolygon) {

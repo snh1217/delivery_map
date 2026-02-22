@@ -8,7 +8,7 @@ import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizeDongCentroids } from "@/lib/dong";
-import { calculateSegments, makeFinalShortList } from "@/lib/geo";
+import { calculateSegments, makeFinalShortList, recommendVisitOrder } from "@/lib/geo";
 import { openNaverDirections, type NaverDirectionLinkSet } from "@/lib/naverDeepLink";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type { DestinationRowState, GeocodeItem, LatLng, SessionUser, SettingsState } from "@/types";
@@ -154,13 +154,21 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const segments = useMemo(() => {
     return calculateSegments({
       origin,
-      destinations: rows.map((row) => ({ label: row.label ?? row.input, coord: row.coord })),
+        destinations: rows.map((row) => ({ label: row.label ?? row.input, coord: row.coord })),
       settings,
       centroids,
     });
   }, [centroids, origin, rows, settings]);
 
   const finalShortList = useMemo(() => makeFinalShortList(segments), [segments]);
+  const recommendedOrder = useMemo(
+    () =>
+      recommendVisitOrder({
+        origin,
+        destinations: rows.map((row) => ({ label: (row.label ?? row.input) || "이름 없음", coord: row.coord })),
+      }),
+    [origin, rows],
+  );
 
   return (
     <main className="min-h-screen bg-slate-50 px-3 py-4 sm:px-4">
@@ -235,12 +243,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onNavigate={onNavigate}
           />
 
-          <ResultPanel segments={segments} finalShortList={finalShortList} viewMode={settings.viewMode} />
+          <ResultPanel
+            segments={segments}
+            finalShortList={finalShortList}
+            viewMode={settings.viewMode}
+            recommendedOrder={recommendedOrder}
+          />
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
           <h2 className="mb-2 text-base font-semibold text-slate-800">네이버 지도</h2>
-          <NaverMap origin={origin} destinations={rows.map((row) => ({ coord: row.coord }))} segments={segments} />
+          <NaverMap
+            origin={origin}
+            destinations={rows.map((row, index) => ({
+              coord: row.coord,
+              label: (row.label ?? row.input) || `도착지 ${index + 1}`,
+            }))}
+            segments={segments}
+          />
         </section>
       </div>
 

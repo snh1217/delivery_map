@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { polygonPaths } from "@/lib/geo";
@@ -6,19 +6,22 @@ import type { LatLng, SegmentResult } from "@/types";
 
 type Props = {
   origin: LatLng;
-  destinations: Array<{ coord?: LatLng }>;
+  destinations: Array<{ coord?: LatLng; label?: string }>;
   segments: SegmentResult[];
 };
 
 const COLORS = ["#06b6d4", "#3b82f6", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6"];
 
+function labelContent(text: string) {
+  const safe = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return `<div style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:11px;line-height:1.3;color:#0f172a;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,0.12)">${safe}</div>`;
+}
+
 export function NaverMap({ origin, destinations, segments }: Props) {
   const mapRef = useRef<unknown>(null);
   const overlaysRef = useRef<unknown[]>([]);
   const rootRef = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(
-    typeof window !== "undefined" && Boolean(window.naver?.maps),
-  );
+  const [ready, setReady] = useState(typeof window !== "undefined" && Boolean(window.naver?.maps));
 
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID;
 
@@ -81,9 +84,17 @@ export function NaverMap({ origin, destinations, segments }: Props) {
     const startMarker = new naverMaps.Marker({
       map,
       position: new naverMaps.LatLng(origin.lat, origin.lon),
-      title: "출발",
+      title: "출발지",
     });
     overlaysRef.current.push(startMarker);
+    const startLabel = new naverMaps.InfoWindow({
+      content: labelContent("출발지"),
+      borderWidth: 0,
+      backgroundColor: "transparent",
+      disableAnchor: true,
+    });
+    startLabel.open(map, startMarker);
+    overlaysRef.current.push(startLabel);
     bounds.extend(new naverMaps.LatLng(origin.lat, origin.lon));
 
     destinations.forEach((dest, idx) => {
@@ -94,10 +105,20 @@ export function NaverMap({ origin, destinations, segments }: Props) {
       const marker = new naverMaps.Marker({
         map,
         position: new naverMaps.LatLng(dest.coord.lat, dest.coord.lon),
-        title: `도착 ${idx + 1}`,
+        title: `도착지 ${idx + 1}`,
       });
 
       overlaysRef.current.push(marker);
+
+      const markerLabel = new naverMaps.InfoWindow({
+        content: labelContent(`${idx + 1}. ${dest.label ?? `도착지 ${idx + 1}`}`),
+        borderWidth: 0,
+        backgroundColor: "transparent",
+        disableAnchor: true,
+      });
+      markerLabel.open(map, marker);
+      overlaysRef.current.push(markerLabel);
+
       bounds.extend(new naverMaps.LatLng(dest.coord.lat, dest.coord.lon));
     });
 
@@ -121,10 +142,10 @@ export function NaverMap({ origin, destinations, segments }: Props) {
 
     if (points.length > 0) {
       map.fitBounds(bounds, {
-        top: 24,
-        right: 24,
-        bottom: 24,
-        left: 24,
+        top: 48,
+        right: 48,
+        bottom: 48,
+        left: 48,
       });
     }
   }, [destinations, origin, points.length, ready, segments]);

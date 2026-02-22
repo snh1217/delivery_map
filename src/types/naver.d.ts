@@ -18,6 +18,8 @@ type NaverOverlay = {
   setMap: (map: NaverMapInstance | null) => void;
 };
 
+type NaverMarkerInstance = NaverOverlay;
+
 type NaverLatLngBounds = {
   extend: (latLng: NaverLatLng) => void;
 };
@@ -36,7 +38,7 @@ type NaverMapsApi = {
     position: NaverLatLng;
     map: NaverMapInstance;
     title?: string;
-  }) => NaverOverlay;
+  }) => NaverMarkerInstance;
   Polygon: new (options: {
     map: NaverMapInstance;
     paths: NaverLatLng[];
@@ -46,6 +48,14 @@ type NaverMapsApi = {
     strokeOpacity: number;
     strokeWeight: number;
   }) => NaverOverlay;
+  InfoWindow: new (options: {
+    content: string;
+    borderWidth?: number;
+    backgroundColor?: string;
+    disableAnchor?: boolean;
+  }) => NaverOverlay & {
+    open: (map: NaverMapInstance, marker?: NaverMarkerInstance) => void;
+  };
 };
 
 declare global {

@@ -47,6 +47,9 @@ export function DestinationRow({
   return (
     <div className="rounded-xl border border-slate-200 p-3">
       <div className="mb-2 text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
+      <p className="mb-2 text-xs text-slate-500">
+        예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)
+      </p>
 
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
         <input
@@ -54,6 +57,12 @@ export function DestinationRow({
           placeholder="주소 또는 구 동 입력"
           value={row.input}
           onChange={(e) => onChangeInput(row.id, e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && row.input.trim() && row.status !== "loading") {
+              e.preventDefault();
+              onSearch(row.id);
+            }
+          }}
         />
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -84,7 +93,7 @@ export function DestinationRow({
           >
             {row.geocodeItems.map((item, itemIndex) => (
               <option key={`${row.id}-${itemIndex}`} value={itemIndex}>
-                {item.title}
+                {item.title} | {item.address}
               </option>
             ))}
           </select>
@@ -92,6 +101,11 @@ export function DestinationRow({
       ) : null}
 
       {row.label ? <p className="mt-1 text-xs text-slate-600">선택 주소: {row.label}</p> : null}
+      {row.coord ? (
+        <p className="mt-1 text-xs text-slate-500">
+          좌표: {row.coord.lat.toFixed(5)}, {row.coord.lon.toFixed(5)}
+        </p>
+      ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
       <div className="mt-2 grid gap-2 sm:grid-cols-2">

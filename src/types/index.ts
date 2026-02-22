@@ -52,6 +52,14 @@ export type SegmentResult = {
   dongs: DongCentroid[];
 };
 
+export type RouteRecommendationItem = {
+  step: number;
+  rowIndex: number;
+  label: string;
+  distanceKm: number;
+  cumulativeKm: number;
+};
+
 export type SessionUser = {
   phone: string;
   isAdmin: boolean;
