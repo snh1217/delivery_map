@@ -226,6 +226,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   };
 
+  const onAddRow = () => {
+    setRows((prev) => (prev.length >= 10 ? prev : [...prev, createRow()]));
+  };
+
   const segments = useMemo(() => {
     return calculateSegments({
       origin,
@@ -493,7 +497,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               count: batch.stops.length,
               onClick: () => onNavigateBatch(index),
             }))}
-            onAdd={() => setRows((prev) => (prev.length >= 10 ? prev : [...prev, createRow()]))}
+            onAdd={onAddRow}
             onReset={() => setRows([createRow()])}
             onNavigateAll={onNavigateAll}
             onChangeInput={(id, value) =>
@@ -590,6 +594,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           </div>
         </div>
       ) : null}
+
+      <div className="fixed bottom-4 right-4 z-30 lg:hidden">
+        <button
+          type="button"
+          className="flex h-14 items-center gap-2 rounded-full bg-cyan-700 px-4 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
+          onClick={onAddRow}
+          disabled={rows.length >= 10}
+        >
+          <span className="text-lg leading-none">+</span>
+          도착지 추가
+        </button>
+      </div>
     </main>
   );
 }
