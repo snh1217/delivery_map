@@ -170,6 +170,15 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           <p className="mt-1 text-sm text-slate-600">출발지: 내 현재 위치(GPS), 권한 거부 시 서울시청 좌표</p>
           <div className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
             로그인: {sessionUser?.phone ?? "-"} {sessionUser?.isAdmin ? "(관리자)" : ""}
+            {sessionUser?.isAdmin ? (
+              <button
+                type="button"
+                className="ml-2 rounded-md border border-cyan-300 bg-white px-2 py-0.5 text-[11px] text-cyan-700"
+                onClick={() => router.push("/admin")}
+              >
+                관리자 승인 관리
+              </button>
+            ) : null}
             <button
               type="button"
               className="ml-2 rounded-md border border-slate-300 px-2 py-0.5 text-[11px]"
@@ -184,6 +193,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             위치 상태: {locationStatus}
             <br />
             승인 상태: {sessionUser?.isAllowed ? "허용" : "미허용"}
+            {sessionUser?.isAdmin ? (
+              <>
+                <br />
+                관리자 안내: 회원가입 요청 승인/반려는 상단 관리자 승인 관리 버튼에서 처리합니다.
+              </>
+            ) : null}
           </div>
         </section>
 

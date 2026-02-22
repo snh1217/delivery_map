@@ -11,9 +11,12 @@ export function SettingsPanel({ settings, onChange }: Props) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h2 className="mb-3 text-lg font-semibold text-slate-800">설정</h2>
+      <p className="mb-3 text-xs text-slate-600">
+        팬(부채꼴) 계산값을 조절합니다. 기본값(30도 / 버퍼 3km / 뒤꼬리 5km)으로 시작하는 것을 권장합니다.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm text-slate-700">
-          halfAngleDeg
+          팬 반각(도)
           <input
             className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
             type="number"
@@ -25,7 +28,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
         </label>
 
         <label className="text-sm text-slate-700">
-          forwardBufferKm
+          전방 버퍼(km)
           <input
             className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
             type="number"
@@ -37,7 +40,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
         </label>
 
         <label className="text-sm text-slate-700">
-          backwardTailKm
+          뒤 꼬리(km)
           <input
             className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
             type="number"
@@ -49,7 +52,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
         </label>
 
         <label className="text-sm text-slate-700">
-          autoSearch
+          자동 검색
           <button
             type="button"
             className={`mt-1 h-11 w-full rounded-lg px-2 text-sm font-medium ${
@@ -57,7 +60,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
             }`}
             onClick={() => onChange({ ...settings, autoSearch: !settings.autoSearch })}
           >
-            {settings.autoSearch ? "ON (600ms)" : "OFF"}
+            {settings.autoSearch ? "켜짐 (입력 후 600ms)" : "꺼짐"}
           </button>
         </label>
       </div>

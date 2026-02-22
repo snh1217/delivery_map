@@ -86,6 +86,12 @@ export function LoginForm({ nextPath = "/app" }: Props) {
     <div className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <h1 className="text-xl font-bold text-slate-800">전화번호 승인 로그인</h1>
       <p className="mt-1 text-sm text-slate-600">회원가입 요청 후 관리자 승인을 받아야 사용할 수 있습니다.</p>
+      <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+        <p>이용 방법</p>
+        <p>1. 아래에서 이름/전화번호로 회원가입 요청</p>
+        <p>2. 관리자가 승인하면 같은 전화번호로 로그인</p>
+        <p>3. 관리자 승인 화면은 로그인 후 상단의 관리자 승인 관리 버튼에서 이동</p>
+      </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-3">
         <h2 className="text-sm font-semibold text-slate-700">로그인</h2>
