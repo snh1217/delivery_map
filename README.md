@@ -61,6 +61,7 @@ Firebase fallback 사용 시 Firebase Client/Admin 환경변수를 추가합니�
 
 - 현재 버전은 `카카오맵 링크 방식`(딥링크 + 웹 fallback) 준비가 포함되어 있습니다.
 - `카카오내비 SDK`로 확장하려면 `NEXT_PUBLIC_KAKAO_JAVASCRIPT_KEY` 등록 후 SDK 로더/호출만 추가하면 됩니다.
+- 카카오 API 확장 대비 환경변수(선택): `KAKAO_REST_API_KEY`, `KAKAO_NATIVE_APP_KEY`, `KAKAO_ADMIN_KEY`
 
 ## Supabase 스키마
 
@@ -118,3 +119,4 @@ git push -u origin main
 
 - 현재 앱은 네이버 지도가 기본이며, 도착지 행에서 카카오맵 길찾기 버튼을 함께 제공합니다.
 - 카카오내비는 추후 Kakao JavaScript SDK 기반 호출로 확장 가능하도록 `src/lib/kakaoDeepLink.ts`를 추가했습니다.
+- 보안상 `KAKAO_ADMIN_KEY`는 서버 전용으로만 사용하고, 클라이언트에는 절대 노출하지 않습니다.
