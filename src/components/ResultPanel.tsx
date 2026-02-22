@@ -36,9 +36,7 @@ export function ResultPanel({
   };
 
   const onShare = async () => {
-    if (!canShare) {
-      return;
-    }
+    if (!canShare) return;
     await navigator.share({ title: "퀵서비스 동 리스트", text });
   };
 
@@ -120,7 +118,12 @@ export function ResultPanel({
       </details>
 
       <label className="mb-1 block text-xs font-medium text-slate-600">최종 동 리스트</label>
-      <textarea className="h-28 w-full rounded-lg border border-slate-300 p-2 text-sm" readOnly value={text} onFocus={(e) => e.target.select()} />
+      <textarea
+        className="h-28 w-full rounded-lg border border-slate-300 p-2 text-sm"
+        readOnly
+        value={text}
+        onFocus={(e) => e.target.select()}
+      />
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button

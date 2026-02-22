@@ -54,7 +54,7 @@ export function DestinationList({
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">도착지 목록 (출발지는 자동)</h2>
-          <p className="text-xs text-slate-500">최대 10개까지 추가 가능</p>
+          <p className="text-xs text-slate-500">최대 20개까지 추가 가능</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm" onClick={onReset}>
@@ -64,7 +64,7 @@ export function DestinationList({
             type="button"
             className="h-11 rounded-lg bg-cyan-700 px-4 text-sm font-medium text-white disabled:opacity-50"
             onClick={onAdd}
-            disabled={rows.length >= 10}
+            disabled={rows.length >= 20}
           >
             + 추가
           </button>

@@ -37,18 +37,14 @@ export function NaverMap({ origin, destinations, segments }: Props) {
   const points = useMemo(() => [origin, ...destinations.map((d) => d.coord).filter(Boolean)] as LatLng[], [destinations, origin]);
 
   useEffect(() => {
-    if (!clientId) {
-      return;
-    }
+    if (!clientId) return;
 
     const scriptId = "naver-map-sdk";
     const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
     const onLoaded = () => setReady(true);
 
     if (existing) {
-      if (!window.naver?.maps) {
-        existing.addEventListener("load", onLoaded);
-      }
+      if (!window.naver?.maps) existing.addEventListener("load", onLoaded);
       return () => existing.removeEventListener("load", onLoaded);
     }
 
@@ -58,14 +54,11 @@ export function NaverMap({ origin, destinations, segments }: Props) {
     script.async = true;
     script.addEventListener("load", onLoaded);
     document.head.appendChild(script);
-
     return () => script.removeEventListener("load", onLoaded);
   }, [clientId]);
 
   useEffect(() => {
-    if (!ready || !rootRef.current || !window.naver?.maps) {
-      return;
-    }
+    if (!ready || !rootRef.current || !window.naver?.maps) return;
 
     const naverMaps = window.naver.maps;
 
@@ -104,9 +97,7 @@ export function NaverMap({ origin, destinations, segments }: Props) {
     bounds.extend(new naverMaps.LatLng(origin.lat, origin.lon));
 
     destinations.forEach((dest, idx) => {
-      if (!dest.coord) {
-        return;
-      }
+      if (!dest.coord) return;
 
       const marker = new naverMaps.Marker({
         map,

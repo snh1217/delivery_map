@@ -27,6 +27,7 @@ import type {
 } from "@/types";
 
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
+const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const DEFAULT_SETTINGS: SettingsState = {
   halfAngleDeg: 30,
@@ -227,7 +228,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   const onAddRow = () => {
-    setRows((prev) => (prev.length >= 10 ? prev : [...prev, createRow()]));
+    setRows((prev) => (prev.length >= MAX_DESTINATIONS ? prev : [...prev, createRow()]));
   };
 
   const segments = useMemo(() => {
@@ -600,7 +601,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           type="button"
           className="flex h-14 items-center gap-2 rounded-full bg-cyan-700 px-4 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
           onClick={onAddRow}
-          disabled={rows.length >= 10}
+          disabled={rows.length >= MAX_DESTINATIONS}
         >
           <span className="text-lg leading-none">+</span>
           도착지 추가
