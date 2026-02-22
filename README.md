@@ -57,8 +57,21 @@ npm run build
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `ADMIN_NOTIFY_EMAIL` (선택, 가입 요청 알림 메일 수신자)
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (선택, 메일 발송용)
 
 Firebase fallback 사용 시 Firebase Client/Admin 환경변수를 추가합니다.
+
+가입 승인 요청 메일 알림(선택):
+
+- 가입 요청 생성 시 서버에서 관리자 메일로 알림을 보냅니다.
+- 아래 값이 모두 설정되면 활성화됩니다.
+  - `ADMIN_NOTIFY_EMAIL`
+  - `SMTP_HOST`
+  - `SMTP_PORT`
+  - `SMTP_FROM`
+  - (인증 필요 SMTP인 경우) `SMTP_USER`, `SMTP_PASS`
+- `SMTP_SECURE=true` 권장 (포트 465 사용 시)
 
 카카오 연동(선택):
 

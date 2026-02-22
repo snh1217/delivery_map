@@ -8,6 +8,7 @@ import type {
   SignupRequestRow,
 } from "@/types";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
+import { notifyAdminSignupRequest } from "@/lib/notify/adminNotify";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export const AUTH_PHONE_COOKIE = "qs_auth_phone";
@@ -195,6 +196,16 @@ export async function createSignupRequest(params: { phone: string; name: string 
   }
 
   const supabase = getSupabaseServiceClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("signup_requests")
+    .select("phone, status")
+    .eq("phone", phone)
+    .maybeSingle<{ phone: string; status: SignupRequestRow["status"] }>();
+
+  if (existingError) {
+    throw new Error(existingError.message);
+  }
+
   const { data, error } = await supabase
     .from("signup_requests")
     .upsert(
@@ -214,7 +225,20 @@ export async function createSignupRequest(params: { phone: string; name: string 
     throw new Error(error.message);
   }
 
-  return data as SignupRequestRow;
+  const row = data as SignupRequestRow;
+  const shouldNotify = !existing || existing.status !== "pending";
+
+  if (shouldNotify) {
+    void notifyAdminSignupRequest({
+      phone: row.phone,
+      name: row.name,
+      createdAt: row.created_at,
+    }).catch((notifyError) => {
+      console.error("[signup-request] admin notification failed:", notifyError);
+    });
+  }
+
+  return row;
 }
 
 export async function listSignupRequests(status?: "pending" | "approved" | "rejected") {
