@@ -1,9 +1,37 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import type { DestinationRowState, LatLng } from "@/types";
+
+type SpeechRecognitionLike = {
+  lang: string;
+  interimResults: boolean;
+  continuous: boolean;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<{
+    isFinal: boolean;
+    0: { transcript: string };
+    length: number;
+  }>;
+};
+
+type WindowWithSpeech = Window & {
+  webkitSpeechRecognition?: SpeechRecognitionCtor;
+  SpeechRecognition?: SpeechRecognitionCtor;
+};
 
 type Props = {
   index: number;
@@ -20,6 +48,19 @@ type Props = {
   preferredNavigationApp: "naver" | "kakao";
 };
 
+function normalizeTranscript(base: string, transcript: string) {
+  const merged = [base.trim(), transcript.trim()].filter(Boolean).join(" ");
+  return merged.replace(/\s+/g, " ").trim();
+}
+
+function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const w = window as WindowWithSpeech;
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
 export function DestinationRow({
   index,
   row,
@@ -35,6 +76,10 @@ export function DestinationRow({
   preferredNavigationApp,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const voiceBaseInputRef = useRef("");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!autoSearch || !row.input.trim()) {
@@ -52,9 +97,79 @@ export function DestinationRow({
     rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlighted]);
 
+  useEffect(() => {
+    return () => {
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        // no-op
+      }
+      recognitionRef.current = null;
+    };
+  }, []);
+
   const canNavigate = Boolean(row.coord);
   const naverLinks = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
   const kakaoLinks = row.coord ? createKakaoMapDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
+  const speechSupported = Boolean(getSpeechRecognitionCtor());
+
+  const startVoiceInput = () => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      setVoiceError("이 브라우저는 음성 입력을 지원하지 않습니다. (Chrome/Edge 권장)");
+      return;
+    }
+
+    setVoiceError(null);
+    voiceBaseInputRef.current = row.input ?? "";
+
+    const recognition = new Ctor();
+    recognition.lang = "ko-KR";
+    recognition.interimResults = true;
+    recognition.continuous = false;
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        const part = result?.[0]?.transcript ?? "";
+        transcript += ` ${part}`;
+      }
+
+      const normalized = normalizeTranscript(voiceBaseInputRef.current, transcript);
+      onChangeInput(row.id, normalized);
+    };
+
+    recognition.onerror = (event) => {
+      const code = event.error ?? "unknown";
+      const messageMap: Record<string, string> = {
+        "not-allowed": "마이크 권한이 거부되었습니다. 브라우저 권한을 허용해주세요.",
+        "service-not-allowed": "음성 인식 서비스 사용이 허용되지 않았습니다.",
+        "no-speech": "음성이 인식되지 않았습니다. 다시 시도해주세요.",
+        aborted: "음성 입력이 취소되었습니다.",
+        "audio-capture": "마이크를 찾을 수 없습니다.",
+      };
+      setVoiceError(messageMap[code] ?? `음성 입력 오류: ${code}`);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognitionRef.current = recognition;
+    setIsListening(true);
+    recognition.start();
+  };
+
+  const stopVoiceInput = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      // no-op
+    }
+  };
 
   return (
     <div
@@ -80,18 +195,41 @@ export function DestinationRow({
       </p>
 
       <div className="grid gap-2">
-        <input
-          className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
-          placeholder="주소 또는 구/동 입력"
-          value={row.input}
-          onChange={(e) => onChangeInput(row.id, e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && row.input.trim() && row.status !== "loading") {
-              e.preventDefault();
-              onSearch(row.id);
-            }
-          }}
-        />
+        <div className="grid grid-cols-[1fr_auto] gap-2">
+          <input
+            className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
+            placeholder="주소 또는 구/동 입력"
+            value={row.input}
+            onChange={(e) => onChangeInput(row.id, e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && row.input.trim() && row.status !== "loading") {
+                e.preventDefault();
+                onSearch(row.id);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className={`h-12 rounded-lg px-3 text-xs font-medium ${
+              isListening
+                ? "border border-rose-300 bg-rose-50 text-rose-700"
+                : "border border-slate-300 bg-white text-slate-700"
+            } disabled:opacity-50`}
+            onClick={isListening ? stopVoiceInput : startVoiceInput}
+            disabled={!speechSupported && !isListening}
+            title={speechSupported ? "음성으로 주소 입력" : "이 브라우저는 음성 입력 미지원"}
+          >
+            {isListening ? "음성중지" : "음성입력"}
+          </button>
+        </div>
+
+        {isListening ? (
+          <p className="text-xs text-cyan-700">음성 입력 중... 말한 내용이 주소 입력칸에 바로 반영됩니다.</p>
+        ) : null}
+        {voiceError ? <p className="text-xs text-rose-600">{voiceError}</p> : null}
+        {!speechSupported ? (
+          <p className="text-xs text-slate-500">음성 입력은 Chrome/Edge(안드로이드 포함)에서 더 안정적으로 동작합니다.</p>
+        ) : null}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
@@ -194,3 +332,4 @@ export function DestinationRow({
     </div>
   );
 }
+
