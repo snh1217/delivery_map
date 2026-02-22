@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { SettingsState } from "@/types";
 
 type Props = {
@@ -7,7 +8,51 @@ type Props = {
   onChange: (next: SettingsState) => void;
 };
 
+type NumericFieldKey = "halfAngleDeg" | "forwardBufferKm" | "backwardTailKm";
+
 export function SettingsPanel({ settings, onChange }: Props) {
+  const [draftHalfAngle, setDraftHalfAngle] = useState(String(settings.halfAngleDeg));
+  const [draftForwardBuffer, setDraftForwardBuffer] = useState(String(settings.forwardBufferKm));
+  const [draftBackwardTail, setDraftBackwardTail] = useState(String(settings.backwardTailKm));
+
+  const commitNumber = (key: NumericFieldKey, raw: string) => {
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed)) {
+      if (key === "halfAngleDeg") setDraftHalfAngle(String(settings.halfAngleDeg));
+      if (key === "forwardBufferKm") setDraftForwardBuffer(String(settings.forwardBufferKm));
+      if (key === "backwardTailKm") setDraftBackwardTail(String(settings.backwardTailKm));
+      return;
+    }
+
+    if (key === "halfAngleDeg") {
+      const clamped = Math.min(80, Math.max(5, parsed));
+      setDraftHalfAngle(String(clamped));
+      onChange({ ...settings, halfAngleDeg: clamped });
+      return;
+    }
+    if (key === "forwardBufferKm") {
+      const clamped = Math.min(30, Math.max(0, parsed));
+      setDraftForwardBuffer(String(clamped));
+      onChange({ ...settings, forwardBufferKm: clamped });
+      return;
+    }
+    const clamped = Math.min(30, Math.max(0, parsed));
+    setDraftBackwardTail(String(clamped));
+    onChange({ ...settings, backwardTailKm: clamped });
+  };
+
+  const numberInputHandlers = (key: NumericFieldKey, value: string) => ({
+    onBlur: () => commitNumber(key, value),
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitNumber(key, value);
+        e.currentTarget.blur();
+      }
+    },
+    onFocus: (e: React.FocusEvent<HTMLInputElement>) => e.currentTarget.select(),
+  });
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <details className="group">
@@ -39,10 +84,12 @@ export function SettingsPanel({ settings, onChange }: Props) {
               <input
                 className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
                 type="number"
+                inputMode="numeric"
                 min={5}
                 max={80}
-                value={settings.halfAngleDeg}
-                onChange={(e) => onChange({ ...settings, halfAngleDeg: Number(e.target.value) })}
+                value={draftHalfAngle}
+                onChange={(e) => setDraftHalfAngle(e.target.value)}
+                {...numberInputHandlers("halfAngleDeg", draftHalfAngle)}
               />
             </label>
 
@@ -51,10 +98,12 @@ export function SettingsPanel({ settings, onChange }: Props) {
               <input
                 className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
                 type="number"
+                inputMode="decimal"
                 step="0.5"
                 min={0}
-                value={settings.forwardBufferKm}
-                onChange={(e) => onChange({ ...settings, forwardBufferKm: Number(e.target.value) })}
+                value={draftForwardBuffer}
+                onChange={(e) => setDraftForwardBuffer(e.target.value)}
+                {...numberInputHandlers("forwardBufferKm", draftForwardBuffer)}
               />
             </label>
 
@@ -63,10 +112,12 @@ export function SettingsPanel({ settings, onChange }: Props) {
               <input
                 className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
                 type="number"
+                inputMode="decimal"
                 step="0.5"
                 min={0}
-                value={settings.backwardTailKm}
-                onChange={(e) => onChange({ ...settings, backwardTailKm: Number(e.target.value) })}
+                value={draftBackwardTail}
+                onChange={(e) => setDraftBackwardTail(e.target.value)}
+                {...numberInputHandlers("backwardTailKm", draftBackwardTail)}
               />
             </label>
 
