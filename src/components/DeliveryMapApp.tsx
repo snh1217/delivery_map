@@ -289,6 +289,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     [recommendationMode, roadRecommendedOrder, straightRecommendedOrder],
   );
 
+  const maxMultiRouteStops = settings.navigationApp === "kakao" ? 2 : 6;
+
   const orderedRouteStops = useMemo<OrderedRouteStop[]>(() => {
     return recommendedOrder
       .map((item) => ({ rowIndex: item.rowIndex, row: rows[item.rowIndex] }))
@@ -304,7 +306,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       }));
   }, [recommendedOrder, rows]);
 
-  const routeableStops = useMemo(() => orderedRouteStops.slice(0, 6), [orderedRouteStops]);
+  const routeableStops = useMemo(
+    () => orderedRouteStops.slice(0, maxMultiRouteStops),
+    [orderedRouteStops, maxMultiRouteStops],
+  );
 
   const routeBatches = useMemo(() => {
     const batches: Array<{ key: string; label: string; origin: LatLng; stops: OrderedRouteStop[] }> = [];
@@ -312,22 +317,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return batches;
     }
 
-    for (let i = 0; i < orderedRouteStops.length; i += 6) {
-      const stops = orderedRouteStops.slice(i, i + 6);
+    for (let i = 0; i < orderedRouteStops.length; i += maxMultiRouteStops) {
+      const stops = orderedRouteStops.slice(i, i + maxMultiRouteStops);
       const prevLast = i === 0 ? null : orderedRouteStops[i - 1];
       const batchOrigin = prevLast ? { lat: prevLast.lat, lon: prevLast.lon } : origin;
       const startSeq = i + 1;
       const endSeq = i + stops.length;
       batches.push({
         key: `batch-${i}`,
-        label: `${Math.floor(i / 6) + 1}차 (${startSeq}~${endSeq})`,
+        label: `${Math.floor(i / maxMultiRouteStops) + 1}차 (${startSeq}~${endSeq})`,
         origin: batchOrigin,
         stops,
       });
     }
 
     return batches;
-  }, [orderedRouteStops, origin]);
+  }, [orderedRouteStops, origin, maxMultiRouteStops]);
 
   const removeRowsAfterRouteHandoff = (rowIds: string[], message: string) => {
     if (rowIds.length === 0) {
@@ -627,6 +632,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             resolvedCount={orderedRouteStops.length}
             routeableCount={routeableStops.length}
             skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
+            routeProviderLabel={settings.navigationApp === "kakao" ? "카카오" : "네이버"}
+            routeMaxStops={maxMultiRouteStops}
             highlightedRowIndex={highlightedRowIndex}
             activeRouteBatchIndex={activeRouteBatchIndex}
             routeBatchButtons={routeBatches.map((batch, index) => ({

@@ -17,6 +17,8 @@ type Props = {
   resolvedCount: number;
   routeableCount: number;
   skippedCountForAllRoute: number;
+  routeProviderLabel: "네이버" | "카카오";
+  routeMaxStops: number;
   highlightedRowIndex: number | null;
   routeBatchButtons: RouteBatchButton[];
   activeRouteBatchIndex: number | null;
@@ -39,6 +41,8 @@ export function DestinationList({
   resolvedCount,
   routeableCount,
   skippedCountForAllRoute,
+  routeProviderLabel,
+  routeMaxStops,
   highlightedRowIndex,
   routeBatchButtons,
   activeRouteBatchIndex,
@@ -78,9 +82,15 @@ export function DestinationList({
       <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-col gap-2">
           <div className="text-xs text-slate-600">
-            전체 길찾기 좌표 확정 {resolvedCount}개 / 네이버 경유지 자동 전달 {routeableCount}개
-            {skippedCountForAllRoute > 0 ? ` (나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용)` : ""}
+            전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개 (최대 {routeMaxStops}개)
+            {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용` : ""}
           </div>
+
+          {routeProviderLabel === "카카오" ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              카카오맵은 자동 경유지 제한으로 한 번에 최대 {routeMaxStops}개씩 전송합니다. 도착지가 많으면 자동으로 분할 버튼을 사용하세요.
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
@@ -111,7 +121,7 @@ export function DestinationList({
               </div>
             ) : (
               <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
-                도착지가 7개 이상이면 분할 길찾기 버튼이 표시됩니다.
+                도착지가 {routeMaxStops + 1}개 이상이면 분할 길찾기 버튼이 표시됩니다.
               </div>
             )}
           </div>
