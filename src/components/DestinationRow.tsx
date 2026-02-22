@@ -41,10 +41,7 @@ export function DestinationRow({
       return;
     }
 
-    const timer = window.setTimeout(() => {
-      onSearch(row.id);
-    }, 600);
-
+    const timer = window.setTimeout(() => onSearch(row.id), 600);
     return () => window.clearTimeout(timer);
   }, [autoSearch, onSearch, row.id, row.input]);
 
@@ -112,14 +109,15 @@ export function DestinationRow({
           >
             삭제
           </button>
-          <button
-            type="button"
-            className="hidden h-12 rounded-lg border border-slate-300 px-3 text-sm sm:block"
-            disabled={!canNavigate}
-            onClick={() => onNavigate(row.id)}
-          >
-            길찾기
-          </button>
+          {canNavigate ? (
+            <button
+              type="button"
+              className="hidden h-12 rounded-lg border border-slate-300 px-3 text-sm sm:block"
+              onClick={() => onNavigate(row.id)}
+            >
+              길찾기
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -148,56 +146,51 @@ export function DestinationRow({
       ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white disabled:opacity-50"
-            disabled={!canNavigate}
-            onClick={() => onNavigate(row.id)}
-          >
-            기본 앱 길찾기 ({preferredNavigationApp === "naver" ? "네이버" : "카카오"})
-          </button>
-        {naverLinks ? (
-          <a
-            className="flex h-11 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm"
-            href={detectPlatform() === "desktop" ? naverLinks.desktopWeb : naverLinks.mobileWeb}
-            target="_blank"
-            rel="noreferrer"
-          >
-            네이버 웹 열기
-          </a>
-        ) : (
-          <div className="h-11 rounded-lg border border-slate-200" />
-        )}
-      </div>
+      {canNavigate ? (
+        <>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white"
+              onClick={() => onNavigate(row.id)}
+            >
+              기본 앱 길찾기 ({preferredNavigationApp === "naver" ? "네이버" : "카카오"})
+            </button>
+            {naverLinks ? (
+              <a
+                className="flex h-11 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm"
+                href={detectPlatform() === "desktop" ? naverLinks.desktopWeb : naverLinks.mobileWeb}
+                target="_blank"
+                rel="noreferrer"
+              >
+                네이버 웹 열기
+              </a>
+            ) : null}
+          </div>
 
-      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          className="h-11 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800 disabled:opacity-50"
-          disabled={!canNavigate}
-          onClick={() => {
-            if (!row.coord) return;
-            onNavigateKakao(row.id);
-          }}
-        >
-          카카오맵 길찾기
-        </button>
-        {kakaoLinks ? (
-          <a
-            className="flex h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 text-sm text-amber-800"
-            href={kakaoLinks.mobileWeb}
-            target="_blank"
-            rel="noreferrer"
-          >
-            카카오맵 웹 열기
-          </a>
-        ) : (
-          <div className="h-11 rounded-lg border border-slate-200" />
-        )}
-      </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              className="h-11 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800"
+              onClick={() => onNavigateKakao(row.id)}
+            >
+              카카오맵 길찾기
+            </button>
+            {kakaoLinks ? (
+              <a
+                className="flex h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 text-sm text-amber-800"
+                href={kakaoLinks.mobileWeb}
+                target="_blank"
+                rel="noreferrer"
+              >
+                카카오맵 웹 열기
+              </a>
+            ) : null}
+          </div>
 
-      <p className="mt-2 text-[11px] text-slate-500">카카오맵 길찾기/웹 열기를 바로 사용할 수 있습니다.</p>
+          <p className="mt-2 text-[11px] text-slate-500">좌표가 확정되면 네이버/카카오 길찾기를 바로 사용할 수 있습니다.</p>
+        </>
+      ) : null}
     </div>
   );
 }
