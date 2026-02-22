@@ -48,17 +48,37 @@ type Props = {
   preferredNavigationApp: "naver" | "kakao";
 };
 
-function normalizeTranscript(base: string, transcript: string) {
-  const merged = [base.trim(), transcript.trim()].filter(Boolean).join(" ");
-  return merged.replace(/\s+/g, " ").trim();
-}
-
 function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
   if (typeof window === "undefined") {
     return null;
   }
   const w = window as WindowWithSpeech;
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+function removeVoiceHabitPhrases(value: string) {
+  let text = value;
+
+  // 흔한 명령형 말버릇 제거 (앞/뒤 위주)
+  const patterns = [
+    /(검색|찾기|찾아)\s*해\s*줘(?:요)?$/g,
+    /(추가|입력|적용)\s*해\s*줘(?:요)?$/g,
+    /(검색|찾기|찾아)\s*해\s*줘(?:요)?/g,
+    /(추가|입력|적용)\s*해\s*줘(?:요)?/g,
+    /^(여기|이거|저기)\s*/g,
+    /^(주소)\s*(로|를)?\s*/g,
+  ];
+
+  for (const pattern of patterns) {
+    text = text.replace(pattern, " ");
+  }
+
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function normalizeTranscript(base: string, transcript: string) {
+  const merged = [base.trim(), transcript.trim()].filter(Boolean).join(" ");
+  return removeVoiceHabitPhrases(merged).replace(/\s+/g, " ").trim();
 }
 
 export function DestinationRow({
@@ -81,11 +101,29 @@ export function DestinationRow({
   const voiceHasResultRef = useRef(false);
   const voiceLastMergedInputRef = useRef("");
   const skipNextAutoSearchRef = useRef(false);
+  const autoSearchTimerRef = useRef<number | null>(null);
+  const voicePressActiveRef = useRef(false);
+  const suppressVoiceClickRef = useRef(false);
+
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
+
+  const clearPendingVoiceAutoSearch = () => {
+    if (autoSearchTimerRef.current !== null) {
+      window.clearTimeout(autoSearchTimerRef.current);
+      autoSearchTimerRef.current = null;
+    }
+    setVoicePreviewText(null);
+  };
+
+  const runSearchNow = () => {
+    clearPendingVoiceAutoSearch();
+    onSearch(row.id);
+  };
 
   useEffect(() => {
-    if (!autoSearch || !row.input.trim()) {
+    if (!autoSearch || !row.input.trim() || isListening) {
       return;
     }
 
@@ -96,7 +134,7 @@ export function DestinationRow({
 
     const timer = window.setTimeout(() => onSearch(row.id), 600);
     return () => window.clearTimeout(timer);
-  }, [autoSearch, onSearch, row.id, row.input]);
+  }, [autoSearch, isListening, onSearch, row.id, row.input]);
 
   useEffect(() => {
     if (!highlighted) {
@@ -107,6 +145,7 @@ export function DestinationRow({
 
   useEffect(() => {
     return () => {
+      clearPendingVoiceAutoSearch();
       try {
         recognitionRef.current?.abort();
       } catch {
@@ -122,12 +161,17 @@ export function DestinationRow({
   const speechSupported = Boolean(getSpeechRecognitionCtor());
 
   const startVoiceInput = () => {
+    if (isListening) {
+      return;
+    }
+
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
       setVoiceError("이 브라우저는 음성 입력을 지원하지 않습니다. (Chrome/Edge 권장)");
       return;
     }
 
+    clearPendingVoiceAutoSearch();
     setVoiceError(null);
     voiceBaseInputRef.current = row.input ?? "";
     voiceHasResultRef.current = false;
@@ -140,11 +184,8 @@ export function DestinationRow({
 
     recognition.onresult = (event) => {
       let transcript = "";
-
       for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const result = event.results[i];
-        const part = result?.[0]?.transcript ?? "";
-        transcript += ` ${part}`;
+        transcript += ` ${event.results[i]?.[0]?.transcript ?? ""}`;
       }
 
       const normalized = normalizeTranscript(voiceBaseInputRef.current, transcript);
@@ -168,13 +209,21 @@ export function DestinationRow({
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
+      voicePressActiveRef.current = false;
 
-      if (voiceHasResultRef.current && voiceLastMergedInputRef.current.trim()) {
-        skipNextAutoSearchRef.current = true;
-        window.setTimeout(() => {
-          onSearch(row.id);
-        }, 180);
+      const finalText = removeVoiceHabitPhrases(voiceLastMergedInputRef.current);
+      if (!voiceHasResultRef.current || !finalText.trim()) {
+        return;
       }
+
+      onChangeInput(row.id, finalText);
+      setVoicePreviewText(finalText);
+      skipNextAutoSearchRef.current = true;
+      autoSearchTimerRef.current = window.setTimeout(() => {
+        autoSearchTimerRef.current = null;
+        setVoicePreviewText(null);
+        onSearch(row.id);
+      }, 500);
     };
 
     recognitionRef.current = recognition;
@@ -187,6 +236,22 @@ export function DestinationRow({
       recognitionRef.current?.stop();
     } catch {
       // no-op
+    }
+  };
+
+  const onVoiceButtonPointerDown = () => {
+    suppressVoiceClickRef.current = true;
+    voicePressActiveRef.current = true;
+    startVoiceInput();
+  };
+
+  const onVoiceButtonPointerUpLike = () => {
+    if (!voicePressActiveRef.current) {
+      return;
+    }
+    voicePressActiveRef.current = false;
+    if (isListening) {
+      stopVoiceInput();
     }
   };
 
@@ -219,11 +284,14 @@ export function DestinationRow({
             className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
             placeholder="주소 또는 구/동 입력"
             value={row.input}
-            onChange={(e) => onChangeInput(row.id, e.target.value)}
+            onChange={(e) => {
+              clearPendingVoiceAutoSearch();
+              onChangeInput(row.id, e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && row.input.trim() && row.status !== "loading") {
                 e.preventDefault();
-                onSearch(row.id);
+                runSearchNow();
               }
             }}
           />
@@ -234,16 +302,35 @@ export function DestinationRow({
                 ? "border border-rose-300 bg-rose-50 text-rose-700"
                 : "border border-slate-300 bg-white text-slate-700"
             } disabled:opacity-50`}
-            onClick={isListening ? stopVoiceInput : startVoiceInput}
+            onPointerDown={speechSupported ? onVoiceButtonPointerDown : undefined}
+            onPointerUp={onVoiceButtonPointerUpLike}
+            onPointerCancel={onVoiceButtonPointerUpLike}
+            onPointerLeave={onVoiceButtonPointerUpLike}
+            onClick={() => {
+              if (suppressVoiceClickRef.current) {
+                suppressVoiceClickRef.current = false;
+                return;
+              }
+              if (isListening) {
+                stopVoiceInput();
+              } else {
+                startVoiceInput();
+              }
+            }}
             disabled={!speechSupported && !isListening}
-            title={speechSupported ? "음성으로 주소 입력" : "이 브라우저는 음성 입력 미지원"}
+            title={speechSupported ? "길게 누르고 주소를 말한 뒤 손을 떼면 자동 검색" : "이 브라우저는 음성 입력 미지원"}
           >
-            {isListening ? "음성중지" : "음성입력"}
+            {isListening ? "듣는 중" : "음성입력"}
           </button>
         </div>
 
         {isListening ? (
-          <p className="text-xs text-cyan-700">음성 입력 중... 말한 내용이 주소 입력칸에 바로 반영됩니다.</p>
+          <p className="text-xs text-cyan-700">버튼을 누른 상태로 주소를 말하고 손을 떼면 자동으로 검색합니다.</p>
+        ) : null}
+        {voicePreviewText ? (
+          <p className="text-xs text-emerald-700">
+            음성 인식 결과 미리보기: <span className="font-medium">{voicePreviewText}</span> (0.5초 후 자동 검색)
+          </p>
         ) : null}
         {voiceError ? <p className="text-xs text-rose-600">{voiceError}</p> : null}
         {!speechSupported ? (
@@ -255,7 +342,7 @@ export function DestinationRow({
             type="button"
             className="h-12 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white"
             disabled={!row.input.trim() || row.status === "loading"}
-            onClick={() => onSearch(row.id)}
+            onClick={runSearchNow}
           >
             {row.status === "loading" ? "검색 중..." : "검색/적용"}
           </button>
@@ -351,3 +438,4 @@ export function DestinationRow({
     </div>
   );
 }
+
