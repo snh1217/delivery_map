@@ -3,7 +3,7 @@
 import { DestinationRow } from "@/components/DestinationRow";
 import type { DestinationRowState, LatLng } from "@/types";
 
-type RouteBatchButton = {
+export type RouteBatchButton = {
   key: string;
   label: string;
   count: number;
@@ -19,6 +19,7 @@ type Props = {
   skippedCountForAllRoute: number;
   highlightedRowIndex: number | null;
   routeBatchButtons: RouteBatchButton[];
+  activeRouteBatchIndex: number | null;
   onAdd: () => void;
   onReset: () => void;
   onNavigateAll: () => void;
@@ -38,6 +39,7 @@ export function DestinationList({
   skippedCountForAllRoute,
   highlightedRowIndex,
   routeBatchButtons,
+  activeRouteBatchIndex,
   onAdd,
   onReset,
   onNavigateAll,
@@ -55,11 +57,7 @@ export function DestinationList({
           <p className="text-xs text-slate-500">최대 10개까지 추가 가능</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
-          <button
-            type="button"
-            className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"
-            onClick={onReset}
-          >
+          <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm" onClick={onReset}>
             초기화
           </button>
           <button
@@ -79,6 +77,7 @@ export function DestinationList({
             전체 길찾기: 좌표 확정 {resolvedCount}개 / 네이버 경유지 지원 기준 자동 전달 {routeableCount}개
             {skippedCountForAllRoute > 0 ? ` (나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용)` : ""}
           </div>
+
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
@@ -88,13 +87,18 @@ export function DestinationList({
             >
               전체 길찾기 (경유지 포함)
             </button>
+
             {routeBatchButtons.length > 1 ? (
               <div className="grid grid-cols-2 gap-2">
-                {routeBatchButtons.map((button) => (
+                {routeBatchButtons.map((button, index) => (
                   <button
                     key={button.key}
                     type="button"
-                    className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700"
+                    className={`h-11 rounded-lg px-3 text-xs font-medium ${
+                      activeRouteBatchIndex === index
+                        ? "border border-cyan-400 bg-cyan-50 text-cyan-800"
+                        : "border border-slate-300 bg-white text-slate-700"
+                    }`}
                     onClick={button.onClick}
                   >
                     {button.label} ({button.count})
@@ -107,6 +111,16 @@ export function DestinationList({
               </div>
             )}
           </div>
+
+          {activeRouteBatchIndex !== null && routeBatchButtons.length > 1 ? (
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-800">
+              {routeBatchButtons[activeRouteBatchIndex]
+                ? `${routeBatchButtons[activeRouteBatchIndex].label} 경로를 열었습니다. 다음 경로는 ${
+                    routeBatchButtons[activeRouteBatchIndex + 1]?.label ?? "없음"
+                  }`
+                : "분할 경로 안내"}
+            </div>
+          ) : null}
         </div>
       </div>
 

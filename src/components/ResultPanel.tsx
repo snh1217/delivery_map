@@ -39,11 +39,7 @@ export function ResultPanel({
     if (!canShare) {
       return;
     }
-
-    await navigator.share({
-      title: "퀵서비스 동 리스트",
-      text,
-    });
+    await navigator.share({ title: "퀵서비스 동 리스트", text });
   };
 
   return (
@@ -88,15 +84,15 @@ export function ResultPanel({
           </button>
           <span className="text-xs text-slate-500">
             {recommendationMode === "road"
-              ? "현재 위치 -> 각 도착지 네이버 경로 거리 기준 정렬"
-              : "현재 위치 -> 각 도착지 직선거리 기준 정렬"}
+              ? "연쇄 경로(휴리스틱) 기준으로 네이버 경로 거리 사용"
+              : "현재 위치 기준 직선거리로 빠르게 정렬"}
           </span>
         </div>
 
         {roadRecommendationError ? <p className="mt-2 text-xs text-rose-600">{roadRecommendationError}</p> : null}
 
         <ol className="mt-2 space-y-2">
-          {recommendedOrder.map((item: RouteRecommendationItem) => (
+          {recommendedOrder.map((item) => (
             <li key={`${item.rowIndex}-${item.step}`}>
               <button
                 type="button"
@@ -124,12 +120,7 @@ export function ResultPanel({
       </details>
 
       <label className="mb-1 block text-xs font-medium text-slate-600">최종 동 리스트</label>
-      <textarea
-        className="h-28 w-full rounded-lg border border-slate-300 p-2 text-sm"
-        readOnly
-        value={text}
-        onFocus={(e) => e.target.select()}
-      />
+      <textarea className="h-28 w-full rounded-lg border border-slate-300 p-2 text-sm" readOnly value={text} onFocus={(e) => e.target.select()} />
 
       <div className="mt-2 grid grid-cols-2 gap-2">
         <button

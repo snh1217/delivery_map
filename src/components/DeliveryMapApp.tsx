@@ -113,6 +113,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [roadRecommendedOrder, setRoadRecommendedOrder] = useState<RouteRecommendationItem[] | null>(null);
   const [roadRecommendationLoading, setRoadRecommendationLoading] = useState(false);
   const [roadRecommendationError, setRoadRecommendationError] = useState<string | null>(null);
+  const [activeRouteBatchIndex, setActiveRouteBatchIndex] = useState<number | null>(null);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -145,11 +146,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     setRoadRecommendedOrder(null);
     setRoadRecommendationError(null);
-    if (recommendationMode === "road") {
-      setRecommendationMode("straight");
-    }
+    setRecommendationMode((prev) => (prev === "road" ? "straight" : prev));
     setHighlightedRowIndex(null);
-  }, [origin, recommendationMode, rows]);
+    setActiveRouteBatchIndex(null);
+  }, [origin, rows]);
 
   const onSearch = async (id: string) => {
     const row = rows.find((item) => item.id === id);
@@ -290,6 +290,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (routeableStops.length === 0) {
       return;
     }
+    setActiveRouteBatchIndex(routeBatches.length > 1 ? 0 : null);
 
     const result = openNaverMultiDirections(origin, routeableStops);
     if (result.usedAppScheme && result.links) {
@@ -302,6 +303,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (!batch || batch.stops.length === 0) {
       return;
     }
+    setActiveRouteBatchIndex(batchIndex);
 
     const result = openNaverMultiDirections(batch.origin, batch.stops);
     if (result.usedAppScheme && result.links) {
@@ -323,40 +325,100 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setRoadRecommendationError(null);
 
     try {
-      const measured = await Promise.all(
-        resolved.map(async (item) => {
-          const response = await fetch(
-            `/api/directions5?startLat=${origin.lat}&startLon=${origin.lon}&goalLat=${item.coord.lat}&goalLon=${item.coord.lon}&option=trafast`,
-            { cache: "no-store" },
-          );
+      const cache = new Map<string, number>();
+      const keyOf = (a: LatLng, b: LatLng) => `${a.lat.toFixed(6)},${a.lon.toFixed(6)}>${b.lat.toFixed(6)},${b.lon.toFixed(6)}`;
 
-          if (!response.ok) {
-            const payload = (await response.json().catch(() => ({}))) as { message?: string };
-            throw new Error(payload.message ?? "Directions API 요청 실패");
+      const getRoadKm = async (a: LatLng, b: LatLng) => {
+        const key = keyOf(a, b);
+        const cached = cache.get(key);
+        if (cached !== undefined) {
+          return cached;
+        }
+
+        const response = await fetch(
+          `/api/directions5?startLat=${a.lat}&startLon=${a.lon}&goalLat=${b.lat}&goalLon=${b.lon}&option=trafast`,
+          { cache: "no-store" },
+        );
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(payload.message ?? "Directions API 요청 실패");
+        }
+
+        const payload = (await response.json()) as DirectionsApiResponse;
+        const route = payload.raw?.route;
+        const firstRouteGroup = route ? Object.values(route)[0] : undefined;
+        const distanceMeters = firstRouteGroup?.[0]?.summary?.distance;
+        const km = typeof distanceMeters === "number" ? distanceMeters / 1000 : Number.POSITIVE_INFINITY;
+        cache.set(key, km);
+        return km;
+      };
+
+      const unresolved = [...resolved];
+      const greedyOrder: typeof resolved = [];
+      let current = origin;
+
+      while (unresolved.length > 0) {
+        const candidates = await Promise.all(
+          unresolved.map(async (item) => ({
+            item,
+            km: await getRoadKm(current, item.coord),
+          })),
+        );
+        candidates.sort((a, b) => a.km - b.km);
+        const next = candidates[0];
+        greedyOrder.push(next.item);
+        current = next.item.coord;
+        const removeIndex = unresolved.findIndex((it) => it.rowIndex === next.item.rowIndex);
+        unresolved.splice(removeIndex, 1);
+      }
+
+      const pathDistance = async (order: typeof resolved) => {
+        let total = 0;
+        let from = origin;
+        for (const item of order) {
+          total += await getRoadKm(from, item.coord);
+          from = item.coord;
+        }
+        return total;
+      };
+
+      // 2-opt style local improvement on the greedy order (open path, no return edge).
+      let improved = [...greedyOrder];
+      let improvedFlag = true;
+      while (improvedFlag) {
+        improvedFlag = false;
+        for (let i = 0; i < improved.length - 2; i += 1) {
+          for (let k = i + 1; k < improved.length - 1; k += 1) {
+            const candidate = [
+              ...improved.slice(0, i),
+              ...improved.slice(i, k + 1).reverse(),
+              ...improved.slice(k + 1),
+            ];
+            const [currDist, candDist] = await Promise.all([pathDistance(improved), pathDistance(candidate)]);
+            if (candDist + 0.05 < currDist) {
+              improved = candidate;
+              improvedFlag = true;
+            }
           }
+        }
+      }
 
-          const payload = (await response.json()) as DirectionsApiResponse;
-          const route = payload.raw?.route;
-          const firstRouteGroup = route ? Object.values(route)[0] : undefined;
-          const distanceMeters = firstRouteGroup?.[0]?.summary?.distance;
-          const km = typeof distanceMeters === "number" ? distanceMeters / 1000 : Number.POSITIVE_INFINITY;
-
-          return {
-            ...item,
-            distanceKm: km,
-          };
-        }),
-      );
-
-      const sorted = measured
-        .sort((a, b) => a.distanceKm - b.distanceKm)
-        .map((item, index) => ({
+      let cumulative = 0;
+      let from = origin;
+      const sorted = [] as RouteRecommendationItem[];
+      for (let index = 0; index < improved.length; index += 1) {
+        const item = improved[index];
+        const legKm = await getRoadKm(from, item.coord);
+        cumulative += legKm;
+        sorted.push({
           step: index + 1,
           rowIndex: item.rowIndex,
           label: item.label,
-          distanceKm: Number(item.distanceKm.toFixed(1)),
-          cumulativeKm: Number(item.distanceKm.toFixed(1)),
-        }));
+          distanceKm: Number(legKm.toFixed(1)),
+          cumulativeKm: Number(cumulative.toFixed(1)),
+        });
+        from = item.coord;
+      }
 
       setRoadRecommendedOrder(sorted);
       setRecommendationMode("road");
@@ -424,6 +486,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             routeableCount={routeableStops.length}
             skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
             highlightedRowIndex={highlightedRowIndex}
+            activeRouteBatchIndex={activeRouteBatchIndex}
             routeBatchButtons={routeBatches.map((batch, index) => ({
               key: batch.key,
               label: batch.label,
@@ -486,6 +549,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             destinations={rows.map((row, index) => ({
               coord: row.coord,
               label: (row.label ?? row.input) || `도착지 ${index + 1}`,
+              recommendStep: recommendedOrder.find((item) => item.rowIndex === index)?.step,
+              highlighted: highlightedRowIndex === index,
             }))}
             segments={segments}
           />

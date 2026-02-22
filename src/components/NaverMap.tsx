@@ -4,17 +4,26 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { polygonPaths } from "@/lib/geo";
 import type { LatLng, SegmentResult } from "@/types";
 
+type DestinationMapItem = {
+  coord?: LatLng;
+  label?: string;
+  recommendStep?: number;
+  highlighted?: boolean;
+};
+
 type Props = {
   origin: LatLng;
-  destinations: Array<{ coord?: LatLng; label?: string }>;
+  destinations: DestinationMapItem[];
   segments: SegmentResult[];
 };
 
 const COLORS = ["#06b6d4", "#3b82f6", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6"];
 
-function labelContent(text: string) {
+function labelContent(text: string, options?: { accent?: string; strong?: boolean }) {
   const safe = text.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return `<div style="padding:4px 8px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:11px;line-height:1.3;color:#0f172a;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,0.12)">${safe}</div>`;
+  const accent = options?.accent ?? "#cbd5e1";
+  const strong = options?.strong ?? false;
+  return `<div style="padding:4px 8px;border:1px solid ${accent};border-radius:10px;background:${strong ? "#ecfeff" : "#fff"};font-size:11px;line-height:1.3;color:#0f172a;white-space:nowrap;box-shadow:0 1px 4px rgba(15,23,42,0.12);font-weight:${strong ? 700 : 500}">${safe}</div>`;
 }
 
 export function NaverMap({ origin, destinations, segments }: Props) {
@@ -25,9 +34,7 @@ export function NaverMap({ origin, destinations, segments }: Props) {
 
   const clientId = process.env.NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID;
 
-  const points = useMemo(() => {
-    return [origin, ...destinations.map((d) => d.coord).filter(Boolean)] as LatLng[];
-  }, [destinations, origin]);
+  const points = useMemo(() => [origin, ...destinations.map((d) => d.coord).filter(Boolean)] as LatLng[], [destinations, origin]);
 
   useEffect(() => {
     if (!clientId) {
@@ -36,14 +43,12 @@ export function NaverMap({ origin, destinations, segments }: Props) {
 
     const scriptId = "naver-map-sdk";
     const existing = document.getElementById(scriptId) as HTMLScriptElement | null;
-
     const onLoaded = () => setReady(true);
 
     if (existing) {
       if (!window.naver?.maps) {
         existing.addEventListener("load", onLoaded);
       }
-
       return () => existing.removeEventListener("load", onLoaded);
     }
 
@@ -87,8 +92,9 @@ export function NaverMap({ origin, destinations, segments }: Props) {
       title: "출발지",
     });
     overlaysRef.current.push(startMarker);
+
     const startLabel = new naverMaps.InfoWindow({
-      content: labelContent("출발지"),
+      content: labelContent("출발지", { accent: "#0891b2", strong: true }),
       borderWidth: 0,
       backgroundColor: "transparent",
       disableAnchor: true,
@@ -107,11 +113,15 @@ export function NaverMap({ origin, destinations, segments }: Props) {
         position: new naverMaps.LatLng(dest.coord.lat, dest.coord.lon),
         title: `도착지 ${idx + 1}`,
       });
-
       overlaysRef.current.push(marker);
 
+      const step = dest.recommendStep;
+      const accent = typeof step === "number" ? COLORS[(step - 1) % COLORS.length] : "#cbd5e1";
       const markerLabel = new naverMaps.InfoWindow({
-        content: labelContent(`${idx + 1}. ${dest.label ?? `도착지 ${idx + 1}`}`),
+        content: labelContent(
+          `${typeof step === "number" ? `[${step}] ` : ""}${idx + 1}. ${dest.label ?? `도착지 ${idx + 1}`}`,
+          { accent, strong: Boolean(dest.highlighted) },
+        ),
         borderWidth: 0,
         backgroundColor: "transparent",
         disableAnchor: true,
@@ -134,26 +144,20 @@ export function NaverMap({ origin, destinations, segments }: Props) {
           strokeOpacity: 0.9,
           strokeWeight: 2,
         });
-
         overlaysRef.current.push(polygon);
         path.forEach((p) => bounds.extend(new naverMaps.LatLng(p.lat, p.lng)));
       });
     });
 
     if (points.length > 0) {
-      map.fitBounds(bounds, {
-        top: 48,
-        right: 48,
-        bottom: 48,
-        left: 48,
-      });
+      map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 });
     }
   }, [destinations, origin, points.length, ready, segments]);
 
   if (!clientId) {
     return (
       <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-700">
-        NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID가 없어 지도 표시가 비활성화되었습니다.
+        `NEXT_PUBLIC_NAVER_MAPS_CLIENT_ID`가 없어 지도 표시가 비활성화되었습니다.
       </div>
     );
   }
