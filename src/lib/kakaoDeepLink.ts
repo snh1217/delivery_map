@@ -1,4 +1,5 @@
 import type { LatLng } from "@/types";
+import type { RoutePoint } from "@/lib/naverDeepLink";
 
 export type KakaoDirectionLinkSet = {
   appScheme: string;
@@ -72,3 +73,48 @@ export function openKakaoMapDirections(origin: LatLng, destination: LatLng, name
   return { links, usedAppScheme: true };
 }
 
+export function createKakaoMapMultiDirectionLinks(origin: LatLng, orderedStops: RoutePoint[]): KakaoDirectionLinkSet | null {
+  if (orderedStops.length === 0) {
+    return null;
+  }
+
+  // KakaoMap route scheme supports a single waypoint parameter(vp).
+  // We support up to 2 stops (waypoint + destination) for exact automatic routing.
+  if (orderedStops.length > 2) {
+    return null;
+  }
+
+  const destination = orderedStops[orderedStops.length - 1];
+  const waypoint = orderedStops.length === 2 ? orderedStops[0] : null;
+
+  const vpPart = waypoint ? `&vp=${waypoint.lat},${waypoint.lon}` : "";
+  const appScheme = `kakaomap://route?sp=${origin.lat},${origin.lon}${vpPart}&ep=${destination.lat},${destination.lon}&by=CAR`;
+  const mobileWeb = `https://m.map.kakao.com/scheme/route?sp=${origin.lat},${origin.lon}${vpPart}&ep=${destination.lat},${destination.lon}&by=CAR`;
+
+  return {
+    appScheme,
+    mobileWeb,
+    desktopWeb: mobileWeb,
+    storeUrl: kakaoStoreUrl(),
+  };
+}
+
+export function openKakaoMapMultiDirections(origin: LatLng, orderedStops: RoutePoint[]) {
+  const links = createKakaoMapMultiDirectionLinks(origin, orderedStops);
+  if (!links) {
+    return { links: null, usedAppScheme: false, supported: false as const };
+  }
+
+  const platform = detectKakaoPlatform();
+  if (platform === "desktop") {
+    window.open(links.desktopWeb, "_blank", "noopener,noreferrer");
+    return { links, usedAppScheme: false, supported: true as const };
+  }
+
+  window.location.href = links.appScheme;
+  window.setTimeout(() => {
+    window.location.href = links.mobileWeb;
+  }, 1200);
+
+  return { links, usedAppScheme: true, supported: true as const };
+}

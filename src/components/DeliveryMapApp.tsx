@@ -15,7 +15,11 @@ import {
   type NaverDirectionLinkSet,
   type RoutePoint,
 } from "@/lib/naverDeepLink";
-import { openKakaoMapDirections, type KakaoDirectionLinkSet } from "@/lib/kakaoDeepLink";
+import {
+  openKakaoMapDirections,
+  openKakaoMapMultiDirections,
+  type KakaoDirectionLinkSet,
+} from "@/lib/kakaoDeepLink";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type {
   DestinationRowState,
@@ -360,6 +364,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
     setActiveRouteBatchIndex(routeBatches.length > 1 ? 0 : null);
 
+    if (settings.navigationApp === "kakao") {
+      const result = openKakaoMapMultiDirections(origin, routeableStops);
+      if (!result.supported) {
+        setLastAutoRemovedMessage(
+          "카카오맵 전체 길찾기는 현재 자동 경유지 1개(총 2도착지)까지만 지원됩니다. 개별 길찾기 또는 네이버 기본 앱을 사용하세요.",
+        );
+        return;
+      }
+      if (result.usedAppScheme && result.links) {
+        window.setTimeout(() => setStoreModal(result.links), 1300);
+      }
+      removeRowsAfterRouteHandoff(
+        routeableStops.map((stop) => stop.rowId),
+        `카카오맵 전체 길찾기로 ${routeableStops.length}개 도착지를 전송하고 목록에서 숨겼습니다.`,
+      );
+      return;
+    }
+
     const result = openNaverMultiDirections(origin, routeableStops);
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
@@ -376,6 +398,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return;
     }
     setActiveRouteBatchIndex(batchIndex);
+
+    if (settings.navigationApp === "kakao") {
+      const result = openKakaoMapMultiDirections(batch.origin, batch.stops);
+      if (!result.supported) {
+        setLastAutoRemovedMessage(
+          `카카오맵 ${batch.label} 경로는 자동 경유지 1개 제한으로 바로 전송할 수 없습니다. 네이버 기본 앱으로 변경하거나 개별 길찾기를 사용하세요.`,
+        );
+        return;
+      }
+      if (result.usedAppScheme && result.links) {
+        window.setTimeout(() => setStoreModal(result.links), 1300);
+      }
+      removeRowsAfterRouteHandoff(
+        batch.stops.map((stop) => stop.rowId),
+        `카카오맵 ${batch.label} 경로를 전송하고 해당 도착지를 목록에서 숨겼습니다.`,
+      );
+      return;
+    }
 
     const result = openNaverMultiDirections(batch.origin, batch.stops);
     if (result.usedAppScheme && result.links) {
