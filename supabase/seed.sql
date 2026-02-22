@@ -1,0 +1,3 @@
+-- Optional local seed
+-- insert into public.allowlist(phone, is_active) values (''+821012345678'', true)
+-- on conflict (phone) do update set is_active = true;

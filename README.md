@@ -28,6 +28,15 @@ npm run build
 - 네이버 지도 마커/팬 오버레이
 - 네이버 지도 앱 길찾기(자동차) + 모바일 웹 fallback + 스토어 안내
 
+## 네이버 API 프록시(추가 구현)
+
+- `GET /api/geocode?query=...`
+- `GET /api/reverse-geocode?lat=...&lon=...`
+- `GET /api/directions5?startLat=...&startLon=...&goalLat=...&goalLon=...`
+- `GET /api/directions15?startLat=...&startLon=...&goalLat=...&goalLon=...`
+
+서버 프록시에서 Naver API Gateway 키를 사용하므로 클라이언트에 secret이 노출되지 않습니다.
+
 ## 환경변수
 
 `.env.local.example`를 참고해 `.env.local`을 설정하세요.
