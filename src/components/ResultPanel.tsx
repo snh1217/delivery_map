@@ -48,7 +48,10 @@ export function ResultPanel({
     const totalKm = recommendedOrder.reduce((sum, item) => sum + (item.distanceKm || 0), 0);
     const hasDuration = recommendedOrder.some((item) => typeof item.durationMin === "number");
     const totalMin = hasDuration
-      ? recommendedOrder.reduce((sum, item) => sum + (Number.isFinite(item.durationMin ?? NaN) ? (item.durationMin ?? 0) : 0), 0)
+      ? recommendedOrder.reduce(
+          (sum, item) => sum + (Number.isFinite(item.durationMin ?? NaN) ? (item.durationMin ?? 0) : 0),
+          0,
+        )
       : null;
     return { totalKm: Number(totalKm.toFixed(1)), totalMin };
   }, [recommendedOrder]);
@@ -77,7 +80,7 @@ export function ResultPanel({
         <div className="mt-2 grid grid-cols-2 gap-2">
           <button
             type="button"
-            className={`h-10 rounded-lg text-sm ${
+            className={`h-11 rounded-lg text-sm ${
               recommendationMode === "straight" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"
             }`}
             onClick={() => onChangeRecommendationMode("straight")}
@@ -86,7 +89,7 @@ export function ResultPanel({
           </button>
           <button
             type="button"
-            className={`h-10 rounded-lg text-sm ${
+            className={`h-11 rounded-lg text-sm ${
               recommendationMode === "road" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white"
             }`}
             onClick={() => onChangeRecommendationMode("road")}
@@ -95,7 +98,7 @@ export function ResultPanel({
           </button>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 grid gap-2 sm:grid-cols-[auto_1fr] sm:items-center">
           <button
             type="button"
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-50"
@@ -104,9 +107,9 @@ export function ResultPanel({
           >
             {roadRecommendationLoading ? "실도로 계산 중..." : "실도로 기준 다시 계산"}
           </button>
-          <span className="text-xs text-slate-500">
+          <span className="text-xs leading-5 text-slate-500">
             {recommendationMode === "road"
-              ? "각 구간의 네이버 경로 거리/시간 기준 (대략값)"
+              ? "네이버 경로 거리/시간 기반 대략값"
               : "현재 위치 기준 직선거리로 빠르게 정렬"}
           </span>
         </div>
@@ -131,7 +134,7 @@ export function ResultPanel({
                 onClick={() => onSelectRecommendation(item.rowIndex)}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-sm font-medium text-slate-800">
                       {item.step}. 도착지 {item.rowIndex + 1}
                     </div>
@@ -143,9 +146,7 @@ export function ResultPanel({
                         : ""}
                     </div>
                   </div>
-                  <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">
-                    {item.distanceKm}km
-                  </div>
+                  <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">{item.distanceKm}km</div>
                 </div>
               </button>
             </li>
@@ -166,10 +167,10 @@ export function ResultPanel({
         onFocus={(e) => e.target.select()}
       />
 
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <button
           type="button"
-          className="h-12 rounded-lg bg-cyan-700 text-sm font-medium text-white disabled:opacity-50"
+          className="h-12 rounded-xl bg-cyan-700 text-sm font-medium text-white disabled:opacity-50"
           disabled={!text}
           onClick={() => void onCopy()}
         >
@@ -177,7 +178,7 @@ export function ResultPanel({
         </button>
         <button
           type="button"
-          className="h-12 rounded-lg border border-slate-300 bg-white text-sm disabled:opacity-50"
+          className="h-12 rounded-xl border border-slate-300 bg-white text-sm disabled:opacity-50"
           disabled={!text || !canShare}
           onClick={() => void onShare()}
         >
@@ -202,3 +203,4 @@ export function ResultPanel({
     </section>
   );
 }
+

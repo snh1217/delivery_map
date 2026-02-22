@@ -564,7 +564,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-2 py-3 sm:px-4 sm:py-4">
+    <main className="min-h-screen bg-slate-50 px-2 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32 lg:pb-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
           <h1 className="text-xl font-bold text-slate-800">퀵서비스 구설정 자동 생성</h1>
@@ -743,7 +743,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       ) : null}
 
       {lastAutoRemovedMessage ? (
-        <div className="fixed bottom-4 left-4 z-30 max-w-[70vw] rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg lg:hidden">
+        <div className="fixed bottom-24 left-3 right-3 z-30 rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg lg:hidden">
           <p>{lastAutoRemovedMessage}</p>
           <button
             type="button"
@@ -756,10 +756,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
       ) : null}
 
-      <div className="fixed bottom-4 right-4 z-30 flex flex-col gap-2 lg:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
+        <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto] gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur">
         <button
           type="button"
-          className="flex h-12 items-center justify-center rounded-full bg-slate-900 px-4 text-xs font-semibold text-white shadow-lg disabled:opacity-50"
+          className="flex h-12 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50"
           onClick={onNavigateAll}
           disabled={routeableStops.length === 0}
         >
@@ -767,13 +768,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </button>
         <button
           type="button"
-          className="flex h-14 items-center gap-2 rounded-full bg-cyan-700 px-4 text-sm font-semibold text-white shadow-lg disabled:opacity-50"
+          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
           onClick={onAddRow}
           disabled={rows.length >= MAX_DESTINATIONS}
         >
           <span className="text-lg leading-none">+</span>
           도착지 추가
         </button>
+        </div>
       </div>
     </main>
   );

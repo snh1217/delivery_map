@@ -57,26 +57,23 @@ export function SettingsPanel({ settings, onChange }: Props) {
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
-          <div>
+      <details className="group" open={false}>
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-slate-800">설정</h2>
-            <p className="text-xs text-slate-500">
-              팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리{" "}
-              {settings.backwardTailKm}km / 기본 길찾기 {settings.navigationApp === "naver" ? "네이버" : "카카오"}
+            <p className="mt-0.5 text-xs text-slate-500">
+              팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리 {settings.backwardTailKm}km / 기본
+              길찾기 {settings.navigationApp === "naver" ? "네이버" : "카카오"}
             </p>
           </div>
-          <span className="rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 group-open:hidden">
+          <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
             펼치기
-          </span>
-          <span className="hidden rounded-full border border-slate-200 px-2 py-1 text-xs text-slate-600 group-open:inline-flex">
-            접기
           </span>
         </summary>
 
         <div className="mt-3 border-t border-slate-100 pt-3">
-          <p className="mb-3 text-xs text-slate-600">
-            팬(부채꼴) 계산값과 기본 길찾기 앱을 설정합니다. `길찾기` 버튼은 아래 선택값(네이버/카카오)을 따라 동작합니다.
+          <p className="mb-3 text-xs leading-5 text-slate-600">
+            팬 계산값과 기본 길찾기 앱을 설정합니다. 모바일에서는 자주 바꾸지 않는 항목이라 접어서 사용해도 됩니다.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -136,13 +133,13 @@ export function SettingsPanel({ settings, onChange }: Props) {
             </label>
           </div>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="mt-3 grid gap-2">
             <div className="rounded-xl border border-slate-200 p-3">
               <div className="mb-2 text-sm font-medium text-slate-700">기본 길찾기 앱</div>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className={`h-10 rounded-lg text-sm ${
+                  className={`h-11 rounded-lg text-sm ${
                     settings.navigationApp === "naver"
                       ? "bg-slate-900 text-white"
                       : "border border-slate-300 bg-white text-slate-700"
@@ -153,7 +150,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
                 </button>
                 <button
                   type="button"
-                  className={`h-10 rounded-lg text-sm ${
+                  className={`h-11 rounded-lg text-sm ${
                     settings.navigationApp === "kakao"
                       ? "bg-amber-500 text-white"
                       : "border border-slate-300 bg-white text-slate-700"
@@ -170,7 +167,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  className={`h-10 rounded-lg text-sm ${
+                  className={`h-11 rounded-lg text-sm ${
                     settings.viewMode === "segment"
                       ? "bg-slate-900 text-white"
                       : "border border-slate-300 bg-white text-slate-700"
@@ -181,7 +178,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
                 </button>
                 <button
                   type="button"
-                  className={`h-10 rounded-lg text-sm ${
+                  className={`h-11 rounded-lg text-sm ${
                     settings.viewMode === "all"
                       ? "bg-slate-900 text-white"
                       : "border border-slate-300 bg-white text-slate-700"
@@ -198,3 +195,4 @@ export function SettingsPanel({ settings, onChange }: Props) {
     </section>
   );
 }
+
