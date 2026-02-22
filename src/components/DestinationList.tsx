@@ -30,12 +30,15 @@ export function DestinationList({
 }: Props) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-800">도착지</h2>
-        <div className="flex gap-2">
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-800">도착지 목록 (출발지는 자동)</h2>
+          <p className="text-xs text-slate-500">최대 10개까지 추가 가능</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <button
             type="button"
-            className="h-11 rounded-lg border border-slate-300 px-3 text-sm"
+            className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"
             onClick={onReset}
           >
             초기화

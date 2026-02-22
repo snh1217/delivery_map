@@ -158,5 +158,5 @@ export function NaverMap({ origin, destinations, segments }: Props) {
     );
   }
 
-  return <div ref={rootRef} className="h-[50vh] w-full rounded-xl border border-slate-200" />;
+  return <div ref={rootRef} className="h-[42vh] min-h-[320px] w-full rounded-xl border border-slate-200 sm:h-[50vh]" />;
 }

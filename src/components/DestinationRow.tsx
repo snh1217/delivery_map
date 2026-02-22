@@ -46,12 +46,17 @@ export function DestinationRow({
 
   return (
     <div className="rounded-xl border border-slate-200 p-3">
-      <div className="mb-2 text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
+        {row.status === "resolved" ? (
+          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
+        ) : null}
+      </div>
       <p className="mb-2 text-xs text-slate-500">
         예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)
       </p>
 
-      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-2">
         <input
           className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
           placeholder="주소 또는 구 동 입력"
@@ -64,7 +69,7 @@ export function DestinationRow({
             }
           }}
         />
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
             type="button"
             className="h-12 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white"
@@ -79,6 +84,14 @@ export function DestinationRow({
             onClick={() => onDelete(row.id)}
           >
             삭제
+          </button>
+          <button
+            type="button"
+            className="hidden h-12 rounded-lg border border-slate-300 px-3 text-sm sm:block"
+            disabled={!canNavigate}
+            onClick={() => onNavigate(row.id)}
+          >
+            길찾기
           </button>
         </div>
       </div>
@@ -108,7 +121,7 @@ export function DestinationRow({
       ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
-      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+      <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
         <button
           type="button"
           className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white disabled:opacity-50"
