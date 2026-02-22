@@ -9,7 +9,12 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalShortList, recommendVisitOrder } from "@/lib/geo";
-import { openNaverDirections, type NaverDirectionLinkSet } from "@/lib/naverDeepLink";
+import {
+  openNaverDirections,
+  openNaverMultiDirections,
+  type NaverDirectionLinkSet,
+  type RoutePoint,
+} from "@/lib/naverDeepLink";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type { DestinationRowState, GeocodeItem, LatLng, SessionUser, SettingsState } from "@/types";
 
@@ -212,6 +217,30 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     [origin, rows],
   );
 
+  const orderedRouteStops = useMemo<RoutePoint[]>(() => {
+    return recommendedOrder
+      .map((item) => rows[item.rowIndex])
+      .filter((row): row is DestinationRowState & { coord: LatLng } => Boolean(row?.coord))
+      .map((row, idx) => ({
+        lat: row.coord.lat,
+        lon: row.coord.lon,
+        name: row.label ?? row.input ?? `도착지 ${idx + 1}`,
+      }));
+  }, [recommendedOrder, rows]);
+
+  const routeableStops = useMemo(() => orderedRouteStops.slice(0, 6), [orderedRouteStops]);
+
+  const onNavigateAll = () => {
+    if (routeableStops.length === 0) {
+      return;
+    }
+
+    const result = openNaverMultiDirections(origin, routeableStops);
+    if (result.usedAppScheme && result.links) {
+      window.setTimeout(() => setStoreModal(result.links), 1300);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-2 py-3 sm:px-4 sm:py-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
@@ -265,8 +294,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             rows={rows}
             origin={origin}
             autoSearch={settings.autoSearch}
+            resolvedCount={orderedRouteStops.length}
+            routeableCount={routeableStops.length}
+            skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
             onAdd={() => setRows((prev) => (prev.length >= 10 ? prev : [...prev, createRow()]))}
             onReset={() => setRows([createRow()])}
+            onNavigateAll={onNavigateAll}
             onChangeInput={(id, value) =>
               setRows((prev) =>
                 prev.map((item) =>
