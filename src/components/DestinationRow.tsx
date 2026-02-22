@@ -78,11 +78,19 @@ export function DestinationRow({
   const rootRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const voiceBaseInputRef = useRef("");
+  const voiceHasResultRef = useRef(false);
+  const voiceLastMergedInputRef = useRef("");
+  const skipNextAutoSearchRef = useRef(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!autoSearch || !row.input.trim()) {
+      return;
+    }
+
+    if (skipNextAutoSearchRef.current) {
+      skipNextAutoSearchRef.current = false;
       return;
     }
 
@@ -122,6 +130,8 @@ export function DestinationRow({
 
     setVoiceError(null);
     voiceBaseInputRef.current = row.input ?? "";
+    voiceHasResultRef.current = false;
+    voiceLastMergedInputRef.current = row.input ?? "";
 
     const recognition = new Ctor();
     recognition.lang = "ko-KR";
@@ -138,6 +148,8 @@ export function DestinationRow({
       }
 
       const normalized = normalizeTranscript(voiceBaseInputRef.current, transcript);
+      voiceHasResultRef.current = normalized.trim().length > 0;
+      voiceLastMergedInputRef.current = normalized;
       onChangeInput(row.id, normalized);
     };
 
@@ -156,6 +168,13 @@ export function DestinationRow({
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
+
+      if (voiceHasResultRef.current && voiceLastMergedInputRef.current.trim()) {
+        skipNextAutoSearchRef.current = true;
+        window.setTimeout(() => {
+          onSearch(row.id);
+        }, 180);
+      }
     };
 
     recognitionRef.current = recognition;
@@ -332,4 +351,3 @@ export function DestinationRow({
     </div>
   );
 }
-
