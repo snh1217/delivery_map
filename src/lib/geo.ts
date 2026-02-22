@@ -50,9 +50,13 @@ export function createFanPolygon(params: {
 }
 
 function unionPolygon(a: Feature<Polygon>, b: Feature<Polygon>): Feature<Polygon | MultiPolygon> {
-  const unionResult = union(featureCollection([a, b]));
-  if (unionResult) {
-    return unionResult as Feature<Polygon | MultiPolygon>;
+  try {
+    const unionResult = union(featureCollection([a, b]));
+    if (unionResult) {
+      return unionResult as Feature<Polygon | MultiPolygon>;
+    }
+  } catch {
+    // Turf union may fail on invalid/degenerate polygons. Fallback to a MultiPolygon container.
   }
 
   return {
@@ -95,19 +99,23 @@ export function calculateSegments(params: {
       arcSteps: params.settings.arcSteps,
     });
 
-    const backward = createFanPolygon({
-      center: prev,
-      angleDeg: normalizeBearing(dir + 180),
-      halfAngleDeg: params.settings.halfAngleDeg,
-      radiusKm: params.settings.backwardTailKm,
-      arcSteps: params.settings.arcSteps,
-    });
+    const finalFan =
+      params.settings.backwardTailKm > 0
+        ? unionPolygon(
+            forward,
+            createFanPolygon({
+              center: prev,
+              angleDeg: normalizeBearing(dir + 180),
+              halfAngleDeg: params.settings.halfAngleDeg,
+              radiusKm: params.settings.backwardTailKm,
+              arcSteps: params.settings.arcSteps,
+            }),
+          )
+        : (forward as Feature<Polygon | MultiPolygon>);
 
-    const finalFan = unionPolygon(forward, backward);
-
-    const dongs = params.centroids.filter((item) =>
-      booleanPointInPolygon(point([item.lon, item.lat]), finalFan),
-    );
+    const dongs = params.centroids
+      .filter((item) => booleanPointInPolygon(point([item.lon, item.lat]), finalFan))
+      .sort((a, b) => a.short2.localeCompare(b.short2, "ko"));
 
     results.push({
       index: idx,
@@ -122,7 +130,9 @@ export function calculateSegments(params: {
 }
 
 export function makeFinalShortList(results: SegmentResult[]) {
-  return [...new Set(results.flatMap((segment) => segment.dongs.map((d) => d.short2)))];
+  return [...new Set(results.flatMap((segment) => segment.dongs.map((d) => d.short2).filter(Boolean)))].sort((a, b) =>
+    a.localeCompare(b, "ko"),
+  );
 }
 
 export function recommendVisitOrder(params: {

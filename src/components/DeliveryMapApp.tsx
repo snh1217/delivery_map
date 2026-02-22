@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
 import { NaverMap } from "@/components/NaverMap";
@@ -129,6 +129,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [activeRouteBatchIndex, setActiveRouteBatchIndex] = useState<number | null>(null);
   const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>([]);
   const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(null);
+  const rowsRef = useRef(rows);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -159,6 +160,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [settings]);
 
   useEffect(() => {
+    rowsRef.current = rows;
+  }, [rows]);
+
+  useEffect(() => {
     setRoadRecommendedOrder(null);
     setRoadRecommendationError(null);
     setRecommendationMode((prev) => (prev === "road" ? "straight" : prev));
@@ -167,7 +172,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [origin, rows]);
 
   const onSearch = async (id: string) => {
-    const row = rows.find((item) => item.id === id);
+    const row = rowsRef.current.find((item) => item.id === id);
     if (!row || !row.input.trim()) {
       return;
     }
@@ -338,8 +343,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (rowIds.length === 0) {
       return;
     }
-
-    setRowsUndoStack((prev) => [...prev, rows]);
+    const snapshot = rowsRef.current;
+    if (snapshot.length > 0) {
+      setRowsUndoStack((undoPrev) => [...undoPrev, snapshot]);
+    }
     setRows((prev) => {
       const next = prev.filter((row) => !rowIds.includes(row.id));
       return next.length > 0 ? next : [createRow()];
@@ -664,7 +671,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               )
             }
             onSearch={onSearch}
-            onDelete={(id) => setRows((prev) => prev.filter((item) => item.id !== id))}
+            onDelete={(id) =>
+              setRows((prev) => {
+                const next = prev.filter((item) => item.id !== id);
+                return next.length > 0 ? next : [createRow()];
+              })
+            }
             onSelectCandidate={onSelectCandidate}
             onNavigate={onNavigate}
             onNavigateKakao={onNavigateKakao}
