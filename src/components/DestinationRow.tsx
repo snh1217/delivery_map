@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import type { DestinationRowState, LatLng } from "@/types";
 
@@ -9,6 +9,7 @@ type Props = {
   row: DestinationRowState;
   origin: LatLng;
   autoSearch: boolean;
+  highlighted?: boolean;
   onChangeInput: (id: string, value: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
@@ -21,12 +22,15 @@ export function DestinationRow({
   row,
   origin,
   autoSearch,
+  highlighted = false,
   onChangeInput,
   onSearch,
   onDelete,
   onSelectCandidate,
   onNavigate,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!autoSearch || !row.input.trim()) {
       return;
@@ -39,19 +43,35 @@ export function DestinationRow({
     return () => window.clearTimeout(timer);
   }, [autoSearch, onSearch, row.id, row.input]);
 
+  useEffect(() => {
+    if (!highlighted) {
+      return;
+    }
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlighted]);
+
   const canNavigate = Boolean(row.coord);
-  const links = row.coord
-    ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input)
-    : null;
+  const links = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 p-3">
+    <div
+      ref={rootRef}
+      className={`rounded-xl border p-3 transition ${
+        highlighted ? "border-cyan-400 bg-cyan-50/50 shadow-sm" : "border-slate-200"
+      }`}
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
-        {row.status === "resolved" ? (
-          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
-        ) : null}
+        <div className="flex items-center gap-1">
+          {highlighted ? (
+            <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-800">추천 선택</span>
+          ) : null}
+          {row.status === "resolved" ? (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
+          ) : null}
+        </div>
       </div>
+
       <p className="mb-2 text-xs text-slate-500">
         예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)
       </p>
@@ -69,6 +89,7 @@ export function DestinationRow({
             }
           }}
         />
+
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
             type="button"
@@ -121,7 +142,7 @@ export function DestinationRow({
       ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
-      <div className="mt-2 grid gap-2 grid-cols-1 sm:grid-cols-2">
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button
           type="button"
           className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white disabled:opacity-50"

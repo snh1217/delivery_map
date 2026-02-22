@@ -60,6 +60,8 @@ export type RouteRecommendationItem = {
   cumulativeKm: number;
 };
 
+export type RouteRecommendationMode = "straight" | "road";
+
 export type SessionUser = {
   phone: string;
   isAdmin: boolean;

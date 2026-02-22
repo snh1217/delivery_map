@@ -16,7 +16,15 @@ import {
   type RoutePoint,
 } from "@/lib/naverDeepLink";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
-import type { DestinationRowState, GeocodeItem, LatLng, SessionUser, SettingsState } from "@/types";
+import type {
+  DestinationRowState,
+  GeocodeItem,
+  LatLng,
+  RouteRecommendationItem,
+  RouteRecommendationMode,
+  SessionUser,
+  SettingsState,
+} from "@/types";
 
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
@@ -87,6 +95,12 @@ type Props = {
   sessionUser: SessionUser | null;
 };
 
+type DirectionsApiResponse = {
+  raw?: {
+    route?: Record<string, Array<{ summary?: { distance?: number } }>>;
+  };
+};
+
 export function DeliveryMapApp({ sessionUser }: Props) {
   const router = useRouter();
   const [origin, setOrigin] = useState<LatLng>(DEFAULT_ORIGIN);
@@ -94,6 +108,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
   const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
   const [storeModal, setStoreModal] = useState<NaverDirectionLinkSet | null>(null);
+  const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
+  const [recommendationMode, setRecommendationMode] = useState<RouteRecommendationMode>("straight");
+  const [roadRecommendedOrder, setRoadRecommendedOrder] = useState<RouteRecommendationItem[] | null>(null);
+  const [roadRecommendationLoading, setRoadRecommendationLoading] = useState(false);
+  const [roadRecommendationError, setRoadRecommendationError] = useState<string | null>(null);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -122,6 +141,15 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       // ignore storage failures (private mode / quota)
     }
   }, [settings]);
+
+  useEffect(() => {
+    setRoadRecommendedOrder(null);
+    setRoadRecommendationError(null);
+    if (recommendationMode === "road") {
+      setRecommendationMode("straight");
+    }
+    setHighlightedRowIndex(null);
+  }, [origin, recommendationMode, rows]);
 
   const onSearch = async (id: string) => {
     const row = rows.find((item) => item.id === id);
@@ -208,13 +236,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [centroids, origin, rows, settings]);
 
   const finalShortList = useMemo(() => makeFinalShortList(segments), [segments]);
-  const recommendedOrder = useMemo(
+  const straightRecommendedOrder = useMemo(
     () =>
       recommendVisitOrder({
         origin,
         destinations: rows.map((row) => ({ label: (row.label ?? row.input) || "이름 없음", coord: row.coord })),
       }),
     [origin, rows],
+  );
+
+  const recommendedOrder = useMemo(
+    () => (recommendationMode === "road" && roadRecommendedOrder ? roadRecommendedOrder : straightRecommendedOrder),
+    [recommendationMode, roadRecommendedOrder, straightRecommendedOrder],
   );
 
   const orderedRouteStops = useMemo<RoutePoint[]>(() => {
@@ -230,6 +263,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   const routeableStops = useMemo(() => orderedRouteStops.slice(0, 6), [orderedRouteStops]);
 
+  const routeBatches = useMemo(() => {
+    const batches: Array<{ key: string; label: string; origin: LatLng; stops: RoutePoint[] }> = [];
+    if (orderedRouteStops.length === 0) {
+      return batches;
+    }
+
+    for (let i = 0; i < orderedRouteStops.length; i += 6) {
+      const stops = orderedRouteStops.slice(i, i + 6);
+      const prevLast = i === 0 ? null : orderedRouteStops[i - 1];
+      const batchOrigin = prevLast ? { lat: prevLast.lat, lon: prevLast.lon } : origin;
+      const startSeq = i + 1;
+      const endSeq = i + stops.length;
+      batches.push({
+        key: `batch-${i}`,
+        label: `${Math.floor(i / 6) + 1}차 (${startSeq}~${endSeq})`,
+        origin: batchOrigin,
+        stops,
+      });
+    }
+
+    return batches;
+  }, [orderedRouteStops, origin]);
+
   const onNavigateAll = () => {
     if (routeableStops.length === 0) {
       return;
@@ -238,6 +294,76 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     const result = openNaverMultiDirections(origin, routeableStops);
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
+    }
+  };
+
+  const onNavigateBatch = (batchIndex: number) => {
+    const batch = routeBatches[batchIndex];
+    if (!batch || batch.stops.length === 0) {
+      return;
+    }
+
+    const result = openNaverMultiDirections(batch.origin, batch.stops);
+    if (result.usedAppScheme && result.links) {
+      window.setTimeout(() => setStoreModal(result.links), 1300);
+    }
+  };
+
+  const onComputeRoadRecommendation = async () => {
+    const resolved = rows
+      .map((row, rowIndex) => ({ rowIndex, label: (row.label ?? row.input) || "이름 없음", coord: row.coord }))
+      .filter((row): row is { rowIndex: number; label: string; coord: LatLng } => Boolean(row.coord));
+
+    if (resolved.length === 0) {
+      setRoadRecommendationError("좌표가 확정된 도착지가 없습니다.");
+      return;
+    }
+
+    setRoadRecommendationLoading(true);
+    setRoadRecommendationError(null);
+
+    try {
+      const measured = await Promise.all(
+        resolved.map(async (item) => {
+          const response = await fetch(
+            `/api/directions5?startLat=${origin.lat}&startLon=${origin.lon}&goalLat=${item.coord.lat}&goalLon=${item.coord.lon}&option=trafast`,
+            { cache: "no-store" },
+          );
+
+          if (!response.ok) {
+            const payload = (await response.json().catch(() => ({}))) as { message?: string };
+            throw new Error(payload.message ?? "Directions API 요청 실패");
+          }
+
+          const payload = (await response.json()) as DirectionsApiResponse;
+          const route = payload.raw?.route;
+          const firstRouteGroup = route ? Object.values(route)[0] : undefined;
+          const distanceMeters = firstRouteGroup?.[0]?.summary?.distance;
+          const km = typeof distanceMeters === "number" ? distanceMeters / 1000 : Number.POSITIVE_INFINITY;
+
+          return {
+            ...item,
+            distanceKm: km,
+          };
+        }),
+      );
+
+      const sorted = measured
+        .sort((a, b) => a.distanceKm - b.distanceKm)
+        .map((item, index) => ({
+          step: index + 1,
+          rowIndex: item.rowIndex,
+          label: item.label,
+          distanceKm: Number(item.distanceKm.toFixed(1)),
+          cumulativeKm: Number(item.distanceKm.toFixed(1)),
+        }));
+
+      setRoadRecommendedOrder(sorted);
+      setRecommendationMode("road");
+    } catch (error) {
+      setRoadRecommendationError(error instanceof Error ? error.message : "실도로 기준 계산 실패");
+    } finally {
+      setRoadRecommendationLoading(false);
     }
   };
 
@@ -297,6 +423,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             resolvedCount={orderedRouteStops.length}
             routeableCount={routeableStops.length}
             skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
+            highlightedRowIndex={highlightedRowIndex}
+            routeBatchButtons={routeBatches.map((batch, index) => ({
+              key: batch.key,
+              label: batch.label,
+              count: batch.stops.length,
+              onClick: () => onNavigateBatch(index),
+            }))}
             onAdd={() => setRows((prev) => (prev.length >= 10 ? prev : [...prev, createRow()]))}
             onReset={() => setRows([createRow()])}
             onNavigateAll={onNavigateAll}
@@ -329,6 +462,20 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             finalShortList={finalShortList}
             viewMode={settings.viewMode}
             recommendedOrder={recommendedOrder}
+            recommendationMode={recommendationMode}
+            roadRecommendationLoading={roadRecommendationLoading}
+            roadRecommendationError={roadRecommendationError}
+            onSelectRecommendation={(rowIndex) => {
+              setHighlightedRowIndex(rowIndex);
+              window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
+            }}
+            onChangeRecommendationMode={(mode) => {
+              setRecommendationMode(mode);
+              if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
+                void onComputeRoadRecommendation();
+              }
+            }}
+            onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
           />
         </div>
 
