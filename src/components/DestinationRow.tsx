@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createKakaoMapDirectionLinks, openKakaoMapDirections } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import type { DestinationRowState, LatLng } from "@/types";
 
@@ -51,7 +52,8 @@ export function DestinationRow({
   }, [highlighted]);
 
   const canNavigate = Boolean(row.coord);
-  const links = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
+  const naverLinks = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
+  const kakaoLinks = row.coord ? createKakaoMapDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
 
   return (
     <div
@@ -151,19 +153,49 @@ export function DestinationRow({
         >
           네이버앱 길찾기
         </button>
-        {links ? (
+        {naverLinks ? (
           <a
             className="flex h-11 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm"
-            href={detectPlatform() === "desktop" ? links.desktopWeb : links.mobileWeb}
+            href={detectPlatform() === "desktop" ? naverLinks.desktopWeb : naverLinks.mobileWeb}
             target="_blank"
             rel="noreferrer"
           >
-            웹으로 열기
+            네이버 웹 열기
           </a>
         ) : (
           <div className="h-11 rounded-lg border border-slate-200" />
         )}
       </div>
+
+      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <button
+          type="button"
+          className="h-11 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800 disabled:opacity-50"
+          disabled={!canNavigate}
+          onClick={() => {
+            if (!row.coord) return;
+            openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
+          }}
+        >
+          카카오맵 길찾기 (준비)
+        </button>
+        {kakaoLinks ? (
+          <a
+            className="flex h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 text-sm text-amber-800"
+            href={kakaoLinks.mobileWeb}
+            target="_blank"
+            rel="noreferrer"
+          >
+            카카오맵 웹 열기
+          </a>
+        ) : (
+          <div className="h-11 rounded-lg border border-slate-200" />
+        )}
+      </div>
+
+      <p className="mt-2 text-[11px] text-slate-500">
+        카카오내비는 다음 단계에서 카카오 JavaScript 키 등록 후 SDK 방식으로 연결 가능합니다.
+      </p>
     </div>
   );
 }
