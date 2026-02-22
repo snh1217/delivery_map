@@ -15,6 +15,18 @@ export const AUTH_PHONE_COOKIE = "qs_auth_phone";
 
 const SESSION_MAX_AGE = 60 * 60 * 24 * 5;
 
+function isRouteRunsTableMissingError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const message = error.message ?? "";
+  return (
+    message.includes("public.route_runs") ||
+    message.includes("route_runs") && message.includes("schema cache") ||
+    message.includes('relation "route_runs" does not exist')
+  );
+}
+
 export function sessionMaxAgeSeconds() {
   return SESSION_MAX_AGE;
 }
@@ -320,7 +332,7 @@ export async function insertRouteRun(params: {
   batchLabel?: string | null;
   finalShortList?: string[];
   routeStops?: RouteRunStop[];
-}) {
+}): Promise<RouteRunRow | null> {
   const phone = normalizePhoneNumber(params.phone);
   if (!phone) {
     throw new Error("유효한 전화번호가 아닙니다.");
@@ -345,6 +357,9 @@ export async function insertRouteRun(params: {
     .single();
 
   if (error) {
+    if (isRouteRunsTableMissingError(new Error(error.message))) {
+      return null;
+    }
     throw new Error(error.message);
   }
 
@@ -385,6 +400,12 @@ export async function listUserRouteRunsToday(phone: string, limit = 50) {
     .limit(limit);
 
   if (error) {
+    if (isRouteRunsTableMissingError(new Error(error.message))) {
+      return {
+        dateKst: range.dateKst,
+        runs: [] as RouteRunRow[],
+      };
+    }
     throw new Error(error.message);
   }
 
@@ -409,6 +430,15 @@ export async function getDailyUsageSummaryToday(): Promise<DailyUsageSummary> {
     .order("created_at", { ascending: false });
 
   if (error) {
+    if (isRouteRunsTableMissingError(new Error(error.message))) {
+      return {
+        dateKst: range.dateKst,
+        totalRuns: 0,
+        uniqueUsers: 0,
+        totalDestinations: 0,
+        users: [],
+      };
+    }
     throw new Error(error.message);
   }
 
