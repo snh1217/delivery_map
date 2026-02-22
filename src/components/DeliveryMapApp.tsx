@@ -15,6 +15,7 @@ import {
   type NaverDirectionLinkSet,
   type RoutePoint,
 } from "@/lib/naverDeepLink";
+import { openKakaoMapDirections, type KakaoDirectionLinkSet } from "@/lib/kakaoDeepLink";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type {
   DestinationRowState,
@@ -113,7 +114,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [locationStatus, setLocationStatus] = useState("내 위치를 확인하는 중입니다...");
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
   const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
-  const [storeModal, setStoreModal] = useState<NaverDirectionLinkSet | null>(null);
+  const [storeModal, setStoreModal] = useState<(NaverDirectionLinkSet | KakaoDirectionLinkSet) | null>(null);
   const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
   const [recommendationMode, setRecommendationMode] = useState<RouteRecommendationMode>("straight");
   const [roadRecommendedOrder, setRoadRecommendedOrder] = useState<RouteRecommendationItem[] | null>(null);
@@ -229,6 +230,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
 
     const result = openNaverDirections(origin, row.coord, row.label ?? row.input);
+    if (result.usedAppScheme) {
+      window.setTimeout(() => setStoreModal(result.links), 1300);
+    }
+  };
+
+  const onNavigateKakao = (id: string) => {
+    const row = rows.find((item) => item.id === id);
+    if (!row?.coord) {
+      return;
+    }
+
+    const result = openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
     if (result.usedAppScheme) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
@@ -597,6 +610,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onDelete={(id) => setRows((prev) => prev.filter((item) => item.id !== id))}
             onSelectCandidate={onSelectCandidate}
             onNavigate={onNavigate}
+            onNavigateKakao={onNavigateKakao}
           />
 
           <ResultPanel
@@ -639,7 +653,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       {storeModal ? (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4 sm:items-center">
           <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-800">앱 설치 안내</h3>
+            <h3 className="text-base font-semibold text-slate-800">지도 앱 설치 안내</h3>
             <p className="mt-1 text-sm text-slate-600">앱이 실행되지 않으면 웹지도 또는 앱 설치를 선택하세요.</p>
             <div className="mt-3 grid gap-2">
               <a
@@ -656,7 +670,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 target="_blank"
                 rel="noreferrer"
               >
-                네이버지도 설치
+                지도 앱 설치
               </a>
               <button
                 type="button"

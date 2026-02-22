@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { createKakaoMapDirectionLinks, openKakaoMapDirections } from "@/lib/kakaoDeepLink";
+import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import type { DestinationRowState, LatLng } from "@/types";
 
@@ -16,6 +16,7 @@ type Props = {
   onDelete: (id: string) => void;
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
+  onNavigateKakao: (id: string) => void;
 };
 
 export function DestinationRow({
@@ -29,6 +30,7 @@ export function DestinationRow({
   onDelete,
   onSelectCandidate,
   onNavigate,
+  onNavigateKakao,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -174,7 +176,7 @@ export function DestinationRow({
           disabled={!canNavigate}
           onClick={() => {
             if (!row.coord) return;
-            openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
+            onNavigateKakao(row.id);
           }}
         >
           카카오맵 길찾기 (준비)

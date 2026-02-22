@@ -39,10 +39,7 @@ export function createKakaoMapDirectionLinks(origin: LatLng, destination: LatLng
   const fromName = "현재위치";
   const toName = name || "도착지";
 
-  // KakaoMap URL link (web/app universal handling). `link/from/.../to/...` is the most stable browser fallback.
   const routeWeb = `https://map.kakao.com/link/from/${encodeSegment(fromName)},${origin.lat},${origin.lon}/to/${encodeSegment(toName)},${destination.lat},${destination.lon}`;
-
-  // KakaoMap scheme route (앱 설치 시 직접 시도). 브라우저별 동작 차이가 있어 web fallback을 함께 사용.
   const appScheme = `kakaomap://route?sp=${origin.lat},${origin.lon}&ep=${destination.lat},${destination.lon}&by=CAR`;
 
   return {

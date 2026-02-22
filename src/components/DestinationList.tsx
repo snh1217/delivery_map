@@ -28,6 +28,7 @@ type Props = {
   onDelete: (id: string) => void;
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
+  onNavigateKakao: (id: string) => void;
 };
 
 export function DestinationList({
@@ -48,6 +49,7 @@ export function DestinationList({
   onDelete,
   onSelectCandidate,
   onNavigate,
+  onNavigateKakao,
 }: Props) {
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -138,6 +140,7 @@ export function DestinationList({
             onDelete={onDelete}
             onSelectCandidate={onSelectCandidate}
             onNavigate={onNavigate}
+            onNavigateKakao={onNavigateKakao}
           />
         ))}
       </div>
