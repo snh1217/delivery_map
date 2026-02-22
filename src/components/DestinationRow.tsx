@@ -173,9 +173,10 @@ export function DestinationRow({
 
     clearPendingVoiceAutoSearch();
     setVoiceError(null);
-    voiceBaseInputRef.current = row.input ?? "";
+    onChangeInput(row.id, "");
+    voiceBaseInputRef.current = "";
     voiceHasResultRef.current = false;
-    voiceLastMergedInputRef.current = row.input ?? "";
+    voiceLastMergedInputRef.current = "";
 
     const recognition = new Ctor();
     recognition.lang = "ko-KR";
@@ -438,4 +439,3 @@ export function DestinationRow({
     </div>
   );
 }
-
