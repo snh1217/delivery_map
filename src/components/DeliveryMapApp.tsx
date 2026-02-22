@@ -25,6 +25,8 @@ import type {
   DestinationRowState,
   GeocodeItem,
   LatLng,
+  RouteRunRow,
+  RouteRunStop,
   RouteRecommendationItem,
   RouteRecommendationMode,
   SessionUser,
@@ -130,6 +132,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>([]);
   const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(null);
   const rowsRef = useRef(rows);
+  const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
+  const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
+  const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -162,6 +167,44 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useEffect(() => {
+    if (!sessionUser?.isAllowed) {
+      setDailyRouteRuns([]);
+      setDailyRouteDateKst("");
+      setDailyRouteLoadError(null);
+      return;
+    }
+
+    let mounted = true;
+    const loadDailyRouteRuns = async () => {
+      try {
+        setDailyRouteLoadError(null);
+        const response = await fetch("/api/auth/usage", { cache: "no-store" });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(payload.message ?? "사용 이력 조회 실패");
+        }
+
+        const payload = (await response.json()) as { dateKst: string; runs: RouteRunRow[] };
+        if (!mounted) {
+          return;
+        }
+        setDailyRouteDateKst(payload.dateKst ?? "");
+        setDailyRouteRuns(Array.isArray(payload.runs) ? payload.runs : []);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        setDailyRouteLoadError(error instanceof Error ? error.message : "사용 이력 조회 실패");
+      }
+    };
+
+    void loadDailyRouteRuns();
+    return () => {
+      mounted = false;
+    };
+  }, [sessionUser?.isAllowed]);
 
   useEffect(() => {
     setRoadRecommendedOrder(null);
@@ -339,6 +382,59 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     return batches;
   }, [orderedRouteStops, origin, maxMultiRouteStops]);
 
+  const buildRouteRunStops = (stops: OrderedRouteStop[]): RouteRunStop[] => {
+    const recommendationByRowIndex = new Map(recommendedOrder.map((item) => [item.rowIndex, item]));
+    return stops.map((stop, index) => {
+      const rec = recommendationByRowIndex.get(stop.rowIndex);
+      return {
+        step: index + 1,
+        rowIndex: stop.rowIndex,
+        name: stop.name,
+        lat: stop.lat,
+        lon: stop.lon,
+        distanceKm: rec?.distanceKm,
+        durationMin: rec?.durationMin,
+        cumulativeKm: rec?.cumulativeKm,
+        cumulativeDurationMin: rec?.cumulativeDurationMin,
+      };
+    });
+  };
+
+  const saveRouteRun = async (params: {
+    provider: "naver" | "kakao";
+    batchLabel?: string | null;
+    stops: OrderedRouteStop[];
+  }) => {
+    if (!sessionUser?.isAllowed || params.stops.length === 0) {
+      return;
+    }
+
+    const routeStops = buildRouteRunStops(params.stops);
+    const payload = {
+      provider: params.provider,
+      batchLabel: params.batchLabel ?? null,
+      finalShortList,
+      routeStops,
+    };
+
+    const response = await fetch("/api/auth/usage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+
+    if (!response.ok) {
+      const errorPayload = (await response.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errorPayload.message ?? "길찾기 이력 저장 실패");
+    }
+
+    const result = (await response.json()) as { row?: RouteRunRow };
+    if (result.row) {
+      setDailyRouteRuns((prev) => [result.row as RouteRunRow, ...prev].slice(0, 100));
+    }
+  };
+
   const removeRowsAfterRouteHandoff = (rowIds: string[], message: string) => {
     if (rowIds.length === 0) {
       return;
@@ -387,6 +483,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       if (result.usedAppScheme && result.links) {
         window.setTimeout(() => setStoreModal(result.links), 1300);
       }
+      void saveRouteRun({ provider: "kakao", batchLabel: "전체", stops: routeableStops }).catch(() => {});
       removeRowsAfterRouteHandoff(
         routeableStops.map((stop) => stop.rowId),
         `카카오맵 전체 길찾기로 ${routeableStops.length}개 도착지를 전송하고 목록에서 숨겼습니다.`,
@@ -398,6 +495,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
+    void saveRouteRun({ provider: "naver", batchLabel: "전체", stops: routeableStops }).catch(() => {});
     removeRowsAfterRouteHandoff(
       routeableStops.map((stop) => stop.rowId),
       `전체 길찾기로 ${routeableStops.length}개 도착지를 전송하고 목록에서 숨겼습니다.`,
@@ -422,6 +520,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       if (result.usedAppScheme && result.links) {
         window.setTimeout(() => setStoreModal(result.links), 1300);
       }
+      void saveRouteRun({ provider: "kakao", batchLabel: batch.label, stops: batch.stops }).catch(() => {});
       removeRowsAfterRouteHandoff(
         batch.stops.map((stop) => stop.rowId),
         `카카오맵 ${batch.label} 경로를 전송하고 해당 도착지를 목록에서 숨겼습니다.`,
@@ -433,6 +532,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme && result.links) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
+    void saveRouteRun({ provider: "naver", batchLabel: batch.label, stops: batch.stops }).catch(() => {});
     removeRowsAfterRouteHandoff(
       batch.stops.map((stop) => stop.rowId),
       `${batch.label} 경로를 전송하고 해당 도착지를 목록에서 숨겼습니다.`,
@@ -625,6 +725,41 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               {sessionUser?.isAdmin ? (
                 <div>관리자 안내: 회원가입 요청 승인/반려는 관리자 승인 관리에서 처리합니다.</div>
               ) : null}
+              <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="font-medium text-slate-700">
+                    오늘 길찾기 저장 내역 {dailyRouteDateKst ? `(${dailyRouteDateKst}, KST)` : ""}
+                  </span>
+                  <span className="text-slate-500">{dailyRouteRuns.length}건</span>
+                </div>
+                {dailyRouteLoadError ? <p className="mt-1 text-rose-600">{dailyRouteLoadError}</p> : null}
+                <div className="mt-2 space-y-2">
+                  {dailyRouteRuns.slice(0, 5).map((run) => (
+                    <details key={run.id} className="rounded border border-slate-200 bg-slate-50 p-2">
+                      <summary className="cursor-pointer text-[11px] text-slate-700">
+                        {new Date(run.created_at).toLocaleTimeString()} · {run.provider === "kakao" ? "카카오" : "네이버"}
+                        {run.batch_label ? ` · ${run.batch_label}` : ""} · {run.destination_count}개
+                      </summary>
+                      <div className="mt-1 space-y-1 text-[11px] text-slate-600">
+                        <div>동 리스트: {run.final_short_list_text || "-"}</div>
+                        <ol className="list-decimal pl-4">
+                          {(run.route_stops ?? []).map((stop) => (
+                            <li key={`${run.id}-${stop.step}`}>
+                              {stop.name}
+                              {typeof stop.distanceKm === "number" ? ` (${stop.distanceKm}km` : ""}
+                              {typeof stop.durationMin === "number" ? ` / 약 ${Math.round(stop.durationMin)}분` : ""}
+                              {typeof stop.distanceKm === "number" ? ")" : ""}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    </details>
+                  ))}
+                  {dailyRouteRuns.length === 0 ? (
+                    <p className="text-[11px] text-slate-500">오늘 저장된 길찾기 이력이 없습니다.</p>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </details>
         </section>
@@ -683,26 +818,52 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             preferredNavigationApp={settings.navigationApp}
           />
 
-          <ResultPanel
-            segments={segments}
-            finalShortList={finalShortList}
-            viewMode={settings.viewMode}
-            recommendedOrder={recommendedOrder}
-            recommendationMode={recommendationMode}
-            roadRecommendationLoading={roadRecommendationLoading}
-            roadRecommendationError={roadRecommendationError}
-            onSelectRecommendation={(rowIndex) => {
-              setHighlightedRowIndex(rowIndex);
-              window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
-            }}
-            onChangeRecommendationMode={(mode) => {
-              setRecommendationMode(mode);
-              if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
-                void onComputeRoadRecommendation();
-              }
-            }}
-            onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-          />
+          <div className="space-y-3">
+            <ResultPanel
+              segments={segments}
+              finalShortList={finalShortList}
+              viewMode={settings.viewMode}
+              recommendedOrder={recommendedOrder}
+              recommendationMode={recommendationMode}
+              roadRecommendationLoading={roadRecommendationLoading}
+              roadRecommendationError={roadRecommendationError}
+              onSelectRecommendation={(rowIndex) => {
+                setHighlightedRowIndex(rowIndex);
+                window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
+              }}
+              onChangeRecommendationMode={(mode) => {
+                setRecommendationMode(mode);
+                if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
+                  void onComputeRoadRecommendation();
+                }
+              }}
+              onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
+            />
+
+            {dailyRouteRuns[0] ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-800">최근 저장된 동 리스트</h3>
+                  <span className="text-xs text-slate-500">
+                    {new Date(dailyRouteRuns[0].created_at).toLocaleTimeString()} ·{" "}
+                    {dailyRouteRuns[0].provider === "kakao" ? "카카오" : "네이버"}
+                  </span>
+                </div>
+                <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
+                  {dailyRouteRuns[0].final_short_list_text || "저장된 동 리스트가 없습니다."}
+                </p>
+                {(dailyRouteRuns[0].route_stops?.length ?? 0) > 0 ? (
+                  <ol className="mt-2 space-y-1 text-xs text-slate-600">
+                    {(dailyRouteRuns[0].route_stops ?? []).map((stop) => (
+                      <li key={`${dailyRouteRuns[0].id}-${stop.step}`} className="rounded border border-slate-100 bg-slate-50 px-2 py-1">
+                        {stop.step}. {stop.name}
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+              </section>
+            ) : null}
+          </div>
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">

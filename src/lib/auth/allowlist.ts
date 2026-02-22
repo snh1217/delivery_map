@@ -1,4 +1,12 @@
-import type { AllowlistRow, LoginLogRow, SessionUser, SignupRequestRow } from "@/types";
+import type {
+  AllowlistRow,
+  DailyUsageSummary,
+  LoginLogRow,
+  RouteRunRow,
+  RouteRunStop,
+  SessionUser,
+  SignupRequestRow,
+} from "@/types";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
@@ -280,4 +288,134 @@ export async function reviewSignupRequest(params: {
   }
 
   return data as SignupRequestRow;
+}
+
+export async function insertRouteRun(params: {
+  phone: string;
+  provider: "naver" | "kakao";
+  batchLabel?: string | null;
+  finalShortList?: string[];
+  routeStops?: RouteRunStop[];
+}) {
+  const phone = normalizePhoneNumber(params.phone);
+  if (!phone) {
+    throw new Error("유효한 전화번호가 아닙니다.");
+  }
+
+  const finalShortList = (params.finalShortList ?? []).filter(Boolean);
+  const routeStops = (params.routeStops ?? []).slice(0, 50);
+
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("route_runs")
+    .insert({
+      phone,
+      provider: params.provider,
+      batch_label: params.batchLabel ?? null,
+      destination_count: routeStops.length,
+      final_short_list: finalShortList.length ? finalShortList : null,
+      final_short_list_text: finalShortList.length ? finalShortList.join(", ") : null,
+      route_stops: routeStops,
+    })
+    .select("id, phone, created_at, provider, batch_label, destination_count, final_short_list, final_short_list_text, route_stops")
+    .single();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data as RouteRunRow;
+}
+
+function kstDayRange(targetDate?: Date) {
+  const base = targetDate ?? new Date();
+  const kstNow = new Date(base.getTime() + 9 * 60 * 60 * 1000);
+  const y = kstNow.getUTCFullYear();
+  const m = kstNow.getUTCMonth();
+  const d = kstNow.getUTCDate();
+  const startKstUtc = Date.UTC(y, m, d, 0, 0, 0) - 9 * 60 * 60 * 1000;
+  const endKstUtc = startKstUtc + 24 * 60 * 60 * 1000;
+  const dateKst = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  return {
+    dateKst,
+    startIso: new Date(startKstUtc).toISOString(),
+    endIso: new Date(endKstUtc).toISOString(),
+  };
+}
+
+export async function listUserRouteRunsToday(phone: string, limit = 50) {
+  const normalized = normalizePhoneNumber(phone);
+  if (!normalized) {
+    throw new Error("유효한 전화번호가 아닙니다.");
+  }
+
+  const range = kstDayRange();
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("route_runs")
+    .select("id, phone, created_at, provider, batch_label, destination_count, final_short_list, final_short_list_text, route_stops")
+    .eq("phone", normalized)
+    .gte("created_at", range.startIso)
+    .lt("created_at", range.endIso)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return {
+    dateKst: range.dateKst,
+    runs: ((data ?? []) as RouteRunRow[]).map((row) => ({
+      ...row,
+      route_stops: Array.isArray(row.route_stops) ? row.route_stops : [],
+      final_short_list: Array.isArray(row.final_short_list) ? row.final_short_list : [],
+    })),
+  };
+}
+
+export async function getDailyUsageSummaryToday(): Promise<DailyUsageSummary> {
+  const range = kstDayRange();
+  const supabase = getSupabaseServiceClient();
+  const { data, error } = await supabase
+    .from("route_runs")
+    .select("phone, created_at, destination_count")
+    .gte("created_at", range.startIso)
+    .lt("created_at", range.endIso)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const rows = (data ?? []) as Array<{ phone: string; created_at: string; destination_count: number }>;
+  const byPhone = new Map<string, { runCount: number; destinationCount: number; latestAt: string }>();
+  for (const row of rows) {
+    const entry = byPhone.get(row.phone);
+    if (!entry) {
+      byPhone.set(row.phone, {
+        runCount: 1,
+        destinationCount: Math.max(0, row.destination_count ?? 0),
+        latestAt: row.created_at,
+      });
+      continue;
+    }
+    entry.runCount += 1;
+    entry.destinationCount += Math.max(0, row.destination_count ?? 0);
+    if (row.created_at > entry.latestAt) {
+      entry.latestAt = row.created_at;
+    }
+  }
+
+  const users = [...byPhone.entries()]
+    .map(([phone, value]) => ({ phone, ...value }))
+    .sort((a, b) => b.runCount - a.runCount || b.destinationCount - a.destinationCount || a.phone.localeCompare(b.phone));
+
+  return {
+    dateKst: range.dateKst,
+    totalRuns: rows.length,
+    uniqueUsers: byPhone.size,
+    totalDestinations: rows.reduce((sum, row) => sum + Math.max(0, row.destination_count ?? 0), 0),
+    users,
+  };
 }

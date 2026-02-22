@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import {
   AUTH_PHONE_COOKIE,
+  getDailyUsageSummaryToday,
   listAllowlist,
   listLoginLogs,
   listSignupRequests,
@@ -32,12 +33,13 @@ export async function GET(request: Request) {
   const activeOnly = new URL(request.url).searchParams.get("activeOnly") === "1";
 
   try {
-    const [allowlist, logs, signupRequests] = await Promise.all([
+    const [allowlist, logs, signupRequests, usageSummary] = await Promise.all([
       listAllowlist(activeOnly),
       listLoginLogs(40),
       listSignupRequests(),
+      getDailyUsageSummaryToday(),
     ]);
-    return NextResponse.json({ allowlist, logs, signupRequests });
+    return NextResponse.json({ allowlist, logs, signupRequests, usageSummary });
   } catch (error) {
     const message = error instanceof Error ? error.message : "조회 실패";
     return NextResponse.json({ message }, { status: 500 });

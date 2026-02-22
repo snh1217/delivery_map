@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "data:generate-dong-centroids": "node scripts/generate-dong-centroids.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.95.3",

@@ -25,9 +25,12 @@ npm run build
 - 출발지: 내 위치 GPS (권한 거부 시 서울시청 fallback)
 - 도착지 다중 입력 + 지오코딩 Top5 후보 선택
 - 팬(부채꼴) 권역 계산 + 동(short2) 자동 생성
+- 전국 행정동 centroid(3558건) 기반 동 리스트 계산
 - 네이버 지도 마커/팬 오버레이
 - 네이버 지도 앱 길찾기(자동차) + 모바일 웹 fallback + 스토어 안내
 - 카카오맵 길찾기/웹 링크 연동 준비 (도착지 행에서 선택 가능)
+- 길찾기 실행 후 동 리스트/방문 순서 스냅샷 저장(사용자별 일일 이력)
+- 관리자 화면에서 오늘 총 사용량/사용자별 실행 건수 확인
 
 ## 네이버 API 프록시(추가 구현)
 
@@ -87,7 +90,32 @@ create table if not exists public.login_logs (
   created_at timestamptz not null default now(),
   user_agent text null
 );
+
+create table if not exists public.route_runs (
+  id uuid primary key default gen_random_uuid(),
+  phone text not null,
+  created_at timestamptz not null default now(),
+  provider text not null,
+  batch_label text null,
+  destination_count integer not null default 0,
+  final_short_list text[] null,
+  final_short_list_text text null,
+  route_stops jsonb not null default '[]'::jsonb
+);
 ```
+
+## 전국 동 데이터(실사용 규모)
+
+- 기본 데이터 파일: `src/data/dong_centroids.json` (전국 행정동 centroid 3558건)
+- 생성 스크립트: `npm run data:generate-dong-centroids`
+- 원본 경계 소스: `vuski/admdongkor` (행정동 경계 GeoJSON)
+- 앱 런타임에서는 centroid만 로드하므로 경계 GeoJSON 직접 로드보다 훨씬 가볍습니다.
+
+## 사용자별 일일 이력 / 결과 보존
+
+- 전체 길찾기/분할 길찾기 실행 시 현재 `동 리스트 + 방문 순서` 스냅샷을 서버(`route_runs`)에 저장합니다.
+- 도착지가 화면에서 자동 제거되어도 사용자 정보 패널과 결과 하단 카드에서 최근 저장된 동 리스트를 다시 확인할 수 있습니다.
+- 관리자 화면에는 오늘(KST) 기준 총 실행 건수/사용자 수/사용자별 실행 건수가 표시됩니다.
 
 ## 배포
 

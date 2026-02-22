@@ -1,19 +1,21 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
-import type { AllowlistRow, LoginLogRow, SignupRequestRow } from "@/types";
+import type { AllowlistRow, DailyUsageSummary, LoginLogRow, SignupRequestRow } from "@/types";
 
 type AdminPayload = {
   allowlist: AllowlistRow[];
   logs: LoginLogRow[];
   signupRequests: SignupRequestRow[];
+  usageSummary?: DailyUsageSummary;
 };
 
 export function AdminPanel() {
   const [rows, setRows] = useState<AllowlistRow[]>([]);
   const [logs, setLogs] = useState<LoginLogRow[]>([]);
   const [requests, setRequests] = useState<SignupRequestRow[]>([]);
+  const [usageSummary, setUsageSummary] = useState<DailyUsageSummary | null>(null);
   const [phoneInput, setPhoneInput] = useState("");
   const [search, setSearch] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
@@ -37,6 +39,7 @@ export function AdminPanel() {
       setRows(payload.allowlist);
       setLogs(payload.logs);
       setRequests(payload.signupRequests);
+      setUsageSummary(payload.usageSummary ?? null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "조회 실패");
     } finally {
@@ -50,9 +53,7 @@ export function AdminPanel() {
 
   const filteredRows = useMemo(() => {
     const q = search.trim();
-    if (!q) {
-      return rows;
-    }
+    if (!q) return rows;
     return rows.filter((row) => row.phone.includes(q));
   }, [rows, search]);
 
@@ -60,11 +61,8 @@ export function AdminPanel() {
 
   const filteredRequests = useMemo(() => {
     const q = search.trim();
-    const base = pendingRequests;
-    if (!q) {
-      return base;
-    }
-    return base.filter((row) => row.phone.includes(q) || row.name.includes(q));
+    if (!q) return pendingRequests;
+    return pendingRequests.filter((row) => row.phone.includes(q) || row.name.includes(q));
   }, [pendingRequests, search]);
 
   const processedRequestCount = useMemo(
@@ -142,8 +140,8 @@ export function AdminPanel() {
       </div>
 
       <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-        회원가입 요청 목록은 <span className="font-medium text-slate-800">승인 대기(pending)</span>만 표시합니다.
-        처리 완료 건({processedRequestCount}건)은 요청 목록에서 숨김 처리됩니다.
+        회원가입 요청 목록은 <span className="font-medium text-slate-800">승인 대기(pending)</span>만 표시됩니다.
+        처리 완료 건 {processedRequestCount}건은 목록에서 숨김 처리됩니다.
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
@@ -163,6 +161,53 @@ export function AdminPanel() {
       </div>
 
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+
+      <div className="mt-4 rounded-xl border border-slate-200 p-3">
+        <h3 className="text-sm font-semibold text-slate-700">오늘 사용량 요약</h3>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            기준일(KST): <span className="font-semibold text-slate-800">{usageSummary?.dateKst ?? "-"}</span>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            총 길찾기 실행: <span className="font-semibold text-slate-800">{usageSummary?.totalRuns ?? 0}건</span>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            사용자 수 / 도착지 합계:{" "}
+            <span className="font-semibold text-slate-800">
+              {usageSummary?.uniqueUsers ?? 0}명 / {usageSummary?.totalDestinations ?? 0}개
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 overflow-x-auto rounded-lg border border-slate-200">
+          <table className="min-w-full text-xs">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="px-3 py-2 text-left">전화번호</th>
+                <th className="px-3 py-2 text-left">실행 건수</th>
+                <th className="px-3 py-2 text-left">도착지 합계</th>
+                <th className="px-3 py-2 text-left">마지막 실행</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(usageSummary?.users ?? []).map((user) => (
+                <tr key={user.phone} className="border-t border-slate-200">
+                  <td className="px-3 py-2">{user.phone}</td>
+                  <td className="px-3 py-2">{user.runCount}</td>
+                  <td className="px-3 py-2">{user.destinationCount}</td>
+                  <td className="px-3 py-2">{new Date(user.latestAt).toLocaleString()}</td>
+                </tr>
+              ))}
+              {(usageSummary?.users?.length ?? 0) === 0 ? (
+                <tr>
+                  <td className="px-3 py-3 text-slate-500" colSpan={4}>
+                    오늘 저장된 길찾기 이력이 없습니다.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-3">
         <div className="flex items-center justify-between gap-2">

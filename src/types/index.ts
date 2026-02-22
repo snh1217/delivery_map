@@ -84,6 +84,45 @@ export type LoginLogRow = {
   user_agent: string | null;
 };
 
+export type RouteRunStop = {
+  step: number;
+  rowIndex: number;
+  name: string;
+  lat: number;
+  lon: number;
+  distanceKm?: number;
+  durationMin?: number;
+  cumulativeKm?: number;
+  cumulativeDurationMin?: number;
+};
+
+export type RouteRunRow = {
+  id: string;
+  phone: string;
+  created_at: string;
+  provider: "naver" | "kakao";
+  batch_label: string | null;
+  destination_count: number;
+  final_short_list: string[] | null;
+  final_short_list_text: string | null;
+  route_stops: RouteRunStop[] | null;
+};
+
+export type DailyUsageUserStat = {
+  phone: string;
+  runCount: number;
+  destinationCount: number;
+  latestAt: string;
+};
+
+export type DailyUsageSummary = {
+  dateKst: string;
+  totalRuns: number;
+  uniqueUsers: number;
+  totalDestinations: number;
+  users: DailyUsageUserStat[];
+};
+
 export type SignupRequestStatus = "pending" | "approved" | "rejected";
 
 export type SignupRequestRow = {
