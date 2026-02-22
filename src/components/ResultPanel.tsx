@@ -35,22 +35,20 @@ export function ResultPanel({ segments, finalShortList, viewMode, recommendedOrd
 
       <div className="mb-3 rounded-xl border border-slate-200 p-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-slate-700">추천 방문 순서 (직선거리 기준)</h3>
+          <h3 className="text-sm font-semibold text-slate-700">추천 방문 순서 (현재 위치 기준 거리순)</h3>
           <span className="text-xs text-slate-500">{recommendedOrder.length}개 확정</span>
         </div>
         <p className="mt-1 text-xs text-slate-500">
-          실제 도로 경로와 다를 수 있습니다. 빠른 입력 검토용 추천 순서입니다.
+          현재 내 위치에서 각 도착지까지의 직선거리 기준입니다. 실제 도로 경로와는 다를 수 있습니다.
         </p>
         <ol className="mt-2 space-y-2">
-          {recommendedOrder.map((item) => (
+          {recommendedOrder.map((item: RouteRecommendationItem) => (
             <li key={`${item.rowIndex}-${item.step}`} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
               <div className="text-sm font-medium text-slate-800">
                 {item.step}. 도착지 {item.rowIndex + 1}
               </div>
               <div className="text-xs text-slate-600">{item.label}</div>
-              <div className="mt-1 text-xs text-slate-500">
-                이전 지점 기준 {item.distanceKm}km / 누적 {item.cumulativeKm}km
-              </div>
+              <div className="mt-1 text-xs text-slate-500">현재 위치 기준 거리: {item.distanceKm}km</div>
             </li>
           ))}
           {recommendedOrder.length === 0 ? (

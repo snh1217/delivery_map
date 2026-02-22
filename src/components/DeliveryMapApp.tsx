@@ -14,6 +14,48 @@ import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type { DestinationRowState, GeocodeItem, LatLng, SessionUser, SettingsState } from "@/types";
 
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
+const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
+const DEFAULT_SETTINGS: SettingsState = {
+  halfAngleDeg: 30,
+  forwardBufferKm: 3,
+  backwardTailKm: 5,
+  forwardRadiusMinKm: 2,
+  arcSteps: 72,
+  autoSearch: false,
+  viewMode: "segment",
+};
+
+function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): SettingsState {
+  return {
+    halfAngleDeg: Number.isFinite(raw?.halfAngleDeg) ? Math.min(80, Math.max(5, Number(raw?.halfAngleDeg))) : 30,
+    forwardBufferKm:
+      Number.isFinite(raw?.forwardBufferKm) ? Math.min(30, Math.max(0, Number(raw?.forwardBufferKm))) : 3,
+    backwardTailKm:
+      Number.isFinite(raw?.backwardTailKm) ? Math.min(30, Math.max(0, Number(raw?.backwardTailKm))) : 5,
+    forwardRadiusMinKm:
+      Number.isFinite(raw?.forwardRadiusMinKm) ? Math.min(20, Math.max(0.5, Number(raw?.forwardRadiusMinKm))) : 2,
+    arcSteps: Number.isFinite(raw?.arcSteps) ? Math.min(128, Math.max(24, Number(raw?.arcSteps))) : 72,
+    autoSearch: Boolean(raw?.autoSearch),
+    viewMode: raw?.viewMode === "all" ? "all" : "segment",
+  };
+}
+
+function loadSavedSettings(): SettingsState {
+  if (typeof window === "undefined") {
+    return DEFAULT_SETTINGS;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_SETTINGS;
+    }
+
+    return sanitizeSettings(JSON.parse(raw) as Partial<SettingsState>);
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 function createRow(): DestinationRowState {
   return {
@@ -45,15 +87,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [origin, setOrigin] = useState<LatLng>(DEFAULT_ORIGIN);
   const [locationStatus, setLocationStatus] = useState("내 위치를 확인하는 중입니다...");
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
-  const [settings, setSettings] = useState<SettingsState>({
-    halfAngleDeg: 30,
-    forwardBufferKm: 3,
-    backwardTailKm: 5,
-    forwardRadiusMinKm: 2,
-    arcSteps: 72,
-    autoSearch: false,
-    viewMode: "segment",
-  });
+  const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
   const [storeModal, setStoreModal] = useState<NaverDirectionLinkSet | null>(null);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
@@ -75,6 +109,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       { enableHighAccuracy: true, timeout: 8000 },
     );
   }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch {
+      // ignore storage failures (private mode / quota)
+    }
+  }, [settings]);
 
   const onSearch = async (id: string) => {
     const row = rows.find((item) => item.id === id);
@@ -175,6 +217,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <h1 className="text-xl font-bold text-slate-800">퀵서비스 구설정 자동 생성</h1>
+          <div className="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-xs font-medium text-cyan-800">
+            출발지(고정): 내 현재 위치
+          </div>
           <p className="mt-1 text-sm text-slate-600">출발지: 내 현재 위치(GPS), 권한 거부 시 서울시청 좌표</p>
           <div className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-700">
             로그인: {sessionUser?.phone ?? "-"} {sessionUser?.isAdmin ? "(관리자)" : ""}
@@ -210,7 +255,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           </div>
         </section>
 
-        <SettingsPanel settings={settings} onChange={setSettings} />
+        <SettingsPanel settings={settings} onChange={(next) => setSettings(sanitizeSettings(next))} />
 
         <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
           <DestinationList
