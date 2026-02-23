@@ -33,6 +33,7 @@ import {
   type KakaoNaviInstallLinks,
 } from "@/lib/kakao/navi";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
+import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
   DestinationRowState,
   GeocodeItem,
@@ -310,6 +311,19 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [sessionUser?.isAllowed]);
 
   useEffect(() => {
+    if (!sessionUser?.isAdmin) return;
+    const pending = consumePendingOcrDestination();
+    if (!pending?.address) return;
+    try {
+      addDestinationFromAddress(pending.address);
+    } catch (error) {
+      setLastAutoRemovedMessage(error instanceof Error ? error.message : "OCR 도착지 추가 실패");
+    }
+    // one-shot on page load/admin return
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionUser?.isAdmin]);
+
+  useEffect(() => {
     setRoadRecommendedOrder(null);
     setManualRecommendationRowOrder(null);
     setRoadRecommendationError(null);
@@ -422,6 +436,48 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
+  };
+
+  const applyAddressToRowAndSearch = (id: string, address: string) => {
+    const normalized = address.trim();
+    if (!normalized) return;
+    setRows((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              input: normalized,
+              status: "idle",
+              error: undefined,
+              geocodeItems: [],
+              selectedIndex: 0,
+              coord: undefined,
+              label: undefined,
+            }
+          : item,
+      ),
+    );
+    window.setTimeout(() => {
+      void onSearch(id);
+    }, 0);
+  };
+
+  const addDestinationFromAddress = (address: string) => {
+    const normalized = address.trim();
+    if (!normalized) {
+      throw new Error("추출된 주소가 비어 있습니다.");
+    }
+    if (rowsRef.current.length >= MAX_DESTINATIONS) {
+      throw new Error(`도착지는 최대 ${MAX_DESTINATIONS}개까지 추가할 수 있습니다.`);
+    }
+
+    const newRow = createRow();
+    newRow.input = normalized;
+    setRows((prev) => [...prev, newRow]);
+    window.setTimeout(() => {
+      void onSearch(newRow.id);
+    }, 0);
+    setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
   };
 
   const onNavigateKakao = (id: string) => {
@@ -1072,6 +1128,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onNavigate={onNavigate}
             onNavigateKakao={onNavigateKakao}
             preferredNavigationApp={settings.navigationApp}
+            isAdmin={Boolean(sessionUser?.isAdmin)}
+            onApplyOcrToRow={applyAddressToRowAndSearch}
           />
 
           <div className="space-y-3">

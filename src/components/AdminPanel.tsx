@@ -1,8 +1,11 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminEarningsPanel } from "@/components/admin/AdminEarningsPanel";
+import { ScreenshotAdd } from "@/components/admin/ScreenshotAdd";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
+import { savePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type { AllowlistRow, DailyUsageSummary, LoginLogRow, SignupRequestRow } from "@/types";
 
 type AdminPayload = {
@@ -13,6 +16,7 @@ type AdminPayload = {
 };
 
 export function AdminPanel() {
+  const router = useRouter();
   const [rows, setRows] = useState<AllowlistRow[]>([]);
   const [logs, setLogs] = useState<LoginLogRow[]>([]);
   const [requests, setRequests] = useState<SignupRequestRow[]>([]);
@@ -162,6 +166,15 @@ export function AdminPanel() {
       </div>
 
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+
+      <div className="mt-4">
+        <ScreenshotAdd
+          onApplyAddress={async (address) => {
+            savePendingOcrDestination(address);
+            window.setTimeout(() => router.push("/app"), 450);
+          }}
+        />
+      </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-3">
         <h3 className="text-sm font-semibold text-slate-700">오늘 사용량 요약</h3>

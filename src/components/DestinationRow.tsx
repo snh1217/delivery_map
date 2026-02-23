@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
+import { DestinationAttachment } from "@/components/destinations/DestinationAttachment";
 import {
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
@@ -23,6 +24,8 @@ type Props = {
   onNavigate: (id: string) => void;
   onNavigateKakao: (id: string) => void;
   preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
+  isAdmin?: boolean;
+  onApplyOcrToRow?: (id: string, address: string) => void;
 };
 
 const VOICE_SILENCE_TIMEOUT_MS = 900;
@@ -88,6 +91,8 @@ export function DestinationRow({
   onNavigate,
   onNavigateKakao,
   preferredNavigationApp,
+  isAdmin = false,
+  onApplyOcrToRow,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onSearchRef = useRef(onSearch);
@@ -425,6 +430,21 @@ export function DestinationRow({
         </p>
       ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
+
+      <DestinationAttachment
+        isAdmin={isAdmin}
+        onApplyAddress={(address) => {
+          setVoiceError(null);
+          clearPendingVoiceAutoSearch();
+          setVoicePreviewText(null);
+          if (onApplyOcrToRow) {
+            onApplyOcrToRow(row.id, address);
+            return;
+          }
+          onChangeInput(row.id, address);
+          window.setTimeout(() => onSearch(row.id), 0);
+        }}
+      />
 
       {canNavigate ? (
         <>
