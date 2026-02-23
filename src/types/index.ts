@@ -123,6 +123,32 @@ export type DailyUsageSummary = {
   users: DailyUsageUserStat[];
 };
 
+export type EarningTargetRow = {
+  id: string;
+  owner_phone: string;
+  target_name: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+export type DailyEarningItem = {
+  amount: number;
+  memo?: string;
+  createdAt?: string;
+};
+
+export type DailyEarningRow = {
+  id: string;
+  owner_phone: string;
+  target_id: string | null;
+  target_name: string;
+  ymd: string;
+  items: DailyEarningItem[];
+  total_amount: number;
+  updated_at: string;
+  created_at: string;
+};
+
 export type SignupRequestStatus = "pending" | "approved" | "rejected";
 
 export type SignupRequestRow = {

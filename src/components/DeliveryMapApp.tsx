@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
+import { EarningsFab } from "@/components/EarningsFab";
+import { EarningsModal } from "@/components/EarningsModal";
 import { NaverMap } from "@/components/NaverMap";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
@@ -136,6 +138,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
+  const [earningsModalOpen, setEarningsModalOpen] = useState(false);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -973,6 +976,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </button>
         </div>
       </div>
+
+      {sessionUser?.isAllowed ? <EarningsFab onClick={() => setEarningsModalOpen(true)} /> : null}
+      <EarningsModal open={earningsModalOpen} onClose={() => setEarningsModalOpen(false)} />
     </main>
   );
 }

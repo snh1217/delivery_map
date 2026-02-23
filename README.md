@@ -29,6 +29,7 @@ npm run build
 - 네이버 지도 마커/팬 오버레이
 - 네이버 지도 앱 길찾기(자동차) + 모바일 웹 fallback + 스토어 안내
 - 카카오맵 길찾기/웹 링크 연동 준비 (도착지 행에서 선택 가능)
+- 우측 FAB 기반 일일 운임 계산기 (내 운임/제3자 대상 저장·불러오기)
 - 길찾기 실행 후 동 리스트/방문 순서 스냅샷 저장(사용자별 일일 이력)
 - 관리자 화면에서 오늘 총 사용량/사용자별 실행 건수 확인
 
@@ -115,6 +116,28 @@ create table if not exists public.route_runs (
   final_short_list_text text null,
   route_stops jsonb not null default '[]'::jsonb
 );
+
+create table if not exists public.earning_targets (
+  id uuid primary key default gen_random_uuid(),
+  owner_phone text not null,
+  target_name text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique (owner_phone, target_name)
+);
+
+create table if not exists public.daily_earnings (
+  id uuid primary key default gen_random_uuid(),
+  owner_phone text not null,
+  target_id uuid null,
+  target_name text not null,
+  ymd text not null,
+  items jsonb not null,
+  total_amount integer not null,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  unique (owner_phone, ymd, target_name)
+);
 ```
 
 ## 전국 동 데이터(실사용 규모)
@@ -129,6 +152,34 @@ create table if not exists public.route_runs (
 - 전체 길찾기/분할 길찾기 실행 시 현재 `동 리스트 + 방문 순서` 스냅샷을 서버(`route_runs`)에 저장합니다.
 - 도착지가 화면에서 자동 제거되어도 사용자 정보 패널과 결과 하단 카드에서 최근 저장된 동 리스트를 다시 확인할 수 있습니다.
 - 관리자 화면에는 오늘(KST) 기준 총 실행 건수/사용자 수/사용자별 실행 건수가 표시됩니다.
+
+## 운임 계산기(제3자 포함) 사용법
+
+- 화면 우측의 계산기 FAB를 눌러 `운임 계산기` 모달을 엽니다.
+- 대상 선택:
+  - `내 운임` (기본)
+  - 제3자 대상(별칭) 선택
+  - `+ 대상 추가`로 별칭 등록 가능
+- 운임 항목:
+  - 금액만 입력(숫자)
+  - `+ 운임 추가`로 라인 추가
+  - 합계는 자동 계산됩니다.
+- `오늘 운임 불러오기`:
+  - 현재 선택 대상 기준 오늘(KST) 저장값 조회
+  - 현재 입력값이 있으면 `합치기 / 덮어쓰기` 선택
+- `저장`:
+  - 오늘(KST) 기준으로 upsert 저장
+- `닫기`:
+  - 저장 없이 모달 종료
+  - 임시 입력값은 초기화됩니다.
+
+테스트 체크:
+- 내 운임 저장/불러오기
+- 제3자 대상 추가 후 저장/불러오기
+- 불러오기 시 합치기/덮어쓰기 동작
+- 닫기 = 초기화(저장 안 됨)
+- 로그인 사용자별 데이터 분리
+- KST 날짜 기준 저장/조회 확인
 
 ## 배포
 
