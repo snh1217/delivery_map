@@ -142,23 +142,41 @@ export function recommendVisitOrder(params: {
   const resolved = params.destinations
     .map((dest, rowIndex) => ({ rowIndex, label: dest.label, coord: dest.coord }))
     .filter((dest): dest is { rowIndex: number; label: string; coord: LatLng } => Boolean(dest.coord));
+  const remaining = [...resolved];
+  const ordered: RouteRecommendationItem[] = [];
+  let current = params.origin;
+  let cumulative = 0;
 
-  const sorted = resolved
-    .map((candidate) => ({
-      ...candidate,
-      originDistanceKm: distance(point(toCoord(params.origin)), point(toCoord(candidate.coord)), {
+  while (remaining.length > 0) {
+    let bestIndex = 0;
+    let bestKm = Number.POSITIVE_INFINITY;
+
+    for (let i = 0; i < remaining.length; i += 1) {
+      const candidate = remaining[i];
+      const km = distance(point(toCoord(current)), point(toCoord(candidate.coord)), {
         units: "kilometers",
-      }),
-    }))
-    .sort((a, b) => a.originDistanceKm - b.originDistanceKm);
+      });
+      if (km < bestKm) {
+        bestKm = km;
+        bestIndex = i;
+      }
+    }
 
-  return sorted.map((item, index) => ({
-    step: index + 1,
-    rowIndex: item.rowIndex,
-    label: item.label,
-    distanceKm: Number(item.originDistanceKm.toFixed(1)),
-    cumulativeKm: Number(item.originDistanceKm.toFixed(1)),
-  }));
+    const next = remaining.splice(bestIndex, 1)[0];
+    cumulative += bestKm;
+
+    ordered.push({
+      step: ordered.length + 1,
+      rowIndex: next.rowIndex,
+      label: next.label,
+      distanceKm: Number(bestKm.toFixed(1)),
+      cumulativeKm: Number(cumulative.toFixed(1)),
+    });
+
+    current = next.coord;
+  }
+
+  return ordered;
 }
 
 export function polygonPaths(geometry: Polygon | MultiPolygon) {

@@ -160,6 +160,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
   const [recommendationMode, setRecommendationMode] = useState<RouteRecommendationMode>("straight");
   const [roadRecommendedOrder, setRoadRecommendedOrder] = useState<RouteRecommendationItem[] | null>(null);
+  const [manualRecommendationRowOrder, setManualRecommendationRowOrder] = useState<number[] | null>(null);
   const [roadRecommendationLoading, setRoadRecommendationLoading] = useState(false);
   const [roadRecommendationError, setRoadRecommendationError] = useState<string | null>(null);
   const [activeRouteBatchIndex, setActiveRouteBatchIndex] = useState<number | null>(null);
@@ -267,6 +268,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   useEffect(() => {
     setRoadRecommendedOrder(null);
+    setManualRecommendationRowOrder(null);
     setRoadRecommendationError(null);
     setRecommendationMode((prev) => (prev === "road" ? "straight" : prev));
     setHighlightedRowIndex(null);
@@ -391,10 +393,51 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     [origin, rows],
   );
 
-  const recommendedOrder = useMemo(
+  const baseRecommendedOrder = useMemo(
     () => (recommendationMode === "road" && roadRecommendedOrder ? roadRecommendedOrder : straightRecommendedOrder),
     [recommendationMode, roadRecommendedOrder, straightRecommendedOrder],
   );
+
+  const recommendedOrder = useMemo(() => {
+    if (!manualRecommendationRowOrder || manualRecommendationRowOrder.length === 0) {
+      return baseRecommendedOrder;
+    }
+
+    const byRowIndex = new Map(baseRecommendedOrder.map((item) => [item.rowIndex, item]));
+    const reordered = manualRecommendationRowOrder
+      .map((rowIndex) => byRowIndex.get(rowIndex))
+      .filter((item): item is RouteRecommendationItem => Boolean(item));
+
+    const remaining = baseRecommendedOrder.filter((item) => !manualRecommendationRowOrder.includes(item.rowIndex));
+    const merged = [...reordered, ...remaining];
+    if (recommendationMode === "straight") {
+      let cumulative = 0;
+      let current = origin;
+      return merged.map((item, index) => {
+        const row = rows[item.rowIndex];
+        const coord = row?.coord;
+        if (!coord) {
+          return { ...item, step: index + 1 };
+        }
+        const legKm = Math.hypot(coord.lat - current.lat, coord.lon - current.lon) * 111;
+        cumulative += legKm;
+        current = coord;
+        return {
+          ...item,
+          step: index + 1,
+          distanceKm: Number(legKm.toFixed(1)),
+          cumulativeKm: Number(cumulative.toFixed(1)),
+          durationMin: undefined,
+          cumulativeDurationMin: undefined,
+        };
+      });
+    }
+
+    return merged.map((item, index) => ({
+      ...item,
+      step: index + 1,
+    }));
+  }, [baseRecommendedOrder, manualRecommendationRowOrder, recommendationMode, origin, rows]);
 
   const maxMultiRouteStops = settings.navigationApp === "kakao" ? 2 : 6;
 
@@ -907,6 +950,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               finalShortList={finalShortList}
               viewMode={settings.viewMode}
               recommendedOrder={recommendedOrder}
+              manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
               recommendationMode={recommendationMode}
               roadRecommendationLoading={roadRecommendationLoading}
               roadRecommendationError={roadRecommendationError}
@@ -915,11 +959,25 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
               }}
               onChangeRecommendationMode={(mode) => {
+                setManualRecommendationRowOrder(null);
                 setRecommendationMode(mode);
                 if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
                   void onComputeRoadRecommendation();
                 }
               }}
+              onMoveRecommendation={(rowIndex, direction) => {
+                setManualRecommendationRowOrder((prev) => {
+                  const current = (prev && prev.length > 0 ? prev : recommendedOrder.map((item) => item.rowIndex)).slice();
+                  const index = current.indexOf(rowIndex);
+                  if (index < 0) return current;
+                  const nextIndex = direction === "up" ? index - 1 : index + 1;
+                  if (nextIndex < 0 || nextIndex >= current.length) return current;
+                  const [moved] = current.splice(index, 1);
+                  current.splice(nextIndex, 0, moved);
+                  return current;
+                });
+              }}
+              onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
               onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
             />
 

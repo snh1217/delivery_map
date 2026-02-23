@@ -8,10 +8,13 @@ type Props = {
   finalShortList: string[];
   viewMode: "segment" | "all";
   recommendedOrder: RouteRecommendationItem[];
+  manualOrderActive: boolean;
   recommendationMode: RouteRecommendationMode;
   roadRecommendationLoading: boolean;
   roadRecommendationError: string | null;
   onSelectRecommendation: (rowIndex: number) => void;
+  onMoveRecommendation: (rowIndex: number, direction: "up" | "down") => void;
+  onResetRecommendationOrder: () => void;
   onChangeRecommendationMode: (mode: RouteRecommendationMode) => void;
   onComputeRoadRecommendation: () => void;
 };
@@ -21,9 +24,7 @@ function formatMinutes(value?: number | null) {
     return "-";
   }
   const rounded = Math.round(value);
-  if (rounded < 60) {
-    return `${rounded}분`;
-  }
+  if (rounded < 60) return `${rounded}분`;
   const h = Math.floor(rounded / 60);
   const m = rounded % 60;
   return `${h}시간 ${m}분`;
@@ -34,10 +35,13 @@ export function ResultPanel({
   finalShortList,
   viewMode,
   recommendedOrder,
+  manualOrderActive,
   recommendationMode,
   roadRecommendationLoading,
   roadRecommendationError,
   onSelectRecommendation,
+  onMoveRecommendation,
+  onResetRecommendationOrder,
   onChangeRecommendationMode,
   onComputeRoadRecommendation,
 }: Props) {
@@ -61,9 +65,7 @@ export function ResultPanel({
   };
 
   const onShare = async () => {
-    if (!canShare) {
-      return;
-    }
+    if (!canShare) return;
     await navigator.share({ title: "퀵서비스 동 리스트", text });
   };
 
@@ -109,12 +111,25 @@ export function ResultPanel({
           </button>
           <span className="text-xs leading-5 text-slate-500">
             {recommendationMode === "road"
-              ? "네이버 경로 거리/시간 기반 대략값"
-              : "현재 위치 기준 직선거리로 빠르게 정렬"}
+              ? "네이버 경로 거리/시간 기반 추천 순서"
+              : "내 위치 → 첫 도착지 → 다음 가까운 곳 순서(직선거리)"}
           </span>
         </div>
 
         {roadRecommendationError ? <p className="mt-2 text-xs text-rose-600">{roadRecommendationError}</p> : null}
+
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-slate-500">↑↓ 버튼으로 추천 순서를 직접 수정할 수 있습니다.</p>
+          {manualOrderActive ? (
+            <button
+              type="button"
+              className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-xs"
+              onClick={onResetRecommendationOrder}
+            >
+              순서 초기화
+            </button>
+          ) : null}
+        </div>
 
         <div className="mt-2 grid grid-cols-2 gap-2">
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
@@ -126,31 +141,55 @@ export function ResultPanel({
         </div>
 
         <ol className="mt-2 space-y-2">
-          {recommendedOrder.map((item) => (
+          {recommendedOrder.map((item, index) => (
             <li key={`${item.rowIndex}-${item.step}`}>
-              <button
-                type="button"
-                className="w-full rounded-lg border border-slate-100 bg-slate-50 p-2 text-left active:scale-[0.99]"
-                onClick={() => onSelectRecommendation(item.rowIndex)}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-800">
-                      {item.step}. 도착지 {item.rowIndex + 1}
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <button
+                  type="button"
+                  className="w-full rounded-lg border border-slate-100 bg-slate-50 p-2 text-left active:scale-[0.99]"
+                  onClick={() => onSelectRecommendation(item.rowIndex)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-slate-800">
+                        {item.step}. 도착지 {item.rowIndex + 1}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 text-xs text-slate-600">{item.label}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        구간 {item.distanceKm}km / {formatMinutes(item.durationMin)}
+                        {typeof item.cumulativeDurationMin === "number"
+                          ? ` · 누적 ${formatMinutes(item.cumulativeDurationMin)}`
+                          : ""}
+                      </div>
                     </div>
-                    <div className="mt-0.5 line-clamp-2 text-xs text-slate-600">{item.label}</div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      구간 {item.distanceKm}km / {formatMinutes(item.durationMin)}
-                      {typeof item.cumulativeDurationMin === "number"
-                        ? ` · 누적 ${formatMinutes(item.cumulativeDurationMin)}`
-                        : ""}
-                    </div>
+                    <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">{item.distanceKm}km</div>
                   </div>
-                  <div className="shrink-0 rounded-md bg-white px-2 py-1 text-xs text-slate-600">{item.distanceKm}km</div>
+                </button>
+
+                <div className="grid grid-rows-2 gap-1">
+                  <button
+                    type="button"
+                    className="h-[26px] w-10 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+                    onClick={() => onMoveRecommendation(item.rowIndex, "up")}
+                    disabled={index === 0}
+                    aria-label={`도착지 ${item.rowIndex + 1} 위로 이동`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className="h-[26px] w-10 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+                    onClick={() => onMoveRecommendation(item.rowIndex, "down")}
+                    disabled={index === recommendedOrder.length - 1}
+                    aria-label={`도착지 ${item.rowIndex + 1} 아래로 이동`}
+                  >
+                    ↓
+                  </button>
                 </div>
-              </button>
+              </div>
             </li>
           ))}
+
           {recommendedOrder.length === 0 ? (
             <li className="rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-500">
               좌표가 확정된 도착지가 있으면 추천 순서를 표시합니다.
@@ -203,4 +242,3 @@ export function ResultPanel({
     </section>
   );
 }
-
