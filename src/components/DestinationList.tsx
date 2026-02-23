@@ -22,9 +22,12 @@ type Props = {
   highlightedRowIndex: number | null;
   routeBatchButtons: RouteBatchButton[];
   activeRouteBatchIndex: number | null;
+  canUndoRouteRemoval: boolean;
+  undoRouteMessage?: string | null;
   onAdd: () => void;
   onReset: () => void;
   onNavigateAll: () => void;
+  onUndoRouteRemoval: () => void;
   onChangeInput: (id: string, value: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
@@ -46,9 +49,12 @@ export function DestinationList({
   highlightedRowIndex,
   routeBatchButtons,
   activeRouteBatchIndex,
+  canUndoRouteRemoval,
+  undoRouteMessage,
   onAdd,
   onReset,
   onNavigateAll,
+  onUndoRouteRemoval,
   onChangeInput,
   onSearch,
   onDelete,
@@ -125,6 +131,23 @@ export function DestinationList({
               </div>
             )}
           </div>
+
+          {canUndoRouteRemoval ? (
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-cyan-900">
+                  {undoRouteMessage ?? "이전 길찾기 전송으로 숨겨진 도착지가 있습니다."}
+                </p>
+                <button
+                  type="button"
+                  className="h-10 rounded-lg border border-cyan-300 bg-white px-3 text-xs font-medium text-cyan-800"
+                  onClick={onUndoRouteRemoval}
+                >
+                  이전 경로 되돌리기
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {activeRouteBatchIndex !== null && routeBatchButtons.length > 1 ? (
             <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-800">

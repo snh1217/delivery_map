@@ -120,6 +120,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const router = useRouter();
   const [origin, setOrigin] = useState<LatLng>(DEFAULT_ORIGIN);
   const [locationStatus, setLocationStatus] = useState("내 위치를 확인하는 중입니다...");
+  const [locationSyncing, setLocationSyncing] = useState(false);
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
   const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
   const [storeModal, setStoreModal] = useState<(NaverDirectionLinkSet | KakaoDirectionLinkSet) | null>(null);
@@ -138,22 +139,31 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
-  useEffect(() => {
+  const syncCurrentLocation = (silent = false) => {
     if (!navigator.geolocation) {
       setLocationStatus("위치 기능 미지원: 서울시청 좌표를 사용합니다.");
       return;
     }
-
+    setLocationSyncing(true);
+    if (!silent) {
+      setLocationStatus("현재 위치를 다시 동기화하는 중입니다...");
+    }
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setOrigin({ lat: position.coords.latitude, lon: position.coords.longitude });
         setLocationStatus("현재 위치를 출발지로 사용합니다.");
+        setLocationSyncing(false);
       },
       () => {
         setLocationStatus("위치 권한 거부: 서울시청 좌표를 사용합니다.");
+        setLocationSyncing(false);
       },
       { enableHighAccuracy: true, timeout: 8000 },
     );
+  };
+
+  useEffect(() => {
+    syncCurrentLocation(true);
   }, []);
 
   useEffect(() => {
@@ -678,6 +688,16 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           <div className="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-800">
             출발지(고정): 내 현재 위치
           </div>
+          <div className="mt-2">
+            <button
+              type="button"
+              className="h-10 rounded-lg border border-cyan-300 bg-white px-3 text-sm text-cyan-700 disabled:opacity-50"
+              onClick={() => syncCurrentLocation(false)}
+              disabled={locationSyncing}
+            >
+              {locationSyncing ? "내 위치 동기화 중..." : "내 위치 동기화"}
+            </button>
+          </div>
           <p className="mt-1 text-sm text-slate-600">출발지: 내 현재 위치(GPS), 권한 거부 시 서울시청 좌표</p>
           <details className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
@@ -787,6 +807,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onAdd={onAddRow}
             onReset={() => setRows([createRow()])}
             onNavigateAll={onNavigateAll}
+            canUndoRouteRemoval={rowsUndoStack.length > 0}
+            undoRouteMessage={lastAutoRemovedMessage}
+            onUndoRouteRemoval={undoLastAutoRemove}
             onChangeInput={(id, value) =>
               setRows((prev) =>
                 prev.map((item) =>
