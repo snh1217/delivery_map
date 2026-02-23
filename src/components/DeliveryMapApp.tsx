@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsModal } from "@/components/EarningsModal";
+import { EarningsStatsFab } from "@/components/EarningsStatsFab";
+import { EarningsStatsModal } from "@/components/EarningsStatsModal";
 import { NaverMap } from "@/components/NaverMap";
-import { EarningsRangePanel } from "@/components/profile/EarningsRangePanel";
-import { EarningsSummaryCard } from "@/components/profile/EarningsSummaryCard";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
@@ -141,6 +141,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
   const [earningsModalOpen, setEarningsModalOpen] = useState(false);
+  const [earningsStatsModalOpen, setEarningsStatsModalOpen] = useState(false);
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -747,6 +748,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
               <div className="mt-1">위치 상태: {locationStatus}</div>
               <div>승인 상태: {sessionUser?.isAllowed ? "허용" : "미허용"}</div>
+              {sessionUser?.isAllowed ? (
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="rounded-md border border-cyan-300 bg-cyan-50 px-2 py-1 text-[11px] font-medium text-cyan-800"
+                    onClick={() => setEarningsStatsModalOpen(true)}
+                  >
+                    운임 통계 보기
+                  </button>
+                </div>
+              ) : null}
               {sessionUser?.isAdmin ? (
                 <div>관리자 안내: 회원가입 요청 승인/반려는 관리자 승인 관리에서 처리합니다.</div>
               ) : null}
@@ -787,13 +799,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
             </div>
           </details>
-
-          {sessionUser?.isAllowed ? (
-            <div className="mt-3 space-y-3">
-              <EarningsSummaryCard />
-              <EarningsRangePanel />
-            </div>
-          ) : null}
         </section>
 
         <SettingsPanel settings={settings} onChange={(next) => setSettings(sanitizeSettings(next))} />
@@ -986,7 +991,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
       </div>
 
+      {sessionUser?.isAllowed ? <EarningsStatsFab onClick={() => setEarningsStatsModalOpen(true)} /> : null}
       {sessionUser?.isAllowed ? <EarningsFab onClick={() => setEarningsModalOpen(true)} /> : null}
+      <EarningsStatsModal open={earningsStatsModalOpen} onClose={() => setEarningsStatsModalOpen(false)} />
       <EarningsModal open={earningsModalOpen} onClose={() => setEarningsModalOpen(false)} />
     </main>
   );
