@@ -8,7 +8,6 @@ import { EarningsModal } from "@/components/EarningsModal";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
 import { EarningsStatsModal } from "@/components/EarningsStatsModal";
 import { NaverMap } from "@/components/NaverMap";
-import { EarningsRangePanel } from "@/components/profile/EarningsRangePanel";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
@@ -798,16 +797,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   ) : null}
                 </div>
               </div>
-              {sessionUser?.isAllowed ? (
-                <details className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
-                  <summary className="cursor-pointer text-[11px] font-medium text-slate-700">
-                    운임 기간 통계 (숨김)
-                  </summary>
-                  <div className="mt-2">
-                    <EarningsRangePanel />
-                  </div>
-                </details>
-              ) : null}
             </div>
           </details>
         </section>
