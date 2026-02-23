@@ -562,7 +562,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       const restored = next.pop();
       if (restored) {
         setRows(restored);
-        setLastAutoRemovedMessage("마지막 자동 제거를 되돌렸습니다.");
+        setLastAutoRemovedMessage(null);
       }
       return next;
     });
@@ -1056,39 +1056,38 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
       ) : null}
 
-      {lastAutoRemovedMessage ? (
-        <div className="fixed bottom-24 left-3 right-3 z-30 rounded-xl border border-cyan-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg lg:hidden">
-          <p>{lastAutoRemovedMessage}</p>
+      <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
+        <div
+          className={`mx-auto grid w-full max-w-6xl gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur ${
+            rowsUndoStack.length > 0 ? "grid-cols-3" : "grid-cols-[1fr_auto]"
+          }`}
+        >
           <button
             type="button"
-            className="mt-2 h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium"
-            onClick={undoLastAutoRemove}
-            disabled={rowsUndoStack.length === 0}
+            className="flex h-12 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            onClick={onNavigateAll}
+            disabled={routeableStops.length === 0}
           >
-            되돌리기
+            전체 길찾기 {routeableStops.length > 0 ? `(${routeableStops.length})` : ""}
           </button>
-        </div>
-      ) : null}
-
-      <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
-        <div className="mx-auto grid w-full max-w-6xl grid-cols-[1fr_auto] gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur">
-        <button
-          type="button"
-          className="flex h-12 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white disabled:opacity-50"
-          onClick={onNavigateAll}
-          disabled={routeableStops.length === 0}
-        >
-          전체 길찾기 {routeableStops.length > 0 ? `(${routeableStops.length})` : ""}
-        </button>
-        <button
-          type="button"
-          className="flex h-12 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
-          onClick={onAddRow}
-          disabled={rows.length >= MAX_DESTINATIONS}
-        >
-          <span className="text-lg leading-none">+</span>
-          도착지 추가
-        </button>
+          {rowsUndoStack.length > 0 ? (
+            <button
+              type="button"
+              className="flex h-12 items-center justify-center rounded-xl border border-cyan-300 bg-cyan-50 px-2 text-xs font-semibold text-cyan-900"
+              onClick={undoLastAutoRemove}
+            >
+              최근 목적지 되돌리기
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="flex h-12 items-center justify-center gap-2 rounded-xl bg-cyan-700 px-4 text-sm font-semibold text-white disabled:opacity-50"
+            onClick={onAddRow}
+            disabled={rows.length >= MAX_DESTINATIONS}
+          >
+            <span className="text-lg leading-none">+</span>
+            도착지 추가
+          </button>
         </div>
       </div>
 
