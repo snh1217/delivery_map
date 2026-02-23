@@ -3,35 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
+import {
+  createSpeechRecognizer,
+  isSpeechRecognitionSupported,
+  type SpeechResultPayload,
+} from "@/lib/speech/recognizer";
 import type { DestinationRowState, LatLng } from "@/types";
-
-type SpeechRecognitionLike = {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-};
-
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: ArrayLike<{
-    isFinal: boolean;
-    0: { transcript: string };
-    length: number;
-  }>;
-};
-
-type WindowWithSpeech = Window & {
-  webkitSpeechRecognition?: SpeechRecognitionCtor;
-  SpeechRecognition?: SpeechRecognitionCtor;
-};
 
 type Props = {
   index: number;
@@ -45,40 +22,57 @@ type Props = {
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
   onNavigateKakao: (id: string) => void;
-  preferredNavigationApp: "naver" | "kakao";
+  preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
 };
 
-function getSpeechRecognitionCtor(): SpeechRecognitionCtor | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const w = window as WindowWithSpeech;
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
+const VOICE_SILENCE_TIMEOUT_MS = 900;
+const VOICE_MIN_RECORDING_MS = 800;
+const LOW_CONFIDENCE_THRESHOLD = 0.45;
 
 function removeVoiceHabitPhrases(value: string) {
-  let text = value;
-
-  // 흔한 명령형 말버릇 제거 (앞/뒤 위주)
+  let text = value || "";
   const patterns = [
-    /(검색|찾기|찾아)\s*해\s*줘(?:요)?$/g,
-    /(추가|입력|적용)\s*해\s*줘(?:요)?$/g,
-    /(검색|찾기|찾아)\s*해\s*줘(?:요)?/g,
-    /(추가|입력|적용)\s*해\s*줘(?:요)?/g,
-    /^(여기|이거|저기)\s*/g,
-    /^(주소)\s*(로|를)?\s*/g,
+    /(검색|찾기)(해줘|해주세요|좀|해 줘)?$/gi,
+    /(추가|입력|적용)(해줘|해주세요|좀|해 줘)?$/gi,
+    /(검색|찾기)(해줘|해주세요|좀|해 줘)?/gi,
+    /(추가|입력|적용)(해줘|해주세요|좀|해 줘)?/gi,
+    /^(여기|이거|저기)\s*/gi,
+    /^(주소|주소는)\s*/gi,
   ];
-
   for (const pattern of patterns) {
     text = text.replace(pattern, " ");
   }
-
   return text.replace(/\s+/g, " ").trim();
 }
 
-function normalizeTranscript(base: string, transcript: string) {
-  const merged = [base.trim(), transcript.trim()].filter(Boolean).join(" ");
-  return removeVoiceHabitPhrases(merged).replace(/\s+/g, " ").trim();
+function normalizeVoiceText(text: string) {
+  return removeVoiceHabitPhrases(text)
+    .replace(/서울시/g, "서울")
+    .replace(/경기도/g, "경기")
+    .replace(/\s*-\s*/g, "-")
+    .replace(/[()[\]{}]/g, (m) => (m === "(" || m === ")" ? m : " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function navAppLabel(app: Props["preferredNavigationApp"]) {
+  if (app === "kakao") return "카카오";
+  if (app === "kakaonavi") return "카카오내비";
+  return "네이버";
+}
+
+function voiceErrorMessage(code: string) {
+  const map: Record<string, string> = {
+    "not-allowed": "브라우저에서 마이크 권한을 허용해주세요.",
+    "service-not-allowed": "음성 인식 서비스 사용이 허용되지 않았습니다.",
+    "no-speech": "음성이 인식되지 않았습니다. 다시 시도해주세요.",
+    aborted: "음성 입력이 취소되었습니다.",
+    "audio-capture": "마이크 장치를 찾을 수 없습니다.",
+    network: "네트워크 문제로 음성 인식에 실패했습니다.",
+    nomatch: "인식 결과를 찾지 못했습니다. 다시 시도해주세요.",
+    unsupported: "이 브라우저는 음성 입력을 지원하지 않습니다. Chrome/Edge 권장",
+  };
+  return map[code] ?? `음성 입력 오류: ${code}`;
 }
 
 export function DestinationRow({
@@ -96,169 +90,184 @@ export function DestinationRow({
   preferredNavigationApp,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const onSearchRef = useRef(onSearch);
-  const voiceBaseInputRef = useRef("");
-  const voiceHasResultRef = useRef(false);
-  const voiceLastMergedInputRef = useRef("");
-  const skipNextAutoSearchRef = useRef(false);
+  const recognizerRef = useRef<ReturnType<typeof createSpeechRecognizer> | null>(null);
   const autoSearchTimerRef = useRef<number | null>(null);
-  const voicePressActiveRef = useRef(false);
-  const suppressVoiceClickRef = useRef(false);
+  const skipNextAutoSearchRef = useRef(false);
+  const finalVoiceTextRef = useRef("");
+  const finalConfidenceRef = useRef<number | undefined>(undefined);
 
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
+  const [voiceInterimText, setVoiceInterimText] = useState<string>("");
+  const [voiceLowConfidence, setVoiceLowConfidence] = useState(false);
+
+  const canNavigate = Boolean(row.coord);
+  const speechSupported = isSpeechRecognitionSupported();
+  const naverLinks = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
+  const kakaoLinks = row.coord ? createKakaoMapDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
 
   useEffect(() => {
     onSearchRef.current = onSearch;
   }, [onSearch]);
+
+  useEffect(() => {
+    if (!highlighted) return;
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlighted]);
 
   const clearPendingVoiceAutoSearch = () => {
     if (autoSearchTimerRef.current !== null) {
       window.clearTimeout(autoSearchTimerRef.current);
       autoSearchTimerRef.current = null;
     }
-    setVoicePreviewText(null);
   };
 
-  const runSearchNow = () => {
+  const scheduleVoiceAutoSearch = (text: string, options?: { skipIfLowConfidence?: boolean }) => {
     clearPendingVoiceAutoSearch();
-    onSearchRef.current(row.id);
+    setVoicePreviewText(text);
+
+    const lowConfidence = options?.skipIfLowConfidence && voiceLowConfidence;
+    if (lowConfidence) {
+      return;
+    }
+
+    skipNextAutoSearchRef.current = true;
+    autoSearchTimerRef.current = window.setTimeout(() => {
+      autoSearchTimerRef.current = null;
+      setVoicePreviewText(null);
+      onSearchRef.current(row.id);
+    }, 500);
   };
 
-  useEffect(() => {
-    if (!autoSearch || !row.input.trim() || isListening) {
-      return;
-    }
-
-    if (skipNextAutoSearchRef.current) {
-      skipNextAutoSearchRef.current = false;
-      return;
-    }
-
-    const timer = window.setTimeout(() => onSearch(row.id), 600);
-    return () => window.clearTimeout(timer);
-  }, [autoSearch, isListening, onSearch, row.id, row.input]);
-
-  useEffect(() => {
-    if (!highlighted) {
-      return;
-    }
-    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlighted]);
-
-  useEffect(() => {
-    return () => {
-      clearPendingVoiceAutoSearch();
-      try {
-        recognitionRef.current?.abort();
-      } catch {
-        // no-op
-      }
-      recognitionRef.current = null;
-    };
-  }, []);
-
-  const canNavigate = Boolean(row.coord);
-  const naverLinks = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
-  const kakaoLinks = row.coord ? createKakaoMapDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
-  const speechSupported = Boolean(getSpeechRecognitionCtor());
-
-  const startVoiceInput = () => {
-    if (isListening) {
-      return;
-    }
-
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setVoiceError("이 브라우저는 음성 입력을 지원하지 않습니다. (Chrome/Edge 권장)");
-      return;
-    }
-
-    clearPendingVoiceAutoSearch();
-    setVoiceError(null);
-    onChangeInput(row.id, "");
-    voiceBaseInputRef.current = "";
-    voiceHasResultRef.current = false;
-    voiceLastMergedInputRef.current = "";
-
-    const recognition = new Ctor();
-    recognition.lang = "ko-KR";
-    recognition.interimResults = true;
-    recognition.continuous = false;
-
-    recognition.onresult = (event) => {
-      let transcript = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        transcript += ` ${event.results[i]?.[0]?.transcript ?? ""}`;
-      }
-
-      const normalized = normalizeTranscript(voiceBaseInputRef.current, transcript);
-      voiceHasResultRef.current = normalized.trim().length > 0;
-      voiceLastMergedInputRef.current = normalized;
-      onChangeInput(row.id, normalized);
-    };
-
-    recognition.onerror = (event) => {
-      const code = event.error ?? "unknown";
-      const messageMap: Record<string, string> = {
-        "not-allowed": "마이크 권한이 거부되었습니다. 브라우저 권한을 허용해주세요.",
-        "service-not-allowed": "음성 인식 서비스 사용이 허용되지 않았습니다.",
-        "no-speech": "음성이 인식되지 않았습니다. 다시 시도해주세요.",
-        aborted: "음성 입력이 취소되었습니다.",
-        "audio-capture": "마이크를 찾을 수 없습니다.",
-      };
-      setVoiceError(messageMap[code] ?? `음성 입력 오류: ${code}`);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-      voicePressActiveRef.current = false;
-
-      const finalText = removeVoiceHabitPhrases(voiceLastMergedInputRef.current);
-      if (!voiceHasResultRef.current || !finalText.trim()) {
-        return;
-      }
-
-      onChangeInput(row.id, finalText);
-      setVoicePreviewText(finalText);
-      skipNextAutoSearchRef.current = true;
-      autoSearchTimerRef.current = window.setTimeout(() => {
-        autoSearchTimerRef.current = null;
-        setVoicePreviewText(null);
-        onSearchRef.current(row.id);
-      }, 500);
-    };
-
-    recognitionRef.current = recognition;
-    setIsListening(true);
-    recognition.start();
-  };
-
-  const stopVoiceInput = () => {
+  const stopVoiceRecognition = () => {
     try {
-      recognitionRef.current?.stop();
+      recognizerRef.current?.stop();
     } catch {
       // no-op
     }
   };
 
-  const onVoiceButtonPointerDown = () => {
-    suppressVoiceClickRef.current = true;
-    voicePressActiveRef.current = true;
-    startVoiceInput();
-  };
+  useEffect(() => {
+    return () => {
+      clearPendingVoiceAutoSearch();
+      try {
+        recognizerRef.current?.abort();
+      } catch {
+        // no-op
+      }
+      recognizerRef.current = null;
+    };
+  }, []);
 
-  const onVoiceButtonPointerUpLike = () => {
-    if (!voicePressActiveRef.current) {
+  useEffect(() => {
+    if (!autoSearch || !row.input.trim() || isListening) return;
+    if (skipNextAutoSearchRef.current) {
+      skipNextAutoSearchRef.current = false;
       return;
     }
-    voicePressActiveRef.current = false;
-    if (isListening) {
-      stopVoiceInput();
+    const timer = window.setTimeout(() => onSearchRef.current(row.id), 600);
+    return () => window.clearTimeout(timer);
+  }, [autoSearch, isListening, row.id, row.input]);
+
+  const handleSpeechResult = (payload: SpeechResultPayload) => {
+    const finalNormalized = normalizeVoiceText(payload.finalText);
+    const interimNormalized = normalizeVoiceText(payload.interimText);
+    finalVoiceTextRef.current = finalNormalized;
+    finalConfidenceRef.current = payload.confidence;
+
+    setVoiceInterimText(interimNormalized);
+    if (finalNormalized) {
+      onChangeInput(row.id, finalNormalized);
     }
+  };
+
+  const beginVoiceInput = () => {
+    if (!speechSupported) {
+      setVoiceError(voiceErrorMessage("unsupported"));
+      return;
+    }
+    if (isListening) return;
+
+    setVoiceError(null);
+    setVoicePreviewText(null);
+    setVoiceInterimText("");
+    setVoiceLowConfidence(false);
+    clearPendingVoiceAutoSearch();
+
+    // 새 음성 입력 시작 시 기존 입력값/좌표 상태를 초기화
+    onChangeInput(row.id, "");
+    finalVoiceTextRef.current = "";
+    finalConfidenceRef.current = undefined;
+
+    try {
+      navigator.vibrate?.(15);
+    } catch {
+      // ignore
+    }
+
+    const recognizer = createSpeechRecognizer({
+      lang: "ko-KR",
+      silenceTimeoutMs: VOICE_SILENCE_TIMEOUT_MS,
+      minRecordingMs: VOICE_MIN_RECORDING_MS,
+      onListeningChange: (listening) => setIsListening(listening),
+      onResult: handleSpeechResult,
+      onError: (code) => {
+        setVoiceError(voiceErrorMessage(code));
+      },
+      onEnd: (payload) => {
+        setVoiceInterimText("");
+        recognizerRef.current = null;
+        try {
+          navigator.vibrate?.(10);
+        } catch {
+          // ignore
+        }
+
+        const finalText = normalizeVoiceText(finalVoiceTextRef.current || payload.finalText || "");
+        if (!finalText) {
+          return;
+        }
+
+        onChangeInput(row.id, finalText);
+        const confidence = finalConfidenceRef.current;
+        const isLowConfidence = typeof confidence === "number" && confidence < LOW_CONFIDENCE_THRESHOLD;
+        setVoiceLowConfidence(isLowConfidence);
+
+        if (isLowConfidence) {
+          setVoicePreviewText(finalText);
+          setVoiceError("음성 인식 신뢰도가 낮습니다. 내용을 확인한 뒤 검색/적용을 눌러주세요.");
+          return;
+        }
+
+        scheduleVoiceAutoSearch(finalText);
+      },
+    });
+
+    recognizerRef.current = recognizer;
+
+    try {
+      recognizer.start();
+    } catch (error) {
+      recognizerRef.current = null;
+      const code = error instanceof Error ? error.message : "unknown";
+      setVoiceError(voiceErrorMessage(code));
+    }
+  };
+
+  const toggleVoiceInput = () => {
+    if (isListening) {
+      stopVoiceRecognition();
+      return;
+    }
+    void beginVoiceInput();
+  };
+
+  const runSearchNow = () => {
+    clearPendingVoiceAutoSearch();
+    setVoicePreviewText(null);
+    onSearchRef.current(row.id);
   };
 
   return (
@@ -292,6 +301,8 @@ export function DestinationRow({
             value={row.input}
             onChange={(e) => {
               clearPendingVoiceAutoSearch();
+              setVoicePreviewText(null);
+              setVoiceError(null);
               onChangeInput(row.id, e.target.value);
             }}
             onKeyDown={(e) => {
@@ -301,47 +312,66 @@ export function DestinationRow({
               }
             }}
           />
+
           <button
             type="button"
-            className={`h-12 rounded-lg px-3 text-xs font-medium ${
+            className={`relative h-12 rounded-lg px-3 text-xs font-medium ${
               isListening
                 ? "border border-rose-300 bg-rose-50 text-rose-700"
                 : "border border-slate-300 bg-white text-slate-700"
-            } disabled:opacity-50`}
-            onPointerDown={speechSupported ? onVoiceButtonPointerDown : undefined}
-            onPointerUp={onVoiceButtonPointerUpLike}
-            onPointerCancel={onVoiceButtonPointerUpLike}
-            onPointerLeave={onVoiceButtonPointerUpLike}
-            onClick={() => {
-              if (suppressVoiceClickRef.current) {
-                suppressVoiceClickRef.current = false;
-                return;
-              }
-              if (isListening) {
-                stopVoiceInput();
-              } else {
-                startVoiceInput();
-              }
-            }}
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+            onClick={toggleVoiceInput}
             disabled={!speechSupported && !isListening}
-            title={speechSupported ? "길게 누르고 주소를 말한 뒤 손을 떼면 자동 검색" : "이 브라우저는 음성 입력 미지원"}
+            title={speechSupported ? "한 번 탭하여 음성 입력 시작/중지" : "브라우저에서 음성 입력 미지원"}
           >
-            {isListening ? "듣는 중" : "음성입력"}
+            <span className="inline-flex items-center gap-1">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  isListening ? "animate-pulse bg-rose-500" : "bg-slate-400"
+                }`}
+              />
+              {isListening ? "듣는 중…" : "음성입력"}
+            </span>
           </button>
         </div>
 
         {isListening ? (
-          <p className="text-xs text-cyan-700">버튼을 누른 상태로 주소를 말하고 손을 떼면 자동으로 검색합니다.</p>
+          <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+            <div className="font-medium">듣는 중… 주소를 말해주세요.</div>
+            <div className="mt-1 text-cyan-700">
+              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동 종료됩니다."}
+            </div>
+          </div>
         ) : null}
+
         {voicePreviewText ? (
           <p className="text-xs text-emerald-700">
-            음성 인식 결과 미리보기: <span className="font-medium">{voicePreviewText}</span> (0.5초 후 자동 검색)
+            음성 인식 결과 미리보기: <span className="font-medium">{voicePreviewText}</span>
+            {!voiceLowConfidence ? " (0.5초 후 자동 검색)" : " (확인 후 검색/적용 권장)"}
           </p>
         ) : null}
-        {voiceError ? <p className="text-xs text-rose-600">{voiceError}</p> : null}
-        {!speechSupported ? (
-          <p className="text-xs text-slate-500">음성 입력은 Chrome/Edge(안드로이드 포함)에서 더 안정적으로 동작합니다.</p>
+
+        {voiceError ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+            <p className="text-xs text-rose-700">{voiceError}</p>
+            <button
+              type="button"
+              className="mt-2 h-8 rounded-lg border border-rose-300 bg-white px-2 text-xs text-rose-700"
+              onClick={beginVoiceInput}
+              disabled={isListening || !speechSupported}
+            >
+              다시 시도
+            </button>
+          </div>
         ) : null}
+
+        {!speechSupported ? (
+          <p className="text-xs text-slate-500">브라우저에서 마이크 권한이 필요합니다. 모바일 Chrome/Edge 권장</p>
+        ) : (
+          <p className="text-xs text-slate-500">
+            음성 입력: 탭하여 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용 (지원 브라우저 한정)
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
@@ -404,7 +434,7 @@ export function DestinationRow({
               className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white"
               onClick={() => onNavigate(row.id)}
             >
-              기본 앱 길찾기 ({preferredNavigationApp === "naver" ? "네이버" : "카카오"})
+              기본 앱 길찾기 ({navAppLabel(preferredNavigationApp)})
             </button>
             {naverLinks ? (
               <a
@@ -438,7 +468,9 @@ export function DestinationRow({
             ) : null}
           </div>
 
-          <p className="mt-2 text-[11px] text-slate-500">좌표가 확정되면 네이버/카카오 길찾기를 바로 사용할 수 있습니다.</p>
+          <p className="mt-2 text-[11px] text-slate-500">
+            좌표가 확정되면 기본 앱({navAppLabel(preferredNavigationApp)}) 또는 네이버/카카오맵 길찾기를 사용할 수 있습니다.
+          </p>
         </>
       ) : null}
     </div>

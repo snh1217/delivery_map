@@ -328,7 +328,7 @@ export async function reviewSignupRequest(params: {
 
 export async function insertRouteRun(params: {
   phone: string;
-  provider: "naver" | "kakao";
+  provider: "naver" | "kakao" | "kakaonavi";
   batchLabel?: string | null;
   finalShortList?: string[];
   routeStops?: RouteRunStop[];

@@ -17,7 +17,7 @@ type Props = {
   resolvedCount: number;
   routeableCount: number;
   skippedCountForAllRoute: number;
-  routeProviderLabel: "네이버" | "카카오";
+  routeProviderLabel: "네이버" | "카카오" | "카카오내비";
   routeMaxStops: number;
   highlightedRowIndex: number | null;
   routeBatchButtons: RouteBatchButton[];
@@ -34,7 +34,7 @@ type Props = {
   onSelectCandidate: (id: string, index: number) => void;
   onNavigate: (id: string) => void;
   onNavigateKakao: (id: string) => void;
-  preferredNavigationApp: "naver" | "kakao";
+  preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
 };
 
 export function DestinationList({
@@ -63,6 +63,8 @@ export function DestinationList({
   onNavigateKakao,
   preferredNavigationApp,
 }: Props) {
+  const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
+
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -88,13 +90,14 @@ export function DestinationList({
       <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-col gap-2">
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
-            전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개 (최대 {routeMaxStops}개)
+            전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개(최대 {routeMaxStops}개)
             {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용` : ""}
           </div>
 
-          {routeProviderLabel === "카카오" ? (
+          {isKakaoFamily ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              카카오맵은 자동 경유지 제한으로 한 번에 최대 {routeMaxStops}개씩 전송합니다. 도착지가 많으면 자동으로 분할 버튼을 사용하세요.
+              {routeProviderLabel} 자동 전달 제한으로 한 번에 최대 {routeMaxStops}개 도착지만 전송합니다. 도착지가 많으면
+              분할 길찾기 버튼을 사용하세요.
             </div>
           ) : null}
 
@@ -183,3 +186,4 @@ export function DestinationList({
     </section>
   );
 }
+

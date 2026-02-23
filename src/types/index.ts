@@ -33,7 +33,7 @@ export type SettingsState = {
   arcSteps: number;
   autoSearch: boolean;
   viewMode: "segment" | "all";
-  navigationApp: "naver" | "kakao";
+  navigationApp: "naver" | "kakao" | "kakaonavi";
 };
 
 export type DongCentroid = {
@@ -100,7 +100,7 @@ export type RouteRunRow = {
   id: string;
   phone: string;
   created_at: string;
-  provider: "naver" | "kakao";
+  provider: "naver" | "kakao" | "kakaonavi";
   batch_label: string | null;
   destination_count: number;
   final_short_list: string[] | null;

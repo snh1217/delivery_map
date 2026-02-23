@@ -37,13 +37,13 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as {
-      provider?: "naver" | "kakao";
+      provider?: "naver" | "kakao" | "kakaonavi";
       batchLabel?: string | null;
       finalShortList?: string[];
       routeStops?: RouteRunStop[];
     };
 
-    if (body.provider !== "naver" && body.provider !== "kakao") {
+    if (body.provider !== "naver" && body.provider !== "kakao" && body.provider !== "kakaonavi") {
       return NextResponse.json({ message: "지원되지 않는 길찾기 앱입니다." }, { status: 400 });
     }
 
@@ -60,4 +60,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ message }, { status: 500 });
   }
 }
-

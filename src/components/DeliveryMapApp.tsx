@@ -24,6 +24,14 @@ import {
   openKakaoMapMultiDirections,
   type KakaoDirectionLinkSet,
 } from "@/lib/kakaoDeepLink";
+import {
+  createKakaoNaviInstallLinks,
+  detectKakaoNaviCapability,
+  openKakaoNaviDirections,
+  openKakaoNaviMultiDirections,
+  type KakaoNaviCapability,
+  type KakaoNaviInstallLinks,
+} from "@/lib/kakao/navi";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import type {
   DestinationRowState,
@@ -52,6 +60,18 @@ const DEFAULT_SETTINGS: SettingsState = {
   navigationApp: "naver",
 };
 
+function getNavigationAppLabel(app: SettingsState["navigationApp"]) {
+  if (app === "kakao") return "카카오";
+  if (app === "kakaonavi") return "카카오내비";
+  return "네이버";
+}
+
+function getRouteRunProviderLabel(provider: "naver" | "kakao" | "kakaonavi") {
+  if (provider === "kakao") return "카카오";
+  if (provider === "kakaonavi") return "카카오내비";
+  return "네이버";
+}
+
 function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): SettingsState {
   return {
     halfAngleDeg: Number.isFinite(raw?.halfAngleDeg) ? Math.min(80, Math.max(5, Number(raw?.halfAngleDeg))) : 30,
@@ -64,7 +84,8 @@ function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): Setti
     arcSteps: Number.isFinite(raw?.arcSteps) ? Math.min(128, Math.max(24, Number(raw?.arcSteps))) : 72,
     autoSearch: Boolean(raw?.autoSearch),
     viewMode: raw?.viewMode === "all" ? "all" : "segment",
-    navigationApp: raw?.navigationApp === "kakao" ? "kakao" : "naver",
+    navigationApp:
+      raw?.navigationApp === "kakao" || raw?.navigationApp === "kakaonavi" ? raw.navigationApp : "naver",
   };
 }
 
@@ -156,7 +177,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [locationSyncing, setLocationSyncing] = useState(false);
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
   const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
-  const [storeModal, setStoreModal] = useState<(NaverDirectionLinkSet | KakaoDirectionLinkSet) | null>(null);
+  const [storeModal, setStoreModal] = useState<
+    (NaverDirectionLinkSet | KakaoDirectionLinkSet | KakaoNaviInstallLinks) | null
+  >(null);
   const [highlightedRowIndex, setHighlightedRowIndex] = useState<number | null>(null);
   const [recommendationMode, setRecommendationMode] = useState<RouteRecommendationMode>("straight");
   const [roadRecommendedOrder, setRoadRecommendedOrder] = useState<RouteRecommendationItem[] | null>(null);
@@ -172,6 +195,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
   const [earningsModalOpen, setEarningsModalOpen] = useState(false);
   const [earningsStatsModalOpen, setEarningsStatsModalOpen] = useState(false);
+  const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
+    supported: false,
+    keyExists: false,
+    keySourceVar: null,
+    sdkLoaded: false,
+    naviAvailable: false,
+    message: "카카오내비 상태 확인 전",
+  });
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
@@ -227,6 +258,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useEffect(() => {
+    let mounted = true;
+    void detectKakaoNaviCapability().then((status) => {
+      if (!mounted) return;
+      setKakaoNaviCapability(status);
+      console.info("[KakaoNavi] capability", status);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!sessionUser?.isAllowed) {
@@ -344,6 +387,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return;
     }
 
+    if (settings.navigationApp === "kakaonavi") {
+      if (!kakaoNaviCapability.supported) {
+        setLastAutoRemovedMessage(kakaoNaviCapability.message);
+        setStoreModal(createKakaoNaviInstallLinks());
+        return;
+      }
+      void openKakaoNaviDirections(origin, row.coord, row.label ?? row.input)
+        .then((result) => {
+          if (result.links) {
+            window.setTimeout(() => setStoreModal(result.links), 1200);
+          }
+        })
+        .catch((error) => {
+          setLastAutoRemovedMessage(
+            error instanceof Error
+              ? `${error.message} (카카오 개발자 콘솔 도메인 등록/키 설정 확인)`
+              : "카카오내비 실행 실패",
+          );
+          setStoreModal(createKakaoNaviInstallLinks());
+        });
+      return;
+    }
+
     if (settings.navigationApp === "kakao") {
       const result = openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
       if (result.usedAppScheme) {
@@ -439,7 +505,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }));
   }, [baseRecommendedOrder, manualRecommendationRowOrder, recommendationMode, origin, rows]);
 
-  const maxMultiRouteStops = settings.navigationApp === "kakao" ? 2 : 6;
+  const maxMultiRouteStops = settings.navigationApp === "naver" ? 6 : 2;
 
   const orderedRouteStops = useMemo<OrderedRouteStop[]>(() => {
     return recommendedOrder
@@ -503,7 +569,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   const saveRouteRun = async (params: {
-    provider: "naver" | "kakao";
+    provider: "naver" | "kakao" | "kakaonavi";
     batchLabel?: string | null;
     stops: OrderedRouteStop[];
   }) => {
@@ -574,6 +640,35 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
     setActiveRouteBatchIndex(routeBatches.length > 1 ? 0 : null);
 
+    if (settings.navigationApp === "kakaonavi") {
+      if (!kakaoNaviCapability.supported) {
+        setLastAutoRemovedMessage(kakaoNaviCapability.message);
+        setStoreModal(createKakaoNaviInstallLinks());
+        return;
+      }
+      void openKakaoNaviMultiDirections(origin, routeableStops, maxMultiRouteStops)
+        .then((result) => {
+          if (!result.supported) {
+            setLastAutoRemovedMessage(result.message ?? "카카오내비 전체 길찾기를 실행할 수 없습니다.");
+            if (result.links) setStoreModal(result.links);
+            return;
+          }
+          if (result.links) {
+            window.setTimeout(() => setStoreModal(result.links), 1200);
+          }
+          void saveRouteRun({ provider: "kakaonavi", batchLabel: "전체", stops: routeableStops }).catch(() => {});
+          removeRowsAfterRouteHandoff(
+            routeableStops.map((stop) => stop.rowId),
+            `카카오내비 전체 길찾기로 ${routeableStops.length}개 도착지를 전송하고 목록에서 숨겼습니다.`,
+          );
+        })
+        .catch((error) => {
+          setLastAutoRemovedMessage(error instanceof Error ? error.message : "카카오내비 전체 길찾기 실행 실패");
+          setStoreModal(createKakaoNaviInstallLinks());
+        });
+      return;
+    }
+
     if (settings.navigationApp === "kakao") {
       const result = openKakaoMapMultiDirections(origin, routeableStops);
       if (!result.supported) {
@@ -610,6 +705,37 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return;
     }
     setActiveRouteBatchIndex(batchIndex);
+
+    if (settings.navigationApp === "kakaonavi") {
+      if (!kakaoNaviCapability.supported) {
+        setLastAutoRemovedMessage(kakaoNaviCapability.message);
+        setStoreModal(createKakaoNaviInstallLinks());
+        return;
+      }
+      void openKakaoNaviMultiDirections(batch.origin, batch.stops, maxMultiRouteStops)
+        .then((result) => {
+          if (!result.supported) {
+            setLastAutoRemovedMessage(
+              result.message ?? `카카오내비 ${batch.label} 경로를 자동 전송할 수 없습니다.`,
+            );
+            if (result.links) setStoreModal(result.links);
+            return;
+          }
+          if (result.links) {
+            window.setTimeout(() => setStoreModal(result.links), 1200);
+          }
+          void saveRouteRun({ provider: "kakaonavi", batchLabel: batch.label, stops: batch.stops }).catch(() => {});
+          removeRowsAfterRouteHandoff(
+            batch.stops.map((stop) => stop.rowId),
+            `카카오내비 ${batch.label} 경로를 전송하고 해당 도착지를 목록에서 숨겼습니다.`,
+          );
+        })
+        .catch((error) => {
+          setLastAutoRemovedMessage(error instanceof Error ? error.message : "카카오내비 분할 길찾기 실행 실패");
+          setStoreModal(createKakaoNaviInstallLinks());
+        });
+      return;
+    }
 
     if (settings.navigationApp === "kakao") {
       const result = openKakaoMapMultiDirections(batch.origin, batch.stops);
@@ -860,7 +986,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   {dailyRouteRuns.slice(0, 5).map((run) => (
                     <details key={run.id} className="rounded border border-slate-200 bg-slate-50 p-2">
                       <summary className="cursor-pointer text-[11px] text-slate-700">
-                        {new Date(run.created_at).toLocaleTimeString()} · {run.provider === "kakao" ? "카카오" : "네이버"}
+                        {new Date(run.created_at).toLocaleTimeString()} · {getRouteRunProviderLabel(run.provider)}
                         {run.batch_label ? ` · ${run.batch_label}` : ""} · {run.destination_count}개
                       </summary>
                       <div className="mt-1 space-y-1 text-[11px] text-slate-600">
@@ -887,7 +1013,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           </details>
         </section>
 
-        <SettingsPanel settings={settings} onChange={(next) => setSettings(sanitizeSettings(next))} />
+        <SettingsPanel
+          settings={settings}
+          kakaoNaviStatus={kakaoNaviCapability}
+          onChange={(next) => setSettings(sanitizeSettings(next))}
+        />
 
         <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr] lg:gap-4">
           <DestinationList
@@ -897,7 +1027,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             resolvedCount={orderedRouteStops.length}
             routeableCount={routeableStops.length}
             skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
-            routeProviderLabel={settings.navigationApp === "kakao" ? "카카오" : "네이버"}
+            routeProviderLabel={getNavigationAppLabel(settings.navigationApp)}
             routeMaxStops={maxMultiRouteStops}
             highlightedRowIndex={highlightedRowIndex}
             activeRouteBatchIndex={activeRouteBatchIndex}
@@ -987,7 +1117,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   <h3 className="text-sm font-semibold text-slate-800">최근 저장된 동 리스트</h3>
                   <span className="text-xs text-slate-500">
                     {new Date(dailyRouteRuns[0].created_at).toLocaleTimeString()} ·{" "}
-                    {dailyRouteRuns[0].provider === "kakao" ? "카카오" : "네이버"}
+                    {getRouteRunProviderLabel(dailyRouteRuns[0].provider)}
                   </span>
                 </div>
                 <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-700">
@@ -1034,7 +1164,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 target="_blank"
                 rel="noreferrer"
               >
-                모바일 웹지도 열기
+                {"fallbackLabel" in storeModal && storeModal.fallbackLabel ? storeModal.fallbackLabel : "모바일 웹지도 열기"}
               </a>
               <a
                 className="flex h-11 items-center justify-center rounded-lg border border-slate-300 text-sm"
@@ -1042,7 +1172,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 target="_blank"
                 rel="noreferrer"
               >
-                지도 앱 설치
+                {"storeLabel" in storeModal && storeModal.storeLabel ? storeModal.storeLabel : "지도 앱 설치"}
               </a>
               <button
                 type="button"
