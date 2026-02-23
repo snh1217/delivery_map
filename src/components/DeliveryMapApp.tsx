@@ -40,6 +40,7 @@ import type {
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
 const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
+const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const DEFAULT_SETTINGS: SettingsState = {
   halfAngleDeg: 30,
   forwardBufferKm: 3,
@@ -81,6 +82,34 @@ function loadSavedSettings(): SettingsState {
     return sanitizeSettings(JSON.parse(raw) as Partial<SettingsState>);
   } catch {
     return DEFAULT_SETTINGS;
+  }
+}
+
+function loadRouteUndoState(): { stack: DestinationRowState[][]; message: string | null } {
+  if (typeof window === "undefined") {
+    return { stack: [], message: null };
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(ROUTE_UNDO_STORAGE_KEY);
+    if (!raw) {
+      return { stack: [], message: null };
+    }
+
+    const parsed = JSON.parse(raw) as {
+      stack?: unknown;
+      message?: unknown;
+    };
+
+    const stack = Array.isArray(parsed?.stack)
+      ? parsed.stack.filter((snapshot): snapshot is DestinationRowState[] => Array.isArray(snapshot))
+      : [];
+
+    const message = typeof parsed?.message === "string" ? parsed.message : null;
+
+    return { stack, message };
+  } catch {
+    return { stack: [], message: null };
   }
 }
 
@@ -134,8 +163,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [roadRecommendationLoading, setRoadRecommendationLoading] = useState(false);
   const [roadRecommendationError, setRoadRecommendationError] = useState<string | null>(null);
   const [activeRouteBatchIndex, setActiveRouteBatchIndex] = useState<number | null>(null);
-  const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>([]);
-  const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(null);
+  const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>(() => loadRouteUndoState().stack);
+  const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(() => loadRouteUndoState().message);
   const rowsRef = useRef(rows);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
@@ -179,6 +208,20 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       // ignore storage failures (private mode / quota)
     }
   }, [settings]);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem(
+        ROUTE_UNDO_STORAGE_KEY,
+        JSON.stringify({
+          stack: rowsUndoStack,
+          message: lastAutoRemovedMessage,
+        }),
+      );
+    } catch {
+      // ignore storage failures
+    }
+  }, [rowsUndoStack, lastAutoRemovedMessage]);
 
   useEffect(() => {
     rowsRef.current = rows;
