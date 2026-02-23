@@ -132,6 +132,14 @@ export type EarningTargetRow = {
 };
 
 export type DailyEarningItem = {
+  amount_gross: number;
+  is_logi: boolean;
+  amount_net: number;
+  memo?: string;
+  createdAt?: string;
+};
+
+export type LegacyDailyEarningItem = {
   amount: number;
   memo?: string;
   createdAt?: string;
@@ -147,6 +155,57 @@ export type DailyEarningRow = {
   total_amount: number;
   updated_at: string;
   created_at: string;
+};
+
+export type EarningsRangeByDay = {
+  ymd: string;
+  totalNet: number;
+};
+
+export type EarningsRangeByTarget = {
+  targetName: string;
+  totalNet: number;
+};
+
+export type EarningsRangeRowSummary = {
+  ymd: string;
+  targetName: string;
+  totalNet: number;
+  itemsCount: number;
+};
+
+export type EarningsRangeResponse = {
+  from: string;
+  to: string;
+  target: string;
+  totalNet: number;
+  byDay: EarningsRangeByDay[];
+  byTarget: EarningsRangeByTarget[];
+  rows: EarningsRangeRowSummary[];
+};
+
+export type AdminEarningsUserSummary = {
+  phone: string;
+  totalNet: number;
+  daysUsed: number;
+  entriesCount: number;
+};
+
+export type AdminEarningsSummaryResponse = {
+  from: string;
+  to: string;
+  totalNet: number;
+  byUser: AdminEarningsUserSummary[];
+};
+
+export type AdminEarningsUserDetailResponse = {
+  phone: string;
+  from: string;
+  to: string;
+  totalNet: number;
+  byDay: EarningsRangeByDay[];
+  byTarget: EarningsRangeByTarget[];
+  rows: EarningsRangeRowSummary[];
 };
 
 export type SignupRequestStatus = "pending" | "approved" | "rejected";

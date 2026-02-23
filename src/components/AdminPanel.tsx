@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminEarningsPanel } from "@/components/admin/AdminEarningsPanel";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import type { AllowlistRow, DailyUsageSummary, LoginLogRow, SignupRequestRow } from "@/types";
 
@@ -332,6 +333,8 @@ export function AdminPanel() {
           {logs.length === 0 ? <li>로그가 없습니다.</li> : null}
         </ul>
       </div>
+
+      <AdminEarningsPanel />
     </section>
   );
 }

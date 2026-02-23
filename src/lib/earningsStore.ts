@@ -1,7 +1,18 @@
-import { normalizePhoneNumber } from "@/lib/auth/phone";
-import { getKstYmd, MY_EARNING_TARGET_NAME, sanitizeDailyEarningItems, sumItems } from "@/lib/earnings";
+﻿import { normalizePhoneNumber } from "@/lib/auth/phone";
+import {
+  getKstYmd,
+  MY_EARNING_TARGET_NAME,
+  sanitizeDailyEarningItems,
+  sumNet,
+} from "@/lib/earnings";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
-import type { DailyEarningRow, EarningTargetRow } from "@/types";
+import type {
+  AdminEarningsSummaryResponse,
+  AdminEarningsUserDetailResponse,
+  DailyEarningRow,
+  EarningsRangeResponse,
+  EarningTargetRow,
+} from "@/types";
 
 function normalizedOwnerPhone(phone: string) {
   const normalized = normalizePhoneNumber(phone);
@@ -18,6 +29,32 @@ function isMissingEarningsTable(errorMessage: string) {
     errorMessage.includes("schema cache") ||
     errorMessage.includes("does not exist")
   );
+}
+
+function normalizeDailyEarningRow(row: DailyEarningRow): DailyEarningRow {
+  const items = sanitizeDailyEarningItems(Array.isArray(row.items) ? (row.items as unknown[]) : []);
+  const total_amount = sumNet(items);
+  return {
+    ...row,
+    items,
+    total_amount,
+  };
+}
+
+type DailyEarningDbRow = {
+  id: string;
+  owner_phone: string;
+  target_id: string | null;
+  target_name: string;
+  ymd: string;
+  items: unknown;
+  total_amount: number;
+  updated_at: string;
+  created_at: string;
+};
+
+function normalizeRows(rows: DailyEarningDbRow[]): DailyEarningRow[] {
+  return rows.map((row) => normalizeDailyEarningRow(row as DailyEarningRow));
 }
 
 export async function listEarningTargets(ownerPhone: string) {
@@ -133,7 +170,7 @@ export async function getTodayDailyEarning(params: {
     .eq("owner_phone", ownerPhone)
     .eq("ymd", ymd)
     .eq("target_name", targetName)
-    .maybeSingle();
+    .maybeSingle<DailyEarningDbRow>();
 
   if (error) {
     if (isMissingEarningsTable(error.message)) {
@@ -144,7 +181,7 @@ export async function getTodayDailyEarning(params: {
 
   return {
     ymd,
-    row: (data as DailyEarningRow | null) ?? null,
+    row: data ? normalizeDailyEarningRow(data as unknown as DailyEarningRow) : null,
   };
 }
 
@@ -176,7 +213,7 @@ export async function upsertTodayDailyEarning(params: {
   if (items.length === 0) {
     throw new Error("최소 1건 이상의 운임을 입력하세요.");
   }
-  const totalAmount = sumItems(items);
+  const totalAmount = sumNet(items);
   const ymd = getKstYmd();
 
   const supabase = getSupabaseServiceClient();
@@ -195,12 +232,137 @@ export async function upsertTodayDailyEarning(params: {
       { onConflict: "owner_phone,ymd,target_name" },
     )
     .select("id, owner_phone, target_id, target_name, ymd, items, total_amount, updated_at, created_at")
-    .single();
+    .single<DailyEarningDbRow>();
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data as DailyEarningRow;
+  return normalizeDailyEarningRow(data as unknown as DailyEarningRow);
 }
 
+async function listDailyEarningsForRange(params: {
+  ownerPhone?: string;
+  from: string;
+  to: string;
+  targetName?: string;
+}) {
+  const supabase = getSupabaseServiceClient();
+  let query = supabase
+    .from("daily_earnings")
+    .select("id, owner_phone, target_id, target_name, ymd, items, total_amount, updated_at, created_at")
+    .gte("ymd", params.from)
+    .lte("ymd", params.to)
+    .order("ymd", { ascending: true })
+    .order("target_name", { ascending: true });
+
+  if (params.ownerPhone) {
+    query = query.eq("owner_phone", params.ownerPhone);
+  }
+  if (params.targetName) {
+    query = query.eq("target_name", params.targetName);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    if (isMissingEarningsTable(error.message)) {
+      return [] as DailyEarningRow[];
+    }
+    throw new Error(error.message);
+  }
+
+  return normalizeRows((data ?? []) as DailyEarningDbRow[]);
+}
+
+function aggregateEarningsRange(rows: DailyEarningRow[], params: { from: string; to: string; target: string }): EarningsRangeResponse {
+  const byDayMap = new Map<string, number>();
+  const byTargetMap = new Map<string, number>();
+  const rowSummaries = rows.map((row) => {
+    const totalNet = Number.isFinite(row.total_amount) ? row.total_amount : sumNet(row.items);
+    byDayMap.set(row.ymd, (byDayMap.get(row.ymd) ?? 0) + totalNet);
+    byTargetMap.set(row.target_name, (byTargetMap.get(row.target_name) ?? 0) + totalNet);
+    return {
+      ymd: row.ymd,
+      targetName: row.target_name,
+      totalNet,
+      itemsCount: Array.isArray(row.items) ? row.items.length : 0,
+    };
+  });
+
+  const totalNet = rowSummaries.reduce((sum, row) => sum + row.totalNet, 0);
+  const byDay = [...byDayMap.entries()]
+    .map(([ymd, total]) => ({ ymd, totalNet: total }))
+    .sort((a, b) => a.ymd.localeCompare(b.ymd));
+  const byTarget = [...byTargetMap.entries()]
+    .map(([targetName, total]) => ({ targetName, totalNet: total }))
+    .sort((a, b) => b.totalNet - a.totalNet || a.targetName.localeCompare(b.targetName, "ko"));
+
+  return {
+    from: params.from,
+    to: params.to,
+    target: params.target,
+    totalNet,
+    byDay,
+    byTarget,
+    rows: rowSummaries.sort((a, b) => a.ymd.localeCompare(b.ymd) || a.targetName.localeCompare(b.targetName, "ko")),
+  };
+}
+
+export async function getUserEarningsRange(params: {
+  ownerPhone: string;
+  from: string;
+  to: string;
+  target: "all" | "me" | string;
+}): Promise<EarningsRangeResponse> {
+  const ownerPhone = normalizedOwnerPhone(params.ownerPhone);
+  const targetName = params.target === "all" ? undefined : params.target === "me" ? MY_EARNING_TARGET_NAME : params.target;
+  const rows = await listDailyEarningsForRange({ ownerPhone, from: params.from, to: params.to, targetName });
+  return aggregateEarningsRange(rows, { from: params.from, to: params.to, target: params.target });
+}
+
+export async function getAdminEarningsSummary(params: { from: string; to: string }): Promise<AdminEarningsSummaryResponse> {
+  const rows = await listDailyEarningsForRange({ from: params.from, to: params.to });
+  const byUser = new Map<string, { totalNet: number; ymdSet: Set<string>; entriesCount: number }>();
+  let totalNet = 0;
+
+  for (const row of rows) {
+    totalNet += row.total_amount;
+    const entry = byUser.get(row.owner_phone) ?? { totalNet: 0, ymdSet: new Set<string>(), entriesCount: 0 };
+    entry.totalNet += row.total_amount;
+    entry.ymdSet.add(row.ymd);
+    entry.entriesCount += 1;
+    byUser.set(row.owner_phone, entry);
+  }
+
+  return {
+    from: params.from,
+    to: params.to,
+    totalNet,
+    byUser: [...byUser.entries()]
+      .map(([phone, value]) => ({
+        phone,
+        totalNet: value.totalNet,
+        daysUsed: value.ymdSet.size,
+        entriesCount: value.entriesCount,
+      }))
+      .sort((a, b) => b.totalNet - a.totalNet || b.entriesCount - a.entriesCount || a.phone.localeCompare(b.phone)),
+  };
+}
+
+export async function getAdminEarningsUserDetail(params: {
+  phone: string;
+  from: string;
+  to: string;
+}): Promise<AdminEarningsUserDetailResponse> {
+  const ownerPhone = normalizedOwnerPhone(params.phone);
+  const range = await getUserEarningsRange({ ownerPhone, from: params.from, to: params.to, target: "all" });
+  return {
+    phone: ownerPhone,
+    from: range.from,
+    to: range.to,
+    totalNet: range.totalNet,
+    byDay: range.byDay,
+    byTarget: range.byTarget,
+    rows: range.rows,
+  };
+}

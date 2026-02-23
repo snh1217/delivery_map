@@ -6,6 +6,8 @@ import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsModal } from "@/components/EarningsModal";
 import { NaverMap } from "@/components/NaverMap";
+import { EarningsRangePanel } from "@/components/profile/EarningsRangePanel";
+import { EarningsSummaryCard } from "@/components/profile/EarningsSummaryCard";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
@@ -785,6 +787,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
             </div>
           </details>
+
+          {sessionUser?.isAllowed ? (
+            <div className="mt-3 space-y-3">
+              <EarningsSummaryCard />
+              <EarningsRangePanel />
+            </div>
+          ) : null}
         </section>
 
         <SettingsPanel settings={settings} onChange={(next) => setSettings(sanitizeSettings(next))} />
