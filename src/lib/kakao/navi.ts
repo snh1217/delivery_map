@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import type { LatLng } from "@/types";
 import { detectKakaoPlatform } from "@/lib/kakaoDeepLink";
 import type { RoutePoint } from "@/lib/naverDeepLink";
-import { getKakaoSdkKeyInfo, loadKakaoSdk } from "@/lib/kakao/sdkLoader";
+import { runKakaoNaviDiagnostics } from "@/lib/kakao/diagnostics";
+import { loadKakaoSdk } from "@/lib/kakao/sdkLoader";
 
 export type KakaoNaviCapability = {
   supported: boolean;
@@ -51,44 +52,16 @@ export function createKakaoNaviInstallLinks(): KakaoNaviInstallLinks {
 }
 
 export async function detectKakaoNaviCapability(): Promise<KakaoNaviCapability> {
-  const keyInfo = getKakaoSdkKeyInfo();
-  if (!keyInfo.exists) {
-    return {
-      supported: false,
-      keyExists: false,
-      keySourceVar: null,
-      sdkLoaded: false,
-      naviAvailable: false,
-      message: "카카오 JavaScript 키가 없어 카카오내비를 사용할 수 없습니다.",
-    };
-  }
+  const diagnostics = await runKakaoNaviDiagnostics();
 
-  try {
-    const kakao = await loadKakaoSdk();
-    const naviAvailable = Boolean(kakao?.Navi?.start);
-    return {
-      supported: naviAvailable,
-      keyExists: true,
-      keySourceVar: keyInfo.sourceVar,
-      sdkLoaded: true,
-      naviAvailable,
-      message: naviAvailable
-        ? "카카오 SDK와 카카오내비 호출 준비가 완료되었습니다."
-        : "카카오 SDK는 로드됐지만 Kakao.Navi API를 찾지 못했습니다. SDK/도메인 설정을 확인하세요.",
-    };
-  } catch (error) {
-    return {
-      supported: false,
-      keyExists: true,
-      keySourceVar: keyInfo.sourceVar,
-      sdkLoaded: false,
-      naviAvailable: false,
-      message:
-        error instanceof Error
-          ? `${error.message} (카카오 개발자 콘솔의 JavaScript 키/도메인 등록을 확인하세요)`
-          : "카카오내비 준비 상태를 확인하지 못했습니다.",
-    };
-  }
+  return {
+    supported: diagnostics.ok,
+    keyExists: diagnostics.checks.hasJsKey,
+    keySourceVar: null,
+    sdkLoaded: diagnostics.checks.sdkLoaded,
+    naviAvailable: diagnostics.checks.hasNavi,
+    message: diagnostics.ok ? "사용 가능" : "현재 사용할 수 없습니다. 관리자에게 문의하세요.",
+  };
 }
 
 function buildNaviViaList(stops: RoutePoint[]) {
@@ -100,13 +73,10 @@ function buildNaviViaList(stops: RoutePoint[]) {
   }));
 }
 
-async function startKakaoNaviRoute(params: {
-  origin: LatLng;
-  orderedStops: RoutePoint[];
-}) {
+async function startKakaoNaviRoute(params: { origin: LatLng; orderedStops: RoutePoint[] }) {
   const kakao = await loadKakaoSdk();
   if (!kakao?.Navi?.start) {
-    throw new Error("Kakao.Navi.start API를 사용할 수 없습니다.");
+    throw new Error("카카오내비 앱 호출을 사용할 수 없습니다.");
   }
 
   if (params.orderedStops.length === 0) {
@@ -117,7 +87,7 @@ async function startKakaoNaviRoute(params: {
   const viaList = buildNaviViaList(params.orderedStops);
 
   const payload = {
-    name: destination.name || "도착지",
+    name: destination.name || "목적지",
     x: destination.lon,
     y: destination.lat,
     coordType: "wgs84",
@@ -132,9 +102,8 @@ async function startKakaoNaviRoute(params: {
   try {
     kakao.Navi.start(payload);
   } catch {
-    // Some environments reject `location` or `viaList` combinations.
     kakao.Navi.start({
-      name: destination.name || "도착지",
+      name: destination.name || "목적지",
       x: destination.lon,
       y: destination.lat,
       coordType: "wgs84",
@@ -149,7 +118,12 @@ export async function openKakaoNaviDirections(origin: LatLng, destination: LatLn
 
   if (platform === "desktop") {
     window.open(links.desktopWeb, "_blank", "noopener,noreferrer");
-    return { supported: false as const, usedAppScheme: false, links, message: "카카오내비는 모바일 앱에서 사용 가능합니다." };
+    return {
+      supported: false as const,
+      usedAppScheme: false,
+      links,
+      message: "카카오내비는 모바일 앱에서 사용할 수 있습니다.",
+    };
   }
 
   await startKakaoNaviRoute({
@@ -163,7 +137,7 @@ export async function openKakaoNaviMultiDirections(origin: LatLng, orderedStops:
   const links = createKakaoNaviInstallLinks();
   const platform = detectKakaoPlatform();
   if (orderedStops.length === 0) {
-    return { supported: false as const, usedAppScheme: false, links, message: "도착지가 없습니다." };
+    return { supported: false as const, usedAppScheme: false, links, message: "목적지가 없습니다." };
   }
 
   if (orderedStops.length > maxStops) {
@@ -177,10 +151,14 @@ export async function openKakaoNaviMultiDirections(origin: LatLng, orderedStops:
 
   if (platform === "desktop") {
     window.open(links.desktopWeb, "_blank", "noopener,noreferrer");
-    return { supported: false as const, usedAppScheme: false, links, message: "카카오내비는 모바일 앱에서 사용 가능합니다." };
+    return {
+      supported: false as const,
+      usedAppScheme: false,
+      links,
+      message: "카카오내비는 모바일 앱에서 사용할 수 있습니다.",
+    };
   }
 
   await startKakaoNaviRoute({ origin, orderedStops });
   return { supported: true as const, usedAppScheme: true, links };
 }
-

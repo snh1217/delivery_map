@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import type { KakaoNaviCapability } from "@/lib/kakao/navi";
@@ -64,6 +64,11 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
   });
 
   const kakaoNaviDisabled = Boolean(kakaoNaviStatus && !kakaoNaviStatus.supported);
+  const kakaoNaviSummary = kakaoNaviStatus
+    ? kakaoNaviStatus.supported
+      ? "사용 가능"
+      : "사용 불가"
+    : "확인 중";
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -72,8 +77,8 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
           <div className="min-w-0">
             <h2 className="text-lg font-semibold text-slate-800">설정</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리 {settings.backwardTailKm}km / 기본 길찾기{" "}
-              {navAppLabel(settings.navigationApp)}
+              팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리 {settings.backwardTailKm}km /
+              기본 길찾기 {navAppLabel(settings.navigationApp)}
             </p>
           </div>
           <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">펼치기</span>
@@ -81,7 +86,7 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
 
         <div className="mt-3 border-t border-slate-100 pt-3">
           <p className="mb-3 text-xs leading-5 text-slate-600">
-            팬 계산값, 자동 검색, 기본 길찾기 앱을 조정합니다. 모바일에서는 자주 바꾸지 않는 값이라 접어서 사용해도 됩니다.
+            팬(부채꼴) 계산값과 자동 검색, 기본 길찾기 앱을 조절합니다. 자주 바꾸지 않는 값은 기본값으로 사용해도 됩니다.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -171,7 +176,7 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
                   type="button"
                   className={`h-11 rounded-lg text-sm ${
                     settings.navigationApp === "kakaonavi"
-                      ? "bg-yellow-500 text-black"
+                      ? "bg-yellow-400 text-black"
                       : "border border-slate-300 bg-white text-slate-700"
                   } ${kakaoNaviDisabled ? "cursor-not-allowed opacity-50" : ""}`}
                   onClick={() => {
@@ -179,28 +184,28 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
                     onChange({ ...settings, navigationApp: "kakaonavi" });
                   }}
                   disabled={kakaoNaviDisabled}
-                  title={kakaoNaviDisabled ? "카카오내비 설정을 먼저 확인하세요." : "카카오내비 사용"}
+                  title={kakaoNaviDisabled ? "현재 사용할 수 없습니다. 관리자에게 문의하세요." : "카카오내비 사용"}
                 >
                   카카오내비
                 </button>
               </div>
 
               <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <div className="font-medium text-slate-700">카카오내비 점검</div>
-                <div className="mt-1">
-                  {kakaoNaviStatus?.message ??
-                    "카카오내비 상태 확인 중... (JavaScript 키 및 SDK/Kakao.Navi API 확인)"}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-slate-700">카카오내비 상태</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                      kakaoNaviStatus?.supported
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-slate-200 text-slate-700"
+                    }`}
+                  >
+                    {kakaoNaviSummary}
+                  </span>
                 </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  키 변수:{" "}
-                  {kakaoNaviStatus?.keySourceVar
-                    ? `${kakaoNaviStatus.keySourceVar} (${kakaoNaviStatus.keyExists ? "설정됨" : "없음"})`
-                    : "없음"}
-                </div>
-                <div className="mt-1 text-[11px] text-slate-500">
-                  카카오 개발자 콘솔 &gt; 내 애플리케이션 &gt; 플랫폼 &gt; Web 도메인에 현재 도메인
-                  (`localhost`, `vercel.app`/운영 도메인)을 등록해야 합니다.
-                </div>
+                {!kakaoNaviStatus?.supported ? (
+                  <p className="mt-1 text-[11px] text-slate-500">현재 사용할 수 없습니다. 관리자에게 문의하세요.</p>
+                ) : null}
               </div>
             </div>
 

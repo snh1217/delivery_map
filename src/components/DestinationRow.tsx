@@ -1,15 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
-import { DestinationAttachment } from "@/components/destinations/DestinationAttachment";
 import {
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
   type SpeechResultPayload,
 } from "@/lib/speech/recognizer";
 import type { DestinationRowState, LatLng } from "@/types";
+
+const DestinationAttachment = dynamic(
+  () => import("@/components/destinations/DestinationAttachment").then((m) => m.DestinationAttachment),
+  { ssr: false },
+);
 
 type Props = {
   index: number;
@@ -25,6 +30,7 @@ type Props = {
   onNavigateKakao: (id: string) => void;
   preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
   isAdmin?: boolean;
+  canUseAttachment?: boolean;
   onApplyOcrToRow?: (id: string, address: string) => void;
 };
 
@@ -92,6 +98,7 @@ export function DestinationRow({
   onNavigateKakao,
   preferredNavigationApp,
   isAdmin = false,
+  canUseAttachment = false,
   onApplyOcrToRow,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -431,20 +438,22 @@ export function DestinationRow({
       ) : null}
       {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
 
-      <DestinationAttachment
-        isAdmin={isAdmin}
-        onApplyAddress={(address) => {
-          setVoiceError(null);
-          clearPendingVoiceAutoSearch();
-          setVoicePreviewText(null);
-          if (onApplyOcrToRow) {
-            onApplyOcrToRow(row.id, address);
-            return;
-          }
-          onChangeInput(row.id, address);
-          window.setTimeout(() => onSearch(row.id), 0);
-        }}
-      />
+      {canUseAttachment ? (
+        <DestinationAttachment
+          isAdmin={isAdmin}
+          onApplyAddress={(address) => {
+            setVoiceError(null);
+            clearPendingVoiceAutoSearch();
+            setVoicePreviewText(null);
+            if (onApplyOcrToRow) {
+              onApplyOcrToRow(row.id, address);
+              return;
+            }
+            onChangeInput(row.id, address);
+            window.setTimeout(() => onSearch(row.id), 0);
+          }}
+        />
+      ) : null}
 
       {canNavigate ? (
         <>

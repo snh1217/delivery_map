@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminEarningsPanel } from "@/components/admin/AdminEarningsPanel";
+import { KakaoNaviDiagnosticsPanel } from "@/components/admin/KakaoNaviDiagnosticsPanel";
 import { ScreenshotAdd } from "@/components/admin/ScreenshotAdd";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { savePendingOcrDestination } from "@/lib/ocr/pendingDestination";
@@ -166,6 +167,10 @@ export function AdminPanel() {
       </div>
 
       {error ? <p className="mt-2 text-sm text-rose-600">{error}</p> : null}
+
+      <div className="mt-4">
+        <KakaoNaviDiagnosticsPanel />
+      </div>
 
       <div className="mt-4">
         <ScreenshotAdd

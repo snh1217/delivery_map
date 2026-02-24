@@ -1,16 +1,15 @@
 ﻿"use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
-import { EarningsModal } from "@/components/EarningsModal";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
-import { EarningsStatsModal } from "@/components/EarningsStatsModal";
-import { NaverMap } from "@/components/NaverMap";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
+import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalShortList, recommendVisitOrder } from "@/lib/geo";
 import {
@@ -46,10 +45,23 @@ import type {
   SettingsState,
 } from "@/types";
 
+const NaverMap = dynamic(() => import("@/components/NaverMap").then((m) => m.NaverMap), { ssr: false });
+const EarningsModal = dynamic(() => import("@/components/EarningsModal").then((m) => m.EarningsModal), { ssr: false });
+const EarningsStatsModal = dynamic(
+  () => import("@/components/EarningsStatsModal").then((m) => m.EarningsStatsModal),
+  { ssr: false },
+);
+
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
 const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
+const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
+const ATTACHMENT_ALLOWED_PHONES = new Set(
+  ["01037986217", "01031446217"]
+    .map((value) => normalizePhoneNumber(value))
+    .filter((value): value is string => Boolean(value)),
+);
 const DEFAULT_SETTINGS: SettingsState = {
   halfAngleDeg: 30,
   forwardBufferKm: 3,
@@ -135,6 +147,32 @@ function loadRouteUndoState(): { stack: DestinationRowState[][]; message: string
   }
 }
 
+function detectIosLikeBrowser() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  const platform = navigator.platform || "";
+  const touchPoints = navigator.maxTouchPoints || 0;
+  const isIOSDevice = /iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(platform) && touchPoints > 1);
+  return isIOSDevice;
+}
+
+function detectIosChrome() {
+  if (typeof navigator === "undefined") return false;
+  return /CriOS/i.test(navigator.userAgent || "");
+}
+
+function loadIosSafeModeDefault() {
+  if (typeof window === "undefined") return false;
+  try {
+    const saved = window.localStorage.getItem(IOS_SAFE_MODE_STORAGE_KEY);
+    if (saved === "1") return true;
+    if (saved === "0") return false;
+  } catch {
+    // ignore storage errors
+  }
+  return detectIosChrome();
+}
+
 function createRow(): DestinationRowState {
   return {
     id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
@@ -196,6 +234,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
   const [earningsModalOpen, setEarningsModalOpen] = useState(false);
   const [earningsStatsModalOpen, setEarningsStatsModalOpen] = useState(false);
+  const [bootClientErrors, setBootClientErrors] = useState<string[]>([]);
+  const [iosSafeMode, setIosSafeMode] = useState<boolean>(loadIosSafeModeDefault);
+  const [mapDeferred, setMapDeferred] = useState<boolean>(loadIosSafeModeDefault);
+  const [iosBrowserInfo] = useState(() => ({ isIos: detectIosLikeBrowser(), isIosChrome: detectIosChrome() }));
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
+  const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
     keyExists: false,
@@ -244,6 +289,54 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   useEffect(() => {
     try {
+      window.localStorage.setItem(IOS_SAFE_MODE_STORAGE_KEY, iosSafeMode ? "1" : "0");
+    } catch {
+      // ignore storage failures
+    }
+    if (!iosSafeMode) {
+      setMapDeferred(false);
+    }
+  }, [iosSafeMode]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)");
+    const apply = () => {
+      const mobile = media.matches;
+      setIsMobileLayout(mobile);
+      if (!mobile) {
+        setResultPanelOpenMobile(true);
+        setMapPanelOpenMobile(true);
+      }
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      const msg = event.message || "클라이언트 오류";
+      setBootClientErrors((prev) => (prev.includes(msg) ? prev : [...prev.slice(-2), msg]));
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      const reason =
+        typeof event.reason === "string"
+          ? event.reason
+          : event.reason instanceof Error
+            ? event.reason.message
+            : "비동기 오류";
+      setBootClientErrors((prev) => (prev.includes(reason) ? prev : [...prev.slice(-2), reason]));
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
       window.sessionStorage.setItem(
         ROUTE_UNDO_STORAGE_KEY,
         JSON.stringify({
@@ -265,7 +358,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     void detectKakaoNaviCapability().then((status) => {
       if (!mounted) return;
       setKakaoNaviCapability(status);
-      console.info("[KakaoNavi] capability", status);
     });
     return () => {
       mounted = false;
@@ -403,8 +495,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
     if (settings.navigationApp === "kakaonavi") {
       if (!kakaoNaviCapability.supported) {
-        setLastAutoRemovedMessage(kakaoNaviCapability.message);
-        setStoreModal(createKakaoNaviInstallLinks());
+        setLastAutoRemovedMessage("카카오내비를 현재 사용할 수 없습니다. 관리자에게 문의하세요.");
         return;
       }
       void openKakaoNaviDirections(origin, row.coord, row.label ?? row.input)
@@ -414,11 +505,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           }
         })
         .catch((error) => {
-          setLastAutoRemovedMessage(
-            error instanceof Error
-              ? `${error.message} (카카오 개발자 콘솔 도메인 등록/키 설정 확인)`
-              : "카카오내비 실행 실패",
-          );
+          setLastAutoRemovedMessage(error instanceof Error ? error.message : "카카오내비 실행 실패");
           setStoreModal(createKakaoNaviInstallLinks());
         });
       return;
@@ -606,6 +693,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     return batches;
   }, [orderedRouteStops, origin, maxMultiRouteStops]);
 
+  const canUseDestinationAttachment = useMemo(() => {
+    const normalized = normalizePhoneNumber(sessionUser?.phone ?? "");
+    return Boolean(normalized && ATTACHMENT_ALLOWED_PHONES.has(normalized));
+  }, [sessionUser?.phone]);
+
   const buildRouteRunStops = (stops: OrderedRouteStop[]): RouteRunStop[] => {
     const recommendationByRowIndex = new Map(recommendedOrder.map((item) => [item.rowIndex, item]));
     return stops.map((stop, index) => {
@@ -698,8 +790,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
     if (settings.navigationApp === "kakaonavi") {
       if (!kakaoNaviCapability.supported) {
-        setLastAutoRemovedMessage(kakaoNaviCapability.message);
-        setStoreModal(createKakaoNaviInstallLinks());
+        setLastAutoRemovedMessage("카카오내비를 현재 사용할 수 없습니다. 관리자에게 문의하세요.");
         return;
       }
       void openKakaoNaviMultiDirections(origin, routeableStops, maxMultiRouteStops)
@@ -764,8 +855,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
     if (settings.navigationApp === "kakaonavi") {
       if (!kakaoNaviCapability.supported) {
-        setLastAutoRemovedMessage(kakaoNaviCapability.message);
-        setStoreModal(createKakaoNaviInstallLinks());
+        setLastAutoRemovedMessage("카카오내비를 현재 사용할 수 없습니다. 관리자에게 문의하세요.");
         return;
       }
       void openKakaoNaviMultiDirections(batch.origin, batch.stops, maxMultiRouteStops)
@@ -958,10 +1048,72 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     <main className="min-h-screen bg-slate-50 px-2 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32 lg:pb-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <h1 className="text-xl font-bold text-slate-800">퀵서비스 구설정 자동 생성</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-slate-800">퀵·배달 구역메이커</h1>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+              Quick + Delivery
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">퀵/배달 경유지 구설정 · 팬 권역 · 길찾기 자동 생성</p>
+          {bootClientErrors.length > 0 ? (
+            <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <div className="font-medium">초기 로딩 중 오류가 감지되었습니다.</div>
+              <ul className="mt-1 list-disc pl-4">
+                {bootClientErrors.map((msg, idx) => (
+                  <li key={`${idx}-${msg}`}>{msg}</li>
+                ))}
+              </ul>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="h-8 rounded-md border border-amber-300 bg-white px-2 text-[11px]"
+                  onClick={() => setBootClientErrors([])}
+                >
+                  닫기
+                </button>
+                <button
+                  type="button"
+                  className="h-8 rounded-md border border-amber-300 bg-white px-2 text-[11px]"
+                  onClick={() => window.location.reload()}
+                >
+                  새로고침
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-800">
             출발지(고정): 내 현재 위치
           </div>
+          {iosBrowserInfo.isIos ? (
+            <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="font-medium">iPhone/iPad 안전 모드</span>
+                  <span className="ml-2 text-slate-500">
+                    {iosBrowserInfo.isIosChrome ? "(Chrome 감지)" : "(iOS 브라우저 감지)"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className={`h-8 rounded-md px-2 text-[11px] ${
+                    iosSafeMode ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-700"
+                  }`}
+                  onClick={() =>
+                    setIosSafeMode((prev) => {
+                      const next = !prev;
+                      if (next) setMapDeferred(true);
+                      return next;
+                    })
+                  }
+                >
+                  {iosSafeMode ? "안전 모드 ON" : "안전 모드 OFF"}
+                </button>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                iOS 크롬/사파리에서 로딩이 불안정하면 지도를 지연 로드하도록 설정할 수 있습니다.
+              </p>
+            </div>
+          ) : null}
           <div className="mt-2">
             <button
               type="button"
@@ -1129,45 +1281,107 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             onNavigateKakao={onNavigateKakao}
             preferredNavigationApp={settings.navigationApp}
             isAdmin={Boolean(sessionUser?.isAdmin)}
+            canUseAttachment={canUseDestinationAttachment}
             onApplyOcrToRow={applyAddressToRowAndSearch}
           />
 
           <div className="space-y-3">
-            <ResultPanel
-              segments={segments}
-              finalShortList={finalShortList}
-              viewMode={settings.viewMode}
-              recommendedOrder={recommendedOrder}
-              manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
-              recommendationMode={recommendationMode}
-              roadRecommendationLoading={roadRecommendationLoading}
-              roadRecommendationError={roadRecommendationError}
-              onSelectRecommendation={(rowIndex) => {
-                setHighlightedRowIndex(rowIndex);
-                window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
-              }}
-              onChangeRecommendationMode={(mode) => {
-                setManualRecommendationRowOrder(null);
-                setRecommendationMode(mode);
-                if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
-                  void onComputeRoadRecommendation();
-                }
-              }}
-              onMoveRecommendation={(rowIndex, direction) => {
-                setManualRecommendationRowOrder((prev) => {
-                  const current = (prev && prev.length > 0 ? prev : recommendedOrder.map((item) => item.rowIndex)).slice();
-                  const index = current.indexOf(rowIndex);
-                  if (index < 0) return current;
-                  const nextIndex = direction === "up" ? index - 1 : index + 1;
-                  if (nextIndex < 0 || nextIndex >= current.length) return current;
-                  const [moved] = current.splice(index, 1);
-                  current.splice(nextIndex, 0, moved);
-                  return current;
-                });
-              }}
-              onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
-              onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-            />
+            {isMobileLayout ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-base font-semibold text-slate-800">결과</h2>
+                    <p className="text-xs text-slate-500">추천 순서 / 동 리스트</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    onClick={() => setResultPanelOpenMobile((prev) => !prev)}
+                  >
+                    {resultPanelOpenMobile ? "접기" : "펼치기"}
+                  </button>
+                </div>
+                {!resultPanelOpenMobile ? (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    최종 동 {finalShortList.length}개 · 필요할 때 펼쳐서 확인하세요.
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <ResultPanel
+                      segments={segments}
+                      finalShortList={finalShortList}
+                      viewMode={settings.viewMode}
+                      recommendedOrder={recommendedOrder}
+                      manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
+                      recommendationMode={recommendationMode}
+                      roadRecommendationLoading={roadRecommendationLoading}
+                      roadRecommendationError={roadRecommendationError}
+                      onSelectRecommendation={(rowIndex) => {
+                        setHighlightedRowIndex(rowIndex);
+                        window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
+                      }}
+                      onChangeRecommendationMode={(mode) => {
+                        setManualRecommendationRowOrder(null);
+                        setRecommendationMode(mode);
+                        if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
+                          void onComputeRoadRecommendation();
+                        }
+                      }}
+                      onMoveRecommendation={(rowIndex, direction) => {
+                        setManualRecommendationRowOrder((prev) => {
+                          const current = (prev && prev.length > 0 ? prev : recommendedOrder.map((item) => item.rowIndex)).slice();
+                          const index = current.indexOf(rowIndex);
+                          if (index < 0) return current;
+                          const nextIndex = direction === "up" ? index - 1 : index + 1;
+                          if (nextIndex < 0 || nextIndex >= current.length) return current;
+                          const [moved] = current.splice(index, 1);
+                          current.splice(nextIndex, 0, moved);
+                          return current;
+                        });
+                      }}
+                      onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
+                      onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
+                    />
+                  </div>
+                )}
+              </section>
+            ) : (
+              <ResultPanel
+                segments={segments}
+                finalShortList={finalShortList}
+                viewMode={settings.viewMode}
+                recommendedOrder={recommendedOrder}
+                manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
+                recommendationMode={recommendationMode}
+                roadRecommendationLoading={roadRecommendationLoading}
+                roadRecommendationError={roadRecommendationError}
+                onSelectRecommendation={(rowIndex) => {
+                  setHighlightedRowIndex(rowIndex);
+                  window.setTimeout(() => setHighlightedRowIndex((prev) => (prev === rowIndex ? null : prev)), 1800);
+                }}
+                onChangeRecommendationMode={(mode) => {
+                  setManualRecommendationRowOrder(null);
+                  setRecommendationMode(mode);
+                  if (mode === "road" && !roadRecommendedOrder && !roadRecommendationLoading) {
+                    void onComputeRoadRecommendation();
+                  }
+                }}
+                onMoveRecommendation={(rowIndex, direction) => {
+                  setManualRecommendationRowOrder((prev) => {
+                    const current = (prev && prev.length > 0 ? prev : recommendedOrder.map((item) => item.rowIndex)).slice();
+                    const index = current.indexOf(rowIndex);
+                    if (index < 0) return current;
+                    const nextIndex = direction === "up" ? index - 1 : index + 1;
+                    if (nextIndex < 0 || nextIndex >= current.length) return current;
+                    const [moved] = current.splice(index, 1);
+                    current.splice(nextIndex, 0, moved);
+                    return current;
+                  });
+                }}
+                onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
+                onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
+              />
+            )}
 
             {dailyRouteRuns[0] ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -1196,17 +1410,53 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <h2 className="mb-2 text-base font-semibold text-slate-800">네이버 지도</h2>
-          <NaverMap
-            origin={origin}
-            destinations={rows.map((row, index) => ({
-              coord: row.coord,
-              label: (row.label ?? row.input) || `도착지 ${index + 1}`,
-              recommendStep: recommendedOrder.find((item) => item.rowIndex === index)?.step,
-              highlighted: highlightedRowIndex === index,
-            }))}
-            segments={segments}
-          />
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-slate-800">네이버 지도</h2>
+            {isMobileLayout ? (
+              <button
+                type="button"
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                onClick={() => setMapPanelOpenMobile((prev) => !prev)}
+              >
+                {mapPanelOpenMobile ? "접기" : "펼치기"}
+              </button>
+            ) : null}
+          </div>
+          {isMobileLayout && !mapPanelOpenMobile ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
+              지도가 길어서 기본 접힘 상태입니다. 필요할 때 펼쳐서 확인하세요.
+            </div>
+          ) : iosSafeMode && mapDeferred ? (
+            <div className="flex min-h-[42vh] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+              <div className="max-w-sm text-center">
+                <p className="text-sm font-medium text-slate-700">지도 로드를 지연하고 있습니다.</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  iOS 브라우저에서 초기 로딩 안정성을 위해 필요할 때만 지도를 로드합니다.
+                </p>
+                <button
+                  type="button"
+                  className="mt-3 h-11 rounded-lg bg-cyan-700 px-4 text-sm font-medium text-white"
+                  onClick={() => {
+                    setMapDeferred(false);
+                    setMapPanelOpenMobile(true);
+                  }}
+                >
+                  지도 로드하기
+                </button>
+              </div>
+            </div>
+          ) : (
+            <NaverMap
+              origin={origin}
+              destinations={rows.map((row, index) => ({
+                coord: row.coord,
+                label: (row.label ?? row.input) || `도착지 ${index + 1}`,
+                recommendStep: recommendedOrder.find((item) => item.rowIndex === index)?.step,
+                highlighted: highlightedRowIndex === index,
+              }))}
+              segments={segments}
+            />
+          )}
         </section>
       </div>
 
@@ -1286,3 +1536,4 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     </main>
   );
 }
+

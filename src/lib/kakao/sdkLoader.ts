@@ -93,3 +93,9 @@ export async function loadKakaoSdk() {
   return kakaoSdkPromise;
 }
 
+export function resetKakaoSdkLoader() {
+  kakaoSdkPromise = null;
+  if (typeof document === "undefined") return;
+  const scripts = document.querySelectorAll<HTMLScriptElement>('script[data-kakao-sdk="true"]');
+  scripts.forEach((script) => script.remove());
+}

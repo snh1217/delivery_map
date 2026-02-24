@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { extractAddressFromScreenshotFile } from "@/lib/ocr/ocrProvider";
 
 type Props = {
   isAdmin: boolean;
@@ -51,6 +50,7 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
     setOcrStatus("인식 준비 중...");
     setOcrOpen(true);
     try {
+      const { extractAddressFromScreenshotFile } = await import("@/lib/ocr/ocrProvider");
       const result = await extractAddressFromScreenshotFile({
         file,
         preprocess: {
@@ -218,4 +218,3 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
     </div>
   );
 }
-

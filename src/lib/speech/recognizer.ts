@@ -75,6 +75,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
   let silenceTimer: number | null = null;
   let startedAt = 0;
   let lastResultAt = 0;
+  let hasReceivedResult = false;
 
   const silenceTimeoutMs = options.silenceTimeoutMs ?? 900;
   const minRecordingMs = options.minRecordingMs ?? 800;
@@ -104,6 +105,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
 
   const scheduleSilenceStop = () => {
     if (!listening) return;
+    if (!hasReceivedResult) return;
     clearTimer();
     const now = Date.now();
     const elapsed = now - startedAt;
@@ -129,6 +131,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     finalText = "";
     interimText = "";
     bestConfidence = undefined;
+    hasReceivedResult = false;
     startedAt = Date.now();
     lastResultAt = startedAt;
 
@@ -161,6 +164,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
       if (typeof confidenceCandidate === "number") {
         bestConfidence = confidenceCandidate;
       }
+      hasReceivedResult = true;
       lastResultAt = Date.now();
       options.onResult?.(payload());
       scheduleSilenceStop();
@@ -181,7 +185,6 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     listening = true;
     options.onListeningChange?.(true);
     recognition.start();
-    scheduleSilenceStop();
   };
 
   return {
@@ -199,4 +202,3 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     isListening: () => listening,
   };
 }
-

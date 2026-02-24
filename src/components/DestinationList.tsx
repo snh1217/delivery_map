@@ -36,6 +36,7 @@ type Props = {
   onNavigateKakao: (id: string) => void;
   preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
   isAdmin?: boolean;
+  canUseAttachment?: boolean;
   onApplyOcrToRow?: (id: string, address: string) => void;
 };
 
@@ -65,6 +66,7 @@ export function DestinationList({
   onNavigateKakao,
   preferredNavigationApp,
   isAdmin = false,
+  canUseAttachment = false,
   onApplyOcrToRow,
 }: Props) {
   const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
@@ -185,6 +187,7 @@ export function DestinationList({
             onNavigateKakao={onNavigateKakao}
             preferredNavigationApp={preferredNavigationApp}
             isAdmin={isAdmin}
+            canUseAttachment={canUseAttachment}
             onApplyOcrToRow={onApplyOcrToRow}
           />
         ))}
