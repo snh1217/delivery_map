@@ -135,6 +135,27 @@ export function makeFinalShortList(results: SegmentResult[]) {
   );
 }
 
+export function normalizeDongDisplayName(dong: string) {
+  const compact = dong.replace(/\s+/g, "").trim();
+  if (!compact) {
+    return "";
+  }
+
+  return compact.replace(/([가-힣]+?)(\d+)(동)$/u, "$1$3");
+}
+
+export function makeSegmentDongDisplayList(segment: SegmentResult) {
+  return [...new Set(segment.dongs.map((dong) => normalizeDongDisplayName(dong.dong)).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, "ko"),
+  );
+}
+
+export function makeFinalDongDisplayList(results: SegmentResult[]) {
+  return [...new Set(results.flatMap((segment) => makeSegmentDongDisplayList(segment)))].sort((a, b) =>
+    a.localeCompare(b, "ko"),
+  );
+}
+
 export function recommendVisitOrder(params: {
   origin: LatLng;
   destinations: Array<{ label: string; coord?: LatLng }>;

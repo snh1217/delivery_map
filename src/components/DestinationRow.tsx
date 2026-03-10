@@ -22,6 +22,9 @@ type Props = {
   origin: LatLng;
   autoSearch: boolean;
   highlighted?: boolean;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  onMoveRow: (id: string, direction: "up" | "down") => void;
   onChangeInput: (id: string, value: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
@@ -41,47 +44,50 @@ const LOW_CONFIDENCE_THRESHOLD = 0.45;
 function removeVoiceHabitPhrases(value: string) {
   let text = value || "";
   const patterns = [
-    /(검색|찾기)(해줘|해주세요|좀|해 줘)?$/gi,
-    /(추가|입력|적용)(해줘|해주세요|좀|해 줘)?$/gi,
-    /(검색|찾기)(해줘|해주세요|좀|해 줘)?/gi,
-    /(추가|입력|적용)(해줘|해주세요|좀|해 줘)?/gi,
-    /^(여기|이거|저기)\s*/gi,
-    /^(주소|주소는)\s*/gi,
+    /(검색|찾기)(해주세요|해줘요|좀|요)?$/giu,
+    /(추가|입력|적용)(해주세요|해줘요|좀|요)?$/giu,
+    /(검색|찾기)(해주세요|해줘요|좀|요)?/giu,
+    /(추가|입력|적용)(해주세요|해줘요|좀|요)?/giu,
+    /^(여기|이거|저기)\s*/giu,
+    /^(주소는?|주소)\s*/giu,
   ];
+
   for (const pattern of patterns) {
     text = text.replace(pattern, " ");
   }
+
   return text.replace(/\s+/g, " ").trim();
 }
 
 function normalizeVoiceText(text: string) {
   return removeVoiceHabitPhrases(text)
-    .replace(/서울시/g, "서울")
-    .replace(/경기도/g, "경기")
+    .replace(/서울시/giu, "서울")
+    .replace(/경기도/giu, "경기")
     .replace(/\s*-\s*/g, "-")
-    .replace(/[()[\]{}]/g, (m) => (m === "(" || m === ")" ? m : " "))
+    .replace(/[()[\]{}]/g, (value) => (value === "(" || value === ")" ? value : " "))
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function navAppLabel(app: Props["preferredNavigationApp"]) {
+function getNavigationAppLabel(app: Props["preferredNavigationApp"]) {
   if (app === "kakao") return "카카오";
   if (app === "kakaonavi") return "카카오내비";
   return "네이버";
 }
 
-function voiceErrorMessage(code: string) {
-  const map: Record<string, string> = {
-    "not-allowed": "브라우저에서 마이크 권한을 허용해주세요.",
-    "service-not-allowed": "음성 인식 서비스 사용이 허용되지 않았습니다.",
-    "no-speech": "음성이 인식되지 않았습니다. 다시 시도해주세요.",
+function getVoiceErrorMessage(code: string) {
+  const messages: Record<string, string> = {
+    "not-allowed": "브라우저에서 마이크 권한을 허용해 주세요.",
+    "service-not-allowed": "음성 인식 서비스를 사용할 수 없습니다.",
+    "no-speech": "음성이 인식되지 않았습니다. 다시 시도해 주세요.",
     aborted: "음성 입력이 취소되었습니다.",
-    "audio-capture": "마이크 장치를 찾을 수 없습니다.",
+    "audio-capture": "마이크를 찾을 수 없습니다.",
     network: "네트워크 문제로 음성 인식에 실패했습니다.",
-    nomatch: "인식 결과를 찾지 못했습니다. 다시 시도해주세요.",
-    unsupported: "이 브라우저는 음성 입력을 지원하지 않습니다. Chrome/Edge 권장",
+    nomatch: "인식 결과가 불확실합니다. 다시 시도해 주세요.",
+    unsupported: "이 브라우저는 음성 입력을 지원하지 않습니다. Chrome/Edge를 권장합니다.",
   };
-  return map[code] ?? `음성 입력 오류: ${code}`;
+
+  return messages[code] ?? `음성 입력 오류: ${code}`;
 }
 
 export function DestinationRow({
@@ -90,6 +96,9 @@ export function DestinationRow({
   origin,
   autoSearch,
   highlighted = false,
+  canMoveUp,
+  canMoveDown,
+  onMoveRow,
   onChangeInput,
   onSearch,
   onDelete,
@@ -112,7 +121,7 @@ export function DestinationRow({
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
-  const [voiceInterimText, setVoiceInterimText] = useState<string>("");
+  const [voiceInterimText, setVoiceInterimText] = useState("");
   const [voiceLowConfidence, setVoiceLowConfidence] = useState(false);
 
   const canNavigate = Boolean(row.coord);
@@ -129,6 +138,31 @@ export function DestinationRow({
     rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlighted]);
 
+  useEffect(() => {
+    return () => {
+      if (autoSearchTimerRef.current !== null) {
+        window.clearTimeout(autoSearchTimerRef.current);
+      }
+      try {
+        recognizerRef.current?.abort();
+      } catch {
+        // no-op
+      }
+      recognizerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!autoSearch || !row.input.trim() || isListening) return;
+    if (skipNextAutoSearchRef.current) {
+      skipNextAutoSearchRef.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(() => onSearchRef.current(row.id), 600);
+    return () => window.clearTimeout(timer);
+  }, [autoSearch, isListening, row.id, row.input]);
+
   const clearPendingVoiceAutoSearch = () => {
     if (autoSearchTimerRef.current !== null) {
       window.clearTimeout(autoSearchTimerRef.current);
@@ -140,8 +174,7 @@ export function DestinationRow({
     clearPendingVoiceAutoSearch();
     setVoicePreviewText(text);
 
-    const lowConfidence = options?.skipIfLowConfidence && voiceLowConfidence;
-    if (lowConfidence) {
+    if (options?.skipIfLowConfidence && voiceLowConfidence) {
       return;
     }
 
@@ -161,28 +194,6 @@ export function DestinationRow({
     }
   };
 
-  useEffect(() => {
-    return () => {
-      clearPendingVoiceAutoSearch();
-      try {
-        recognizerRef.current?.abort();
-      } catch {
-        // no-op
-      }
-      recognizerRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!autoSearch || !row.input.trim() || isListening) return;
-    if (skipNextAutoSearchRef.current) {
-      skipNextAutoSearchRef.current = false;
-      return;
-    }
-    const timer = window.setTimeout(() => onSearchRef.current(row.id), 600);
-    return () => window.clearTimeout(timer);
-  }, [autoSearch, isListening, row.id, row.input]);
-
   const handleSpeechResult = (payload: SpeechResultPayload) => {
     const finalNormalized = normalizeVoiceText(payload.finalText);
     const interimNormalized = normalizeVoiceText(payload.interimText);
@@ -197,18 +208,16 @@ export function DestinationRow({
 
   const beginVoiceInput = () => {
     if (!speechSupported) {
-      setVoiceError(voiceErrorMessage("unsupported"));
+      setVoiceError(getVoiceErrorMessage("unsupported"));
       return;
     }
     if (isListening) return;
 
+    clearPendingVoiceAutoSearch();
     setVoiceError(null);
     setVoicePreviewText(null);
     setVoiceInterimText("");
     setVoiceLowConfidence(false);
-    clearPendingVoiceAutoSearch();
-
-    // 새 음성 입력 시작 시 기존 입력값/좌표 상태를 초기화
     onChangeInput(row.id, "");
     finalVoiceTextRef.current = "";
     finalConfidenceRef.current = undefined;
@@ -223,11 +232,9 @@ export function DestinationRow({
       lang: "ko-KR",
       silenceTimeoutMs: VOICE_SILENCE_TIMEOUT_MS,
       minRecordingMs: VOICE_MIN_RECORDING_MS,
-      onListeningChange: (listening) => setIsListening(listening),
+      onListeningChange: (next) => setIsListening(next),
       onResult: handleSpeechResult,
-      onError: (code) => {
-        setVoiceError(voiceErrorMessage(code));
-      },
+      onError: (code) => setVoiceError(getVoiceErrorMessage(code)),
       onEnd: (payload) => {
         setVoiceInterimText("");
         recognizerRef.current = null;
@@ -249,7 +256,7 @@ export function DestinationRow({
 
         if (isLowConfidence) {
           setVoicePreviewText(finalText);
-          setVoiceError("음성 인식 신뢰도가 낮습니다. 내용을 확인한 뒤 검색/적용을 눌러주세요.");
+          setVoiceError("음성 인식 신뢰도가 낮습니다. 내용을 확인한 뒤 검색/적용을 눌러 주세요.");
           return;
         }
 
@@ -264,7 +271,7 @@ export function DestinationRow({
     } catch (error) {
       recognizerRef.current = null;
       const code = error instanceof Error ? error.message : "unknown";
-      setVoiceError(voiceErrorMessage(code));
+      setVoiceError(getVoiceErrorMessage(code));
     }
   };
 
@@ -273,7 +280,7 @@ export function DestinationRow({
       stopVoiceRecognition();
       return;
     }
-    void beginVoiceInput();
+    beginVoiceInput();
   };
 
   const runSearchNow = () => {
@@ -289,15 +296,38 @@ export function DestinationRow({
         highlighted ? "border-cyan-400 bg-cyan-50/50 shadow-sm" : "border-slate-200"
       }`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
-        <div className="flex items-center gap-1">
-          {highlighted ? (
-            <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-800">추천 선택</span>
-          ) : null}
-          {row.status === "resolved" ? (
-            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
-          ) : null}
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {highlighted ? (
+              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-800">추천 선택</span>
+            ) : null}
+            {row.status === "resolved" ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            type="button"
+            className="h-8 w-9 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+            onClick={() => onMoveRow(row.id, "up")}
+            disabled={!canMoveUp}
+            aria-label={`도착지 ${index + 1} 위로 이동`}
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="h-8 w-9 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+            onClick={() => onMoveRow(row.id, "down")}
+            disabled={!canMoveDown}
+            aria-label={`도착지 ${index + 1} 아래로 이동`}
+          >
+            ↓
+          </button>
         </div>
       </div>
 
@@ -311,15 +341,15 @@ export function DestinationRow({
             className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
             placeholder="주소 또는 구/동 입력"
             value={row.input}
-            onChange={(e) => {
+            onChange={(event) => {
               clearPendingVoiceAutoSearch();
               setVoicePreviewText(null);
               setVoiceError(null);
-              onChangeInput(row.id, e.target.value);
+              onChangeInput(row.id, event.target.value);
             }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && row.input.trim() && row.status !== "loading") {
-                e.preventDefault();
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && row.input.trim() && row.status !== "loading") {
+                event.preventDefault();
                 runSearchNow();
               }
             }}
@@ -334,7 +364,7 @@ export function DestinationRow({
             } disabled:cursor-not-allowed disabled:opacity-50`}
             onClick={toggleVoiceInput}
             disabled={!speechSupported && !isListening}
-            title={speechSupported ? "한 번 탭하여 음성 입력 시작/중지" : "브라우저에서 음성 입력 미지원"}
+            title={speechSupported ? "한 번 탭해서 음성 입력 시작/중지" : "브라우저에서 음성 입력을 지원하지 않습니다."}
           >
             <span className="inline-flex items-center gap-1">
               <span
@@ -349,17 +379,17 @@ export function DestinationRow({
 
         {isListening ? (
           <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
-            <div className="font-medium">듣는 중… 주소를 말해주세요.</div>
+            <div className="font-medium">듣는 중입니다. 주소를 말해 주세요.</div>
             <div className="mt-1 text-cyan-700">
-              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동 종료됩니다."}
+              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동으로 종료됩니다."}
             </div>
           </div>
         ) : null}
 
         {voicePreviewText ? (
           <p className="text-xs text-emerald-700">
-            음성 인식 결과 미리보기: <span className="font-medium">{voicePreviewText}</span>
-            {!voiceLowConfidence ? " (0.5초 후 자동 검색)" : " (확인 후 검색/적용 권장)"}
+            음성 인식 미리보기: <span className="font-medium">{voicePreviewText}</span>
+            {!voiceLowConfidence ? " (0.5초 뒤 자동 검색)" : " (내용 확인 후 검색/적용 권장)"}
           </p>
         ) : null}
 
@@ -378,21 +408,21 @@ export function DestinationRow({
         ) : null}
 
         {!speechSupported ? (
-          <p className="text-xs text-slate-500">브라우저에서 마이크 권한이 필요합니다. 모바일 Chrome/Edge 권장</p>
+          <p className="text-xs text-slate-500">브라우저에서 마이크 권한이 필요합니다. 모바일 Chrome/Edge를 권장합니다.</p>
         ) : (
           <p className="text-xs text-slate-500">
-            음성 입력: 탭하여 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용 (지원 브라우저 한정)
+            음성 입력: 버튼 한 번 탭해서 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용
           </p>
         )}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           <button
             type="button"
-            className="h-12 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white"
+            className="h-12 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
             disabled={!row.input.trim() || row.status === "loading"}
             onClick={runSearchNow}
           >
-            {row.status === "loading" ? "검색 중..." : "검색/적용"}
+            {row.status === "loading" ? "검색 중…" : "검색/적용"}
           </button>
           <button
             type="button"
@@ -419,7 +449,7 @@ export function DestinationRow({
           <select
             className="h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
             value={row.selectedIndex}
-            onChange={(e) => onSelectCandidate(row.id, Number(e.target.value))}
+            onChange={(event) => onSelectCandidate(row.id, Number(event.target.value))}
           >
             {row.geocodeItems.map((item, itemIndex) => (
               <option key={`${row.id}-${itemIndex}`} value={itemIndex}>
@@ -463,7 +493,7 @@ export function DestinationRow({
               className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white"
               onClick={() => onNavigate(row.id)}
             >
-              기본 앱 길찾기 ({navAppLabel(preferredNavigationApp)})
+              기본 앱 길찾기 ({getNavigationAppLabel(preferredNavigationApp)})
             </button>
             {naverLinks ? (
               <a
@@ -498,7 +528,7 @@ export function DestinationRow({
           </div>
 
           <p className="mt-2 text-[11px] text-slate-500">
-            좌표가 확정되면 기본 앱({navAppLabel(preferredNavigationApp)}) 또는 네이버/카카오맵 길찾기를 사용할 수 있습니다.
+            좌표가 확정되면 기본 앱({getNavigationAppLabel(preferredNavigationApp)}) 또는 네이버/카카오 길찾기를 사용할 수 있습니다.
           </p>
         </>
       ) : null}

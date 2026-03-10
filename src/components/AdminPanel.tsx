@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AdminEarningsPanel } from "@/components/admin/AdminEarningsPanel";
+import { DevelopmentRequestsPanel } from "@/components/admin/DevelopmentRequestsPanel";
 import { KakaoNaviDiagnosticsPanel } from "@/components/admin/KakaoNaviDiagnosticsPanel";
 import { ScreenshotAdd } from "@/components/admin/ScreenshotAdd";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
@@ -353,6 +354,7 @@ export function AdminPanel() {
       </div>
 
       <AdminEarningsPanel />
+      <DevelopmentRequestsPanel />
     </section>
   );
 }

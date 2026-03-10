@@ -218,3 +218,35 @@ export type SignupRequestRow = {
   reviewed_at: string | null;
   reviewed_by: string | null;
 };
+
+export type DevelopmentRequestStatus = "pending" | "reviewing" | "done";
+
+export type DevelopmentRequestRow = {
+  id: string;
+  owner_phone: string;
+  title: string;
+  body: string;
+  status: DevelopmentRequestStatus;
+  admin_note: string | null;
+  created_at: string;
+  updated_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+};
+
+export type RouteCallEstimateLeg = {
+  fromLabel: string;
+  toLabel: string;
+  distanceKm: number | null;
+  durationMin: number | null;
+};
+
+export type RouteCallEstimateResult = {
+  longestLegMin: number;
+  adjustedDriveMin: number;
+  pickupMin: number;
+  totalRequiredMin: number;
+  deadlineLabel: string;
+  referenceLeg: string;
+  legs: RouteCallEstimateLeg[];
+};

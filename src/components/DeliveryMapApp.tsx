@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
@@ -11,7 +11,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { normalizeDongCentroids } from "@/lib/dong";
-import { calculateSegments, makeFinalShortList, recommendVisitOrder } from "@/lib/geo";
+import { calculateSegments, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
 import {
   openNaverDirections,
   openNaverMultiDirections,
@@ -34,9 +34,11 @@ import {
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
+  DevelopmentRequestRow,
   DestinationRowState,
   GeocodeItem,
   LatLng,
+  RouteCallEstimateResult,
   RouteRunRow,
   RouteRunStop,
   RouteRecommendationItem,
@@ -183,6 +185,40 @@ function createRow(): DestinationRowState {
   };
 }
 
+function reorderList<T>(items: T[], fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) {
+    return items;
+  }
+
+  const next = items.slice();
+  const [moved] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, moved);
+  return next;
+}
+
+function getCurrentKstTimeValue() {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const hours = String(kst.getUTCHours()).padStart(2, "0");
+  const minutes = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function addMinutesToKstTime(baseTime: string, minutesToAdd: number) {
+  const [hoursRaw, minutesRaw] = baseTime.split(":");
+  const hours = Number(hoursRaw);
+  const minutes = Number(minutesRaw);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) {
+    return "-";
+  }
+
+  const total = hours * 60 + minutes + minutesToAdd;
+  const normalized = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+  const outHours = String(Math.floor(normalized / 60)).padStart(2, "0");
+  const outMinutes = String(normalized % 60).padStart(2, "0");
+  return `${outHours}:${outMinutes}`;
+}
+
 function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number) {
   return {
     ...row,
@@ -241,6 +277,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
   const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
+  const [callTimeInput, setCallTimeInput] = useState(getCurrentKstTimeValue);
+  const [callEstimateLoading, setCallEstimateLoading] = useState(false);
+  const [callEstimateError, setCallEstimateError] = useState<string | null>(null);
+  const [callEstimate, setCallEstimate] = useState<RouteCallEstimateResult | null>(null);
+  const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
+  const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
+  const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
     keyExists: false,
@@ -402,6 +445,34 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     };
   }, [sessionUser?.isAllowed]);
 
+  const loadDevelopmentRequests = useCallback(async () => {
+    if (!sessionUser?.isAllowed) {
+      setDevelopmentRequests([]);
+      setDevelopmentRequestsError(null);
+      return;
+    }
+
+    try {
+      setDevelopmentRequestsLoading(true);
+      setDevelopmentRequestsError(null);
+      const response = await fetch("/api/dev-requests", { cache: "no-store" });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message ?? "개발 요청 조회 실패");
+      }
+      const payload = (await response.json()) as { rows: DevelopmentRequestRow[] };
+      setDevelopmentRequests(Array.isArray(payload.rows) ? payload.rows : []);
+    } catch (error) {
+      setDevelopmentRequestsError(error instanceof Error ? error.message : "개발 요청 조회 실패");
+    } finally {
+      setDevelopmentRequestsLoading(false);
+    }
+  }, [sessionUser?.isAllowed]);
+
+  useEffect(() => {
+    void loadDevelopmentRequests();
+  }, [loadDevelopmentRequests]);
+
   useEffect(() => {
     if (!sessionUser?.isAdmin) return;
     const pending = consumePendingOcrDestination();
@@ -423,6 +494,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setHighlightedRowIndex(null);
     setActiveRouteBatchIndex(null);
   }, [origin, rows]);
+
+  useEffect(() => {
+    setCallEstimate(null);
+    setCallEstimateError(null);
+  }, [origin, rows, recommendationMode, manualRecommendationRowOrder]);
 
   const onSearch = async (id: string) => {
     const row = rowsRef.current.find((item) => item.id === id);
@@ -583,16 +659,32 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setRows((prev) => (prev.length >= MAX_DESTINATIONS ? prev : [...prev, createRow()]));
   };
 
-  const segments = useMemo(() => {
-    return calculateSegments({
-      origin,
-      destinations: rows.map((row) => ({ label: row.label ?? row.input, coord: row.coord })),
-      settings,
-      centroids,
+  const onMoveRow = (id: string, direction: "up" | "down") => {
+    setRows((prev) => {
+      const index = prev.findIndex((item) => item.id === id);
+      if (index < 0) return prev;
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+      return reorderList(prev, index, nextIndex);
     });
-  }, [centroids, origin, rows, settings]);
+  };
 
-  const finalShortList = useMemo(() => makeFinalShortList(segments), [segments]);
+  const onSubmitDevelopmentRequest = async (payload: { title: string; body: string }) => {
+    const response = await fetch("/api/dev-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorPayload = (await response.json().catch(() => ({}))) as { message?: string };
+      throw new Error(errorPayload.message ?? "개발 요청 등록 실패");
+    }
+
+    await loadDevelopmentRequests();
+    setLastAutoRemovedMessage("개발 요청이 등록되었습니다.");
+  };
+
   const straightRecommendedOrder = useMemo(
     () =>
       recommendVisitOrder({
@@ -647,6 +739,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       step: index + 1,
     }));
   }, [baseRecommendedOrder, manualRecommendationRowOrder, recommendationMode, origin, rows]);
+
+  const orderedDestinationsForSegments = useMemo(() => {
+    const orderedResolved = recommendedOrder
+      .map((item) => rows[item.rowIndex])
+      .filter((row): row is DestinationRowState & { coord: LatLng } => Boolean(row?.coord))
+      .map((row) => ({
+        label: row.label ?? row.input,
+        coord: row.coord,
+      }));
+
+    return orderedResolved;
+  }, [recommendedOrder, rows]);
+
+  const segments = useMemo(() => {
+    return calculateSegments({
+      origin,
+      destinations: orderedDestinationsForSegments,
+      settings,
+      centroids,
+    });
+  }, [centroids, orderedDestinationsForSegments, origin, settings]);
+
+  const finalShortList = useMemo(() => makeFinalDongDisplayList(segments), [segments]);
 
   const maxMultiRouteStops = settings.navigationApp === "naver" ? 6 : 2;
 
@@ -1044,6 +1159,80 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   };
 
+  const onComputeCallEstimate = async () => {
+    if (orderedRouteStops.length === 0) {
+      setCallEstimate(null);
+      setCallEstimateError("좌표가 확정된 도착지가 없습니다.");
+      return;
+    }
+
+    setCallEstimateLoading(true);
+    setCallEstimateError(null);
+
+    try {
+      const legs: RouteCallEstimateResult["legs"] = [];
+      let current = origin;
+      let currentLabel = "현재 위치";
+
+      for (const stop of orderedRouteStops) {
+        const response = await fetch(
+          `/api/directions5?startLat=${current.lat}&startLon=${current.lon}&goalLat=${stop.lat}&goalLon=${stop.lon}&option=trafast`,
+          { cache: "no-store" },
+        );
+
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(payload.message ?? "실제 경로 시간 조회 실패");
+        }
+
+        const payload = (await response.json()) as DirectionsApiResponse;
+        const route = payload.raw?.route ? Object.values(payload.raw.route)[0] : undefined;
+        const summary = route?.[0]?.summary;
+        legs.push({
+          fromLabel: currentLabel,
+          toLabel: stop.name,
+          distanceKm: typeof summary?.distance === "number" ? summary.distance / 1000 : null,
+          durationMin: typeof summary?.duration === "number" ? summary.duration / 60000 : null,
+        });
+
+        current = { lat: stop.lat, lon: stop.lon };
+        currentLabel = stop.name;
+      }
+
+      const longestLeg = legs.reduce<RouteCallEstimateResult["legs"][number] | null>((best, leg) => {
+        if (typeof leg.durationMin !== "number") return best;
+        if (!best || (best.durationMin ?? 0) < leg.durationMin) {
+          return leg;
+        }
+        return best;
+      }, null);
+
+      if (!longestLeg || typeof longestLeg.durationMin !== "number") {
+        throw new Error("실제 경로 시간을 계산하지 못했습니다.");
+      }
+
+      const longestLegMin = Math.round(longestLeg.durationMin);
+      const adjustedDriveMin = Math.round(longestLegMin * 2.5);
+      const pickupMin = 20;
+      const totalRequiredMin = adjustedDriveMin + pickupMin;
+
+      setCallEstimate({
+        longestLegMin,
+        adjustedDriveMin,
+        pickupMin,
+        totalRequiredMin,
+        deadlineLabel: addMinutesToKstTime(callTimeInput, totalRequiredMin),
+        referenceLeg: `${longestLeg.fromLabel} → ${longestLeg.toLabel}`,
+        legs,
+      });
+    } catch (error) {
+      setCallEstimate(null);
+      setCallEstimateError(error instanceof Error ? error.message : "콜 시간 계산 실패");
+    } finally {
+      setCallEstimateLoading(false);
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 px-2 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32 lg:pb-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
@@ -1251,6 +1440,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             canUndoRouteRemoval={rowsUndoStack.length > 0}
             undoRouteMessage={lastAutoRemovedMessage}
             onUndoRouteRemoval={undoLastAutoRemove}
+            onMoveRow={onMoveRow}
             onChangeInput={(id, value) =>
               setRows((prev) =>
                 prev.map((item) =>
@@ -1309,7 +1499,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   <div className="mt-3">
                     <ResultPanel
                       segments={segments}
-                      finalShortList={finalShortList}
+                      finalDongList={finalShortList}
                       viewMode={settings.viewMode}
                       recommendedOrder={recommendedOrder}
                       manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
@@ -1341,6 +1531,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                       }}
                       onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                       onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
+                      callTime={callTimeInput}
+                      callEstimateLoading={callEstimateLoading}
+                      callEstimateError={callEstimateError}
+                      callEstimate={callEstimate}
+                      onChangeCallTime={setCallTimeInput}
+                      onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
+                      onComputeCallEstimate={() => void onComputeCallEstimate()}
+                      developmentRequests={developmentRequests}
+                      developmentRequestsLoading={developmentRequestsLoading}
+                      developmentRequestsError={developmentRequestsError}
+                      onRefreshDevelopmentRequests={() => void loadDevelopmentRequests()}
+                      onSubmitDevelopmentRequest={onSubmitDevelopmentRequest}
                     />
                   </div>
                 )}
@@ -1348,7 +1550,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             ) : (
               <ResultPanel
                 segments={segments}
-                finalShortList={finalShortList}
+                finalDongList={finalShortList}
                 viewMode={settings.viewMode}
                 recommendedOrder={recommendedOrder}
                 manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
@@ -1380,6 +1582,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 }}
                 onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                 onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
+                callTime={callTimeInput}
+                callEstimateLoading={callEstimateLoading}
+                callEstimateError={callEstimateError}
+                callEstimate={callEstimate}
+                onChangeCallTime={setCallTimeInput}
+                onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
+                onComputeCallEstimate={() => void onComputeCallEstimate()}
+                developmentRequests={developmentRequests}
+                developmentRequestsLoading={developmentRequestsLoading}
+                developmentRequestsError={developmentRequestsError}
+                onRefreshDevelopmentRequests={() => void loadDevelopmentRequests()}
+                onSubmitDevelopmentRequest={onSubmitDevelopmentRequest}
               />
             )}
 

@@ -23,7 +23,7 @@ npm run build
 - allowlist 기반 접근 제어 (`is_active=true` 사용자만 허용)
 - ADMIN_PHONE 관리자 기능 (회원가입 요청 승인/반려, allowlist 추가/활성 토글, 로그 조회)
 - 출발지: 내 위치 GPS (권한 거부 시 서울시청 fallback)
-- 도착지 다중 입력 + 지오코딩 Top5 후보 선택
+- 도착지 다중 입력 + 순서 직접 변경 + 지오코딩 Top5 후보 선택
 - 팬(부채꼴) 권역 계산 + 동(short2) 자동 생성
 - 전국 행정동 centroid(3558건) 기반 동 리스트 계산
 - 네이버 지도 마커/팬 오버레이
@@ -34,6 +34,8 @@ npm run build
 - 운임 계산기 라인별 `로지(-23%)` 공제 옵션 (실수령 기준 저장/합산)
 - 일반 사용자 내정보 운임 통계 (오늘 요약 + 기간별 조회)
 - 관리자 운임 통계 (기간 총합 / 사용자별 / 사용자 drill-down)
+- 개발요청 게시판 (사용자 등록 + 관리자 상태 관리)
+- 콜 시간 계산 탭 (실제 내비 기준 최장 구간 * 250% + 픽업 20분)
 - 길찾기 실행 후 동 리스트/방문 순서 스냅샷 저장(사용자별 일일 이력)
 - 관리자 화면에서 오늘 총 사용량/사용자별 실행 건수 확인
 
@@ -144,6 +146,19 @@ create table if not exists public.daily_earnings (
   created_at timestamptz not null default now(),
   unique (owner_phone, ymd, target_name)
 );
+
+create table if not exists public.development_requests (
+  id uuid primary key default gen_random_uuid(),
+  owner_phone text not null,
+  title text not null,
+  body text not null,
+  status text not null default 'pending',
+  admin_note text null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  reviewed_at timestamptz null,
+  reviewed_by text null
+);
 ```
 
 ## 전국 동 데이터(실사용 규모)
@@ -158,6 +173,37 @@ create table if not exists public.daily_earnings (
 - 전체 길찾기/분할 길찾기 실행 시 현재 `동 리스트 + 방문 순서` 스냅샷을 서버(`route_runs`)에 저장합니다.
 - 도착지가 화면에서 자동 제거되어도 사용자 정보 패널과 결과 하단 카드에서 최근 저장된 동 리스트를 다시 확인할 수 있습니다.
 - 관리자 화면에는 오늘(KST) 기준 총 실행 건수/사용자 수/사용자별 실행 건수가 표시됩니다.
+- 팬/동 리스트 계산은 현재 추천 방문 순서(수동 수정 포함)를 기준으로 다시 계산됩니다.
+- 최종 동 리스트는 `주안1동, 주안2동 -> 주안동`처럼 숫자 동을 묶어서 표시합니다.
+
+## 추천 방문 순서 / 도착지 순서
+
+- 도착지 목록 카드에서 `↑ / ↓` 버튼으로 입력 순서를 직접 바꿀 수 있습니다.
+- 결과 카드의 `추천 방문 순서`에서도 `↑ / ↓` 버튼으로 추천 순서를 수동 수정할 수 있습니다.
+- 추천 순서를 바꾸면:
+  - 팬(부채꼴) 계산 순서
+  - 최종 동 리스트
+  - 전체 길찾기/분할 길찾기 순서
+  - 길찾기 저장 이력
+  에 모두 반영됩니다.
+
+## 콜 시간 계산
+
+- 결과 패널의 `콜 시간 계산` 탭에서 사용합니다.
+- 입력값:
+  - 콜 잡은 시간
+  - 현재 추천 방문 순서
+- 계산 방식:
+  - 현재 추천 방문 순서 기준으로 각 구간의 실제 내비 시간 조회
+  - 그중 가장 오래 걸리는 구간 시간을 기준으로
+  - `최장 구간 시간 * 2.5 + 픽업 20분`
+  - 결과를 `몇 시까지 들어가면 되는지`로 표시
+- 구간별 거리/시간도 같이 확인할 수 있습니다.
+
+## 개발요청 게시판
+
+- 결과 패널의 `개발 요청` 탭에서 사용자 요청을 등록할 수 있습니다.
+- 관리자 패널에서는 전체 요청 목록과 상태(`pending/reviewing/done`) 및 관리자 메모를 관리할 수 있습니다.
 
 ## 운임 계산기(제3자 포함) 사용법
 

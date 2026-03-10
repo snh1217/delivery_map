@@ -28,6 +28,7 @@ type Props = {
   onReset: () => void;
   onNavigateAll: () => void;
   onUndoRouteRemoval: () => void;
+  onMoveRow: (id: string, direction: "up" | "down") => void;
   onChangeInput: (id: string, value: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
@@ -58,6 +59,7 @@ export function DestinationList({
   onReset,
   onNavigateAll,
   onUndoRouteRemoval,
+  onMoveRow,
   onChangeInput,
   onSearch,
   onDelete,
@@ -76,7 +78,7 @@ export function DestinationList({
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">도착지 목록 (출발지는 자동)</h2>
-          <p className="text-xs text-slate-500">최대 20개까지 추가 가능</p>
+          <p className="text-xs text-slate-500">최대 20개까지 추가 가능 · ↑↓ 버튼으로 순서를 직접 바꿀 수 있습니다.</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
           <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm" onClick={onReset}>
@@ -97,13 +99,12 @@ export function DestinationList({
         <div className="flex flex-col gap-2">
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
             전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개(최대 {routeMaxStops}개)
-            {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 버튼 사용` : ""}
+            {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 길찾기 사용` : ""}
           </div>
 
           {isKakaoFamily ? (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              {routeProviderLabel} 자동 전달 제한으로 한 번에 최대 {routeMaxStops}개 도착지만 전송합니다. 도착지가 많으면
-              분할 길찾기 버튼을 사용하세요.
+              {routeProviderLabel}는 한 번에 최대 {routeMaxStops}개 도착지만 자동 전달합니다. 도착지가 많으면 분할 길찾기 버튼을 사용하세요.
             </div>
           ) : null}
 
@@ -152,7 +153,7 @@ export function DestinationList({
                   className="h-10 rounded-lg border border-cyan-300 bg-white px-3 text-xs font-medium text-cyan-800"
                   onClick={onUndoRouteRemoval}
                 >
-                  이전 경로 되돌리기
+                  최근 목적지 되돌리기
                 </button>
               </div>
             </div>
@@ -179,6 +180,9 @@ export function DestinationList({
             origin={origin}
             autoSearch={autoSearch}
             highlighted={highlightedRowIndex === index}
+            canMoveUp={index > 0}
+            canMoveDown={index < rows.length - 1}
+            onMoveRow={onMoveRow}
             onChangeInput={onChangeInput}
             onSearch={onSearch}
             onDelete={onDelete}
