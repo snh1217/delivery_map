@@ -5,6 +5,7 @@ import { CallTimeEstimatorPanel } from "@/components/CallTimeEstimatorPanel";
 import { DevelopmentRequestBoard } from "@/components/DevelopmentRequestBoard";
 import { makeSegmentDongDisplayList } from "@/lib/geo";
 import type {
+  CallEstimateHistoryRow,
   DevelopmentRequestRow,
   RouteCallEstimateResult,
   RouteRecommendationItem,
@@ -23,6 +24,7 @@ type Props = {
   roadRecommendationError: string | null;
   onSelectRecommendation: (rowIndex: number) => void;
   onMoveRecommendation: (rowIndex: number, direction: "up" | "down") => void;
+  onReorderRecommendation: (dragRowIndex: number, dropRowIndex: number) => void;
   onResetRecommendationOrder: () => void;
   onChangeRecommendationMode: (mode: RouteRecommendationMode) => void;
   onComputeRoadRecommendation: () => void;
@@ -30,9 +32,13 @@ type Props = {
   callEstimateLoading: boolean;
   callEstimateError: string | null;
   callEstimate: RouteCallEstimateResult | null;
+  callHistory: CallEstimateHistoryRow[];
+  callHistoryLoading: boolean;
+  callHistoryError: string | null;
   onChangeCallTime: (value: string) => void;
   onUseCurrentCallTime: () => void;
   onComputeCallEstimate: () => void;
+  onRestoreCallEstimateHistory: (row: CallEstimateHistoryRow) => void;
   developmentRequests: DevelopmentRequestRow[];
   developmentRequestsLoading: boolean;
   developmentRequestsError: string | null;
@@ -64,6 +70,7 @@ export function ResultPanel({
   roadRecommendationError,
   onSelectRecommendation,
   onMoveRecommendation,
+  onReorderRecommendation,
   onResetRecommendationOrder,
   onChangeRecommendationMode,
   onComputeRoadRecommendation,
@@ -71,9 +78,13 @@ export function ResultPanel({
   callEstimateLoading,
   callEstimateError,
   callEstimate,
+  callHistory,
+  callHistoryLoading,
+  callHistoryError,
   onChangeCallTime,
   onUseCurrentCallTime,
   onComputeCallEstimate,
+  onRestoreCallEstimateHistory,
   developmentRequests,
   developmentRequestsLoading,
   developmentRequestsError,
@@ -81,6 +92,7 @@ export function ResultPanel({
   onSubmitDevelopmentRequest,
 }: Props) {
   const [activeTab, setActiveTab] = useState<ResultTab>("route");
+  const [draggingRowIndex, setDraggingRowIndex] = useState<number | null>(null);
   const text = useMemo(() => finalDongList.join(", "), [finalDongList]);
   const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
 
@@ -190,7 +202,7 @@ export function ResultPanel({
             {roadRecommendationError ? <p className="mt-2 text-xs text-rose-600">{roadRecommendationError}</p> : null}
 
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-slate-500">↑ ↓ 버튼으로 추천 순서를 직접 수정할 수 있습니다.</p>
+              <p className="text-xs text-slate-500">드래그하거나 ↑ ↓ 버튼으로 추천 순서를 직접 수정할 수 있습니다.</p>
               {manualOrderActive ? (
                 <button
                   type="button"
@@ -213,8 +225,23 @@ export function ResultPanel({
 
             <ol className="mt-2 space-y-2">
               {recommendedOrder.map((item, index) => (
-                <li key={`${item.rowIndex}-${item.step}`}>
-                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                <li
+                  key={`${item.rowIndex}-${item.step}`}
+                  draggable
+                  onDragStart={() => setDraggingRowIndex(item.rowIndex)}
+                  onDragEnd={() => setDraggingRowIndex(null)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={() => {
+                    if (draggingRowIndex === null || draggingRowIndex === item.rowIndex) return;
+                    onReorderRecommendation(draggingRowIndex, item.rowIndex);
+                    setDraggingRowIndex(null);
+                  }}
+                >
+                  <div
+                    className={`grid grid-cols-[1fr_auto] gap-2 rounded-xl ${
+                      draggingRowIndex === item.rowIndex ? "ring-2 ring-cyan-300" : ""
+                    }`}
+                  >
                     <button
                       type="button"
                       className="w-full rounded-lg border border-slate-100 bg-slate-50 p-2 text-left active:scale-[0.99]"
@@ -237,7 +264,10 @@ export function ResultPanel({
                       </div>
                     </button>
 
-                    <div className="grid grid-rows-2 gap-1">
+                    <div className="grid grid-rows-3 gap-1">
+                      <div className="flex h-[26px] w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-[11px] text-slate-500">
+                        ≡
+                      </div>
                       <button
                         type="button"
                         className="h-[26px] w-10 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
@@ -326,9 +356,13 @@ export function ResultPanel({
           loading={callEstimateLoading}
           error={callEstimateError}
           estimate={callEstimate}
+          history={callHistory}
+          historyLoading={callHistoryLoading}
+          historyError={callHistoryError}
           onChangeCallTime={onChangeCallTime}
           onUseNow={onUseCurrentCallTime}
           onCompute={onComputeCallEstimate}
+          onRestoreHistory={onRestoreCallEstimateHistory}
         />
       ) : null}
 

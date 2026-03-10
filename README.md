@@ -36,6 +36,9 @@ npm run build
 - 관리자 운임 통계 (기간 총합 / 사용자별 / 사용자 drill-down)
 - 개발요청 게시판 (사용자 등록 + 관리자 상태 관리)
 - 콜 시간 계산 탭 (실제 내비 기준 최장 구간 * 250% + 픽업 20분)
+- 개발요청 등록 시 관리자 메일 알림(선택, SMTP 설정 시)
+- 콜 시간 계산 결과 저장/최근 이력 복원
+- 추천 방문 순서 drag-and-drop 지원
 - 길찾기 실행 후 동 리스트/방문 순서 스냅샷 저장(사용자별 일일 이력)
 - 관리자 화면에서 오늘 총 사용량/사용자별 실행 건수 확인
 
@@ -159,6 +162,20 @@ create table if not exists public.development_requests (
   reviewed_at timestamptz null,
   reviewed_by text null
 );
+
+create table if not exists public.call_time_estimates (
+  id uuid primary key default gen_random_uuid(),
+  phone text not null,
+  created_at timestamptz not null default now(),
+  call_time text not null,
+  deadline_label text not null,
+  longest_leg_min integer not null default 0,
+  adjusted_drive_min integer not null default 0,
+  pickup_min integer not null default 20,
+  total_required_min integer not null default 0,
+  reference_leg text not null,
+  route_legs jsonb not null default '[]'::jsonb
+);
 ```
 
 ## 전국 동 데이터(실사용 규모)
@@ -186,6 +203,7 @@ create table if not exists public.development_requests (
   - 전체 길찾기/분할 길찾기 순서
   - 길찾기 저장 이력
   에 모두 반영됩니다.
+- 추천 방문 순서 카드에서는 드래그 앤 드롭으로도 순서를 바꿀 수 있습니다.
 
 ## 콜 시간 계산
 
@@ -199,11 +217,13 @@ create table if not exists public.development_requests (
   - `최장 구간 시간 * 2.5 + 픽업 20분`
   - 결과를 `몇 시까지 들어가면 되는지`로 표시
 - 구간별 거리/시간도 같이 확인할 수 있습니다.
+- 계산 결과는 사용자별 최근 이력으로 저장되며, `다시 보기`로 복원할 수 있습니다.
 
 ## 개발요청 게시판
 
 - 결과 패널의 `개발 요청` 탭에서 사용자 요청을 등록할 수 있습니다.
 - 관리자 패널에서는 전체 요청 목록과 상태(`pending/reviewing/done`) 및 관리자 메모를 관리할 수 있습니다.
+- SMTP가 설정되어 있으면 개발요청 등록 시 관리자 메일 알림도 발송됩니다.
 
 ## 운임 계산기(제3자 포함) 사용법
 

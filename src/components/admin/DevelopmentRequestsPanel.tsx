@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { DevelopmentRequestRow, DevelopmentRequestStatus } from "@/types";
 
 const STATUS_OPTIONS: DevelopmentRequestStatus[] = ["pending", "reviewing", "done"];
@@ -13,6 +13,9 @@ export function DevelopmentRequestsPanel() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [statuses, setStatuses] = useState<Record<string, DevelopmentRequestStatus>>({});
 
+  const pendingCount = useMemo(() => rows.filter((row) => row.status === "pending").length, [rows]);
+  const reviewingCount = useMemo(() => rows.filter((row) => row.status === "reviewing").length, [rows]);
+
   const load = async () => {
     try {
       setLoading(true);
@@ -22,14 +25,11 @@ export function DevelopmentRequestsPanel() {
         const payload = (await response.json().catch(() => ({}))) as { message?: string };
         throw new Error(payload.message ?? "개발 요청 조회 실패");
       }
+
       const payload = (await response.json()) as { rows: DevelopmentRequestRow[] };
       setRows(payload.rows ?? []);
-      setNotes(
-        Object.fromEntries((payload.rows ?? []).map((row) => [row.id, row.admin_note ?? ""])),
-      );
-      setStatuses(
-        Object.fromEntries((payload.rows ?? []).map((row) => [row.id, row.status])),
-      );
+      setNotes(Object.fromEntries((payload.rows ?? []).map((row) => [row.id, row.admin_note ?? ""])));
+      setStatuses(Object.fromEntries((payload.rows ?? []).map((row) => [row.id, row.status])));
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "개발 요청 조회 실패");
     } finally {
@@ -54,10 +54,12 @@ export function DevelopmentRequestsPanel() {
           adminNote: notes[id] ?? "",
         }),
       });
+
       if (!response.ok) {
         const payload = (await response.json().catch(() => ({}))) as { message?: string };
         throw new Error(payload.message ?? "개발 요청 수정 실패");
       }
+
       await load();
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "개발 요청 수정 실패");
@@ -70,7 +72,19 @@ export function DevelopmentRequestsPanel() {
     <section className="mt-4 rounded-xl border border-slate-200 p-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-slate-700">개발 요청 게시판</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-slate-700">개발 요청 게시판</h3>
+            {pendingCount > 0 ? (
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-700">
+                대기 {pendingCount}
+              </span>
+            ) : null}
+            {reviewingCount > 0 ? (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                검토 {reviewingCount}
+              </span>
+            ) : null}
+          </div>
           <p className="text-xs text-slate-500">사용자가 등록한 기능 요청을 확인하고 상태를 관리합니다.</p>
         </div>
         <button
@@ -95,7 +109,7 @@ export function DevelopmentRequestsPanel() {
                   {row.owner_phone} · {new Date(row.created_at).toLocaleString()}
                 </div>
               </div>
-              <span className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-600">{row.status}</span>
+              <span className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-600">{statuses[row.id] ?? row.status}</span>
             </div>
 
             <p className="mt-2 text-sm text-slate-700">{row.body}</p>

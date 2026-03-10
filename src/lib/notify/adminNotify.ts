@@ -6,6 +6,13 @@ type SignupRequestNotificationParams = {
   createdAt?: string;
 };
 
+type DevelopmentRequestNotificationParams = {
+  phone: string;
+  title: string;
+  body: string;
+  createdAt?: string;
+};
+
 function getSmtpConfig() {
   const host = process.env.SMTP_HOST;
   const portRaw = process.env.SMTP_PORT;
@@ -90,3 +97,54 @@ export async function notifyAdminSignupRequest(params: SignupRequestNotification
   return { sent: true as const };
 }
 
+export async function notifyAdminDevelopmentRequest(params: DevelopmentRequestNotificationParams) {
+  const config = getSmtpConfig();
+  if (!config) {
+    return { sent: false as const, reason: "smtp_not_configured" as const };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
+  });
+
+  const createdAt = params.createdAt ? new Date(params.createdAt).toLocaleString("ko-KR") : new Date().toLocaleString("ko-KR");
+  const subject = `[delivery_map] 개발요청 - ${params.title}`;
+  const text = [
+    "새 개발요청이 등록되었습니다.",
+    "",
+    `전화번호: ${params.phone}`,
+    `제목: ${params.title}`,
+    `등록시각: ${createdAt}`,
+    "",
+    params.body,
+    "",
+    "관리자 페이지에서 상태를 관리하세요.",
+    "/admin",
+  ].join("\n");
+
+  const html = `
+    <div style="font-family:Arial,'Malgun Gothic',sans-serif;line-height:1.5;color:#0f172a">
+      <h2 style="margin:0 0 12px 0;font-size:18px">새 개발요청이 등록되었습니다.</h2>
+      <table style="border-collapse:collapse;font-size:14px">
+        <tr><td style="padding:4px 8px 4px 0;color:#475569">전화번호</td><td style="padding:4px 0">${params.phone}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;color:#475569">제목</td><td style="padding:4px 0">${params.title}</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;color:#475569">등록시각</td><td style="padding:4px 0">${createdAt}</td></tr>
+      </table>
+      <div style="margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;white-space:pre-wrap">${params.body}</div>
+      <p style="margin-top:12px">관리자 페이지에서 상태를 관리하세요.</p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    from: config.from,
+    to: config.to,
+    subject,
+    text,
+    html,
+  });
+
+  return { sent: true as const };
+}

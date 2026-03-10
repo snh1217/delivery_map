@@ -1,5 +1,6 @@
 import type { DevelopmentRequestRow } from "@/types";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
+import { notifyAdminDevelopmentRequest } from "@/lib/notify/adminNotify";
 import { getSupabaseServiceClient } from "@/lib/supabase/server";
 
 export async function listDevelopmentRequests(params: {
@@ -65,7 +66,16 @@ export async function createDevelopmentRequest(params: {
     throw new Error(error.message);
   }
 
-  return data as DevelopmentRequestRow;
+  const row = data as DevelopmentRequestRow;
+
+  void notifyAdminDevelopmentRequest({
+    phone: row.owner_phone,
+    title: row.title,
+    body: row.body,
+    createdAt: row.created_at,
+  }).catch(() => {});
+
+  return row;
 }
 
 export async function updateDevelopmentRequest(params: {

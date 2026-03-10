@@ -250,3 +250,17 @@ export type RouteCallEstimateResult = {
   referenceLeg: string;
   legs: RouteCallEstimateLeg[];
 };
+
+export type CallEstimateHistoryRow = {
+  id: string;
+  phone: string;
+  created_at: string;
+  call_time: string;
+  deadline_label: string;
+  longest_leg_min: number;
+  adjusted_drive_min: number;
+  pickup_min: number;
+  total_required_min: number;
+  reference_leg: string;
+  route_legs: RouteCallEstimateLeg[];
+};

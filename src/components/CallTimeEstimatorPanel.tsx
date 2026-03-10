@@ -1,30 +1,19 @@
 "use client";
 
-type Leg = {
-  fromLabel: string;
-  toLabel: string;
-  distanceKm: number | null;
-  durationMin: number | null;
-};
-
-type Estimate = {
-  longestLegMin: number;
-  adjustedDriveMin: number;
-  pickupMin: number;
-  totalRequiredMin: number;
-  deadlineLabel: string;
-  referenceLeg: string;
-  legs: Leg[];
-};
+import type { CallEstimateHistoryRow, RouteCallEstimateResult } from "@/types";
 
 type Props = {
   callTime: string;
   loading: boolean;
   error: string | null;
-  estimate: Estimate | null;
+  estimate: RouteCallEstimateResult | null;
+  history: CallEstimateHistoryRow[];
+  historyLoading: boolean;
+  historyError: string | null;
   onChangeCallTime: (value: string) => void;
   onUseNow: () => void;
   onCompute: () => void;
+  onRestoreHistory: (row: CallEstimateHistoryRow) => void;
 };
 
 function formatDuration(minutes: number | null) {
@@ -43,9 +32,13 @@ export function CallTimeEstimatorPanel({
   loading,
   error,
   estimate,
+  history,
+  historyLoading,
+  historyError,
   onChangeCallTime,
   onUseNow,
   onCompute,
+  onRestoreHistory,
 }: Props) {
   return (
     <section className="space-y-3">
@@ -120,7 +113,10 @@ export function CallTimeEstimatorPanel({
               <h4 className="text-xs font-semibold text-slate-700">현재 추천 방문 순서 기준 구간 시간</h4>
               <div className="mt-2 space-y-2">
                 {estimate.legs.map((leg, index) => (
-                  <div key={`${leg.fromLabel}-${leg.toLabel}-${index}`} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <div
+                    key={`${leg.fromLabel}-${leg.toLabel}-${index}`}
+                    className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                  >
                     <div className="font-medium text-slate-800">
                       {index + 1}. {leg.fromLabel} → {leg.toLabel}
                     </div>
@@ -138,6 +134,39 @@ export function CallTimeEstimatorPanel({
             콜 잡은 시간과 현재 추천 방문 순서를 기준으로 계산합니다. 먼저 시간 계산 버튼을 눌러 주세요.
           </div>
         )}
+
+        <div className="mt-4 rounded-xl border border-slate-200 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-xs font-semibold text-slate-700">최근 계산 이력</h4>
+            {historyLoading ? <span className="text-[11px] text-slate-500">불러오는 중...</span> : null}
+          </div>
+          {historyError ? <p className="mt-2 text-xs text-rose-600">{historyError}</p> : null}
+          <div className="mt-2 space-y-2">
+            {history.map((row) => (
+              <div key={row.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-medium text-slate-800">
+                    {row.call_time} 시작 · {row.deadline_label} 마감
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px]"
+                    onClick={() => onRestoreHistory(row)}
+                  >
+                    다시 보기
+                  </button>
+                </div>
+                <div className="mt-1">기준 구간: {row.reference_leg}</div>
+                <div className="mt-1">총 필요 시간: {formatDuration(row.total_required_min)}</div>
+              </div>
+            ))}
+            {history.length === 0 && !historyLoading ? (
+              <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500">
+                저장된 계산 이력이 없습니다.
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
     </section>
   );

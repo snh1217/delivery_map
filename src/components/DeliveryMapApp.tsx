@@ -34,6 +34,7 @@ import {
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
+  CallEstimateHistoryRow,
   DevelopmentRequestRow,
   DestinationRowState,
   GeocodeItem,
@@ -281,6 +282,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [callEstimateLoading, setCallEstimateLoading] = useState(false);
   const [callEstimateError, setCallEstimateError] = useState<string | null>(null);
   const [callEstimate, setCallEstimate] = useState<RouteCallEstimateResult | null>(null);
+  const [callEstimateHistory, setCallEstimateHistory] = useState<CallEstimateHistoryRow[]>([]);
+  const [callEstimateHistoryLoading, setCallEstimateHistoryLoading] = useState(false);
+  const [callEstimateHistoryError, setCallEstimateHistoryError] = useState<string | null>(null);
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
@@ -472,6 +476,34 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     void loadDevelopmentRequests();
   }, [loadDevelopmentRequests]);
+
+  const loadCallEstimateHistory = useCallback(async () => {
+    if (!sessionUser?.isAllowed) {
+      setCallEstimateHistory([]);
+      setCallEstimateHistoryError(null);
+      return;
+    }
+
+    try {
+      setCallEstimateHistoryLoading(true);
+      setCallEstimateHistoryError(null);
+      const response = await fetch("/api/call-times", { cache: "no-store" });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message ?? "콜 시간 이력 조회 실패");
+      }
+      const payload = (await response.json()) as { rows: CallEstimateHistoryRow[] };
+      setCallEstimateHistory(Array.isArray(payload.rows) ? payload.rows : []);
+    } catch (error) {
+      setCallEstimateHistoryError(error instanceof Error ? error.message : "콜 시간 이력 조회 실패");
+    } finally {
+      setCallEstimateHistoryLoading(false);
+    }
+  }, [sessionUser?.isAllowed]);
+
+  useEffect(() => {
+    void loadCallEstimateHistory();
+  }, [loadCallEstimateHistory]);
 
   useEffect(() => {
     if (!sessionUser?.isAdmin) return;
@@ -666,6 +698,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       const nextIndex = direction === "up" ? index - 1 : index + 1;
       if (nextIndex < 0 || nextIndex >= prev.length) return prev;
       return reorderList(prev, index, nextIndex);
+    });
+  };
+
+  const onReorderRecommendation = (dragRowIndex: number, dropRowIndex: number) => {
+    setManualRecommendationRowOrder((prev) => {
+      const current = (prev && prev.length > 0 ? prev : recommendedOrder.map((item) => item.rowIndex)).slice();
+      const fromIndex = current.indexOf(dragRowIndex);
+      const toIndex = current.indexOf(dropRowIndex);
+      if (fromIndex < 0 || toIndex < 0) {
+        return current;
+      }
+      return reorderList(current, fromIndex, toIndex);
     });
   };
 
@@ -1216,7 +1260,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       const pickupMin = 20;
       const totalRequiredMin = adjustedDriveMin + pickupMin;
 
-      setCallEstimate({
+      const nextEstimate = {
         longestLegMin,
         adjustedDriveMin,
         pickupMin,
@@ -1224,13 +1268,58 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         deadlineLabel: addMinutesToKstTime(callTimeInput, totalRequiredMin),
         referenceLeg: `${longestLeg.fromLabel} → ${longestLeg.toLabel}`,
         legs,
-      });
+      } satisfies RouteCallEstimateResult;
+
+      setCallEstimate(nextEstimate);
+
+      if (sessionUser?.isAllowed) {
+        try {
+          const response = await fetch("/api/call-times", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              callTime: callTimeInput,
+              deadlineLabel: nextEstimate.deadlineLabel,
+              longestLegMin: nextEstimate.longestLegMin,
+              adjustedDriveMin: nextEstimate.adjustedDriveMin,
+              pickupMin: nextEstimate.pickupMin,
+              totalRequiredMin: nextEstimate.totalRequiredMin,
+              referenceLeg: nextEstimate.referenceLeg,
+              routeLegs: nextEstimate.legs,
+            }),
+          });
+          if (response.ok) {
+            const payload = (await response.json()) as { row?: CallEstimateHistoryRow };
+            if (payload.row) {
+              setCallEstimateHistory((prev) => [payload.row as CallEstimateHistoryRow, ...prev].slice(0, 10));
+            } else {
+              void loadCallEstimateHistory();
+            }
+          }
+        } catch {
+          // keep estimate visible even if history save fails
+        }
+      }
     } catch (error) {
       setCallEstimate(null);
       setCallEstimateError(error instanceof Error ? error.message : "콜 시간 계산 실패");
     } finally {
       setCallEstimateLoading(false);
     }
+  };
+
+  const onRestoreCallEstimateHistory = (row: CallEstimateHistoryRow) => {
+    setCallTimeInput(row.call_time);
+    setCallEstimate({
+      longestLegMin: row.longest_leg_min,
+      adjustedDriveMin: row.adjusted_drive_min,
+      pickupMin: row.pickup_min,
+      totalRequiredMin: row.total_required_min,
+      deadlineLabel: row.deadline_label,
+      referenceLeg: row.reference_leg,
+      legs: Array.isArray(row.route_legs) ? row.route_legs : [],
+    });
+    setCallEstimateError(null);
   };
 
   return (
@@ -1530,14 +1619,19 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                         });
                       }}
                       onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
+                      onReorderRecommendation={onReorderRecommendation}
                       onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
                       callTime={callTimeInput}
                       callEstimateLoading={callEstimateLoading}
                       callEstimateError={callEstimateError}
                       callEstimate={callEstimate}
+                      callHistory={callEstimateHistory}
+                      callHistoryLoading={callEstimateHistoryLoading}
+                      callHistoryError={callEstimateHistoryError}
                       onChangeCallTime={setCallTimeInput}
                       onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
                       onComputeCallEstimate={() => void onComputeCallEstimate()}
+                      onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                       developmentRequests={developmentRequests}
                       developmentRequestsLoading={developmentRequestsLoading}
                       developmentRequestsError={developmentRequestsError}
@@ -1581,14 +1675,19 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   });
                 }}
                 onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
+                onReorderRecommendation={onReorderRecommendation}
                 onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
                 callTime={callTimeInput}
                 callEstimateLoading={callEstimateLoading}
                 callEstimateError={callEstimateError}
                 callEstimate={callEstimate}
+                callHistory={callEstimateHistory}
+                callHistoryLoading={callEstimateHistoryLoading}
+                callHistoryError={callEstimateHistoryError}
                 onChangeCallTime={setCallTimeInput}
                 onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
                 onComputeCallEstimate={() => void onComputeCallEstimate()}
+                onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                 developmentRequests={developmentRequests}
                 developmentRequestsLoading={developmentRequestsLoading}
                 developmentRequestsError={developmentRequestsError}
