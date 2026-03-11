@@ -185,6 +185,8 @@ function createRow(): DestinationRowState {
     geocodeItems: [],
     selectedIndex: 0,
     callTime: getCurrentKstTimeValue(),
+    callOriginInput: "",
+    callOriginStatus: "idle",
     callEstimate: null,
     callEstimateLoading: false,
     callEstimateError: undefined,
@@ -196,6 +198,11 @@ function hydrateRow(row: Partial<DestinationRowState> | null | undefined): Desti
     ...createRow(),
     ...row,
     callTime: typeof row?.callTime === "string" ? row.callTime : getCurrentKstTimeValue(),
+    callOriginInput: typeof row?.callOriginInput === "string" ? row.callOriginInput : "",
+    callOriginStatus: row?.callOriginStatus ?? "idle",
+    callOriginCoord: row?.callOriginCoord,
+    callOriginLabel: row?.callOriginLabel,
+    callOriginError: row?.callOriginError,
     callEstimate: row?.callEstimate ?? null,
     callEstimateLoading: Boolean(row?.callEstimateLoading),
     callEstimateError: row?.callEstimateError,
@@ -331,6 +338,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             callEstimate: null,
             callEstimateLoading: false,
             callEstimateError: undefined,
+            ...(row.callOriginLabel === "현재 위치"
+              ? {
+                  callOriginCoord: { lat: position.coords.latitude, lon: position.coords.longitude },
+                }
+              : {}),
           })),
         );
         setLocationStatus("현재 위치를 출발지로 사용합니다.");
@@ -749,6 +761,111 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   const onUseCurrentCallTime = (id: string) => {
     onChangeCallTime(id, getCurrentKstTimeValue());
+  };
+
+  const onChangeCallOriginInput = (id: string, value: string) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              callOriginInput: value,
+              callOriginStatus: "idle",
+              callOriginError: undefined,
+              callOriginCoord: undefined,
+              callOriginLabel: undefined,
+              callEstimate: null,
+              callEstimateError: undefined,
+            }
+          : row,
+      ),
+    );
+  };
+
+  const onUseCurrentLocationForCall = (id: string) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              callOriginInput: "현재 위치",
+              callOriginCoord: origin,
+              callOriginLabel: "현재 위치",
+              callOriginStatus: "resolved",
+              callOriginError: undefined,
+              callEstimate: null,
+              callEstimateError: undefined,
+            }
+          : row,
+      ),
+    );
+  };
+
+  const onResolveCallOrigin = async (id: string) => {
+    const targetRow = rowsRef.current.find((row) => row.id === id);
+    if (!targetRow) return;
+
+    const query = targetRow.callOriginInput.trim();
+    if (!query) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === id ? { ...row, callOriginError: "출발지 주소를 먼저 입력하세요.", callOriginStatus: "error" } : row,
+        ),
+      );
+      return;
+    }
+
+    if (query === "현재 위치") {
+      onUseCurrentLocationForCall(id);
+      return;
+    }
+
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id ? { ...row, callOriginStatus: "loading", callOriginError: undefined, callEstimate: null } : row,
+      ),
+    );
+
+    try {
+      const items = (await searchNaverGeocode(query)).slice(0, 1);
+      if (items.length === 0) {
+        throw new Error("출발지 검색 결과가 없습니다.");
+      }
+
+      const first = items[0];
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                callOriginStatus: "resolved",
+                callOriginCoord: { lat: first.lat, lon: first.lon },
+                callOriginLabel: first.title,
+                callOriginInput: first.title,
+                callOriginError: undefined,
+                callEstimate: null,
+                callEstimateError: undefined,
+              }
+            : row,
+        ),
+      );
+    } catch (error) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                callOriginStatus: "error",
+                callOriginCoord: undefined,
+                callOriginLabel: undefined,
+                callOriginError: error instanceof Error ? error.message : "출발지 검색 실패",
+                callEstimate: null,
+                callEstimateError: undefined,
+              }
+            : row,
+        ),
+      );
+    }
   };
 
   const straightRecommendedOrder = useMemo(
@@ -1243,6 +1360,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       );
       return;
     }
+    if (!targetRow.callOriginCoord) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId ? { ...row, callEstimate: null, callEstimateError: "출발지를 먼저 적용하세요." } : row,
+        ),
+      );
+      return;
+    }
 
     setRows((prev) =>
       prev.map((row) =>
@@ -1258,7 +1383,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
     try {
       const response = await fetch(
-        `/api/directions5?startLat=${origin.lat}&startLon=${origin.lon}&goalLat=${targetRow.coord.lat}&goalLon=${targetRow.coord.lon}&option=trafast`,
+        `/api/directions5?startLat=${targetRow.callOriginCoord.lat}&startLon=${targetRow.callOriginCoord.lon}&goalLat=${targetRow.coord.lat}&goalLon=${targetRow.coord.lon}&option=trafast`,
         { cache: "no-store" },
       );
 
@@ -1289,10 +1414,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         pickupMin,
         totalRequiredMin,
         deadlineLabel: addMinutesToKstTime(targetRow.callTime, totalRequiredMin),
-        referenceLeg: `현재 위치 → ${label}`,
+        referenceLeg: `${targetRow.callOriginLabel ?? "출발지"} → ${label}`,
         legs: [
           {
-            fromLabel: "현재 위치",
+            fromLabel: targetRow.callOriginLabel ?? "출발지",
             toLabel: label,
             distanceKm,
             durationMin,
@@ -1595,6 +1720,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               onChangeCallTime={onChangeCallTime}
               onUseCurrentCallTime={onUseCurrentCallTime}
               onComputeCallEstimate={(id) => void onComputeCallEstimate(id)}
+              onChangeCallOriginInput={onChangeCallOriginInput}
+              onUseCurrentLocationForCall={onUseCurrentLocationForCall}
+              onResolveCallOrigin={(id) => void onResolveCallOrigin(id)}
             />
           </div>
 

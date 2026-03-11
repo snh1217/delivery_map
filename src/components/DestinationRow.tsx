@@ -38,6 +38,9 @@ type Props = {
   onChangeCallTime: (id: string, value: string) => void;
   onUseCurrentCallTime: (id: string) => void;
   onComputeCallEstimate: (id: string) => void;
+  onChangeCallOriginInput: (id: string, value: string) => void;
+  onUseCurrentLocationForCall: (id: string) => void;
+  onResolveCallOrigin: (id: string) => void;
 };
 
 const VOICE_SILENCE_TIMEOUT_MS = 900;
@@ -126,6 +129,9 @@ export function DestinationRow({
   onChangeCallTime,
   onUseCurrentCallTime,
   onComputeCallEstimate,
+  onChangeCallOriginInput,
+  onUseCurrentLocationForCall,
+  onResolveCallOrigin,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onSearchRef = useRef(onSearch);
@@ -502,12 +508,53 @@ export function DestinationRow({
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-semibold text-slate-700">콜 시간 계산</div>
-            <p className="mt-1 text-[11px] text-slate-500">콜 잡은 시간 + (실제 내비시간 150%) + 픽업 20분 기준입니다.</p>
+            <p className="mt-1 text-[11px] text-slate-500">출발지 주소를 적용한 뒤, 콜 시간 + (실제 내비시간 150%) + 픽업 20분으로 계산합니다.</p>
           </div>
-          <div className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-500">출발지: 현재 위치</div>
+          <div className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-500">
+            출발지: {row.callOriginLabel ?? "미설정"}
+          </div>
         </div>
 
-        <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-2">
+        <div className="mt-2 grid gap-2">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2">
+            <input
+              type="text"
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+              placeholder="출발지 주소 입력"
+              value={row.callOriginInput}
+              onChange={(event) => onChangeCallOriginInput(row.id, event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  onResolveCallOrigin(row.id);
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+              onClick={() => onUseCurrentLocationForCall(row.id)}
+            >
+              현재 위치
+            </button>
+            <button
+              type="button"
+              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-50"
+              onClick={() => onResolveCallOrigin(row.id)}
+              disabled={row.callOriginStatus === "loading"}
+            >
+              {row.callOriginStatus === "loading" ? "적용 중" : "출발지 적용"}
+            </button>
+          </div>
+
+          {row.callOriginError ? <p className="text-xs text-rose-600">{row.callOriginError}</p> : null}
+          {row.callOriginCoord ? (
+            <p className="text-[11px] text-slate-500">
+              출발지 좌표: {row.callOriginCoord.lat.toFixed(5)}, {row.callOriginCoord.lon.toFixed(5)}
+            </p>
+          ) : null}
+
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2">
           <input
             type="time"
             className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
@@ -525,14 +572,17 @@ export function DestinationRow({
             type="button"
             className="h-10 rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white disabled:opacity-50"
             onClick={() => onComputeCallEstimate(row.id)}
-            disabled={!row.coord || row.callEstimateLoading}
+            disabled={!row.coord || !row.callOriginCoord || row.callEstimateLoading}
           >
             {row.callEstimateLoading ? "계산 중" : "시간 계산"}
           </button>
         </div>
+        </div>
 
         {!row.coord ? (
           <p className="mt-2 text-[11px] text-slate-500">좌표가 확정되면 이 도착지의 마감 시간을 바로 계산할 수 있습니다.</p>
+        ) : !row.callOriginCoord ? (
+          <p className="mt-2 text-[11px] text-slate-500">출발지를 입력하고 적용하면 이 도착지의 마감 시간을 계산할 수 있습니다.</p>
         ) : null}
         {row.callEstimateError ? <p className="mt-2 text-xs text-rose-600">{row.callEstimateError}</p> : null}
 

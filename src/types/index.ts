@@ -24,6 +24,11 @@ export type DestinationRowState = {
   coord?: LatLng;
   label?: string;
   callTime: string;
+  callOriginInput: string;
+  callOriginCoord?: LatLng;
+  callOriginLabel?: string;
+  callOriginStatus?: "idle" | "loading" | "resolved" | "error";
+  callOriginError?: string;
   callEstimate?: RouteCallEstimateResult | null;
   callEstimateLoading?: boolean;
   callEstimateError?: string;

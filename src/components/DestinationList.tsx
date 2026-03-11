@@ -42,6 +42,9 @@ type Props = {
   onChangeCallTime: (id: string, value: string) => void;
   onUseCurrentCallTime: (id: string) => void;
   onComputeCallEstimate: (id: string) => void;
+  onChangeCallOriginInput: (id: string, value: string) => void;
+  onUseCurrentLocationForCall: (id: string) => void;
+  onResolveCallOrigin: (id: string) => void;
 };
 
 export function DestinationList({
@@ -76,6 +79,9 @@ export function DestinationList({
   onChangeCallTime,
   onUseCurrentCallTime,
   onComputeCallEstimate,
+  onChangeCallOriginInput,
+  onUseCurrentLocationForCall,
+  onResolveCallOrigin,
 }: Props) {
   const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
 
@@ -202,6 +208,9 @@ export function DestinationList({
             onChangeCallTime={onChangeCallTime}
             onUseCurrentCallTime={onUseCurrentCallTime}
             onComputeCallEstimate={onComputeCallEstimate}
+            onChangeCallOriginInput={onChangeCallOriginInput}
+            onUseCurrentLocationForCall={onUseCurrentLocationForCall}
+            onResolveCallOrigin={onResolveCallOrigin}
           />
         ))}
       </div>
