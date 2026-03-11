@@ -1,14 +1,10 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
-import { CallTimeEstimatorPanel } from "@/components/CallTimeEstimatorPanel";
 import { DevelopmentRequestBoard } from "@/components/DevelopmentRequestBoard";
 import { makeSegmentDongDisplayList } from "@/lib/geo";
 import type {
-  CallEstimateHistoryRow,
-  CallTimeEntry,
   DevelopmentRequestRow,
-  RouteCallEstimateResult,
   RouteRecommendationItem,
   RouteRecommendationMode,
   SegmentResult,
@@ -29,21 +25,6 @@ type Props = {
   onResetRecommendationOrder: () => void;
   onChangeRecommendationMode: (mode: RouteRecommendationMode) => void;
   onComputeRoadRecommendation: () => void;
-  callTimeEntries: CallTimeEntry[];
-  activeCallTimeId: string | null;
-  callEstimateLoading: boolean;
-  callEstimateError: string | null;
-  callEstimate: RouteCallEstimateResult | null;
-  callHistory: CallEstimateHistoryRow[];
-  callHistoryLoading: boolean;
-  callHistoryError: string | null;
-  onSelectCallTimeEntry: (id: string) => void;
-  onAddCallTimeEntry: () => void;
-  onRemoveCallTimeEntry: (id: string) => void;
-  onChangeCallTimeEntry: (id: string, value: string) => void;
-  onUseCurrentCallTime: () => void;
-  onComputeCallEstimate: () => void;
-  onRestoreCallEstimateHistory: (row: CallEstimateHistoryRow) => void;
   developmentRequests: DevelopmentRequestRow[];
   developmentRequestsLoading: boolean;
   developmentRequestsError: string | null;
@@ -51,7 +32,7 @@ type Props = {
   onSubmitDevelopmentRequest: (payload: { title: string; body: string }) => Promise<void>;
 };
 
-type ResultTab = "route" | "call" | "requests";
+type ResultTab = "route" | "requests";
 
 function formatMinutes(value?: number | null) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -79,21 +60,6 @@ export function ResultPanel({
   onResetRecommendationOrder,
   onChangeRecommendationMode,
   onComputeRoadRecommendation,
-  callTimeEntries,
-  activeCallTimeId,
-  callEstimateLoading,
-  callEstimateError,
-  callEstimate,
-  callHistory,
-  callHistoryLoading,
-  callHistoryError,
-  onSelectCallTimeEntry,
-  onAddCallTimeEntry,
-  onRemoveCallTimeEntry,
-  onChangeCallTimeEntry,
-  onUseCurrentCallTime,
-  onComputeCallEstimate,
-  onRestoreCallEstimateHistory,
   developmentRequests,
   developmentRequestsLoading,
   developmentRequestsError,
@@ -131,12 +97,12 @@ export function ResultPanel({
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-slate-800">결과</h2>
-          <p className="text-xs text-slate-500">추천 순서, 동 리스트, 콜 시간, 개발 요청</p>
+          <p className="text-xs text-slate-500">추천 순서, 동 리스트, 개발 요청</p>
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">전체 {finalDongList.length}개</span>
       </div>
 
-      <div className="mb-4 grid grid-cols-3 gap-2">
+      <div className="mb-4 grid grid-cols-2 gap-2">
         <button
           type="button"
           className={`h-10 rounded-lg text-xs font-medium ${
@@ -145,15 +111,6 @@ export function ResultPanel({
           onClick={() => setActiveTab("route")}
         >
           추천/동 리스트
-        </button>
-        <button
-          type="button"
-          className={`h-10 rounded-lg text-xs font-medium ${
-            activeTab === "call" ? "bg-slate-900 text-white" : "border border-slate-300 bg-white text-slate-700"
-          }`}
-          onClick={() => setActiveTab("call")}
-        >
-          콜 시간 계산
         </button>
         <button
           type="button"
@@ -353,26 +310,6 @@ export function ResultPanel({
             <p className="mt-3 text-sm text-slate-600">전체 합산 결과: {finalDongList.length}개</p>
           )}
         </>
-      ) : null}
-
-      {activeTab === "call" ? (
-        <CallTimeEstimatorPanel
-          callTimeEntries={callTimeEntries}
-          activeCallTimeId={activeCallTimeId}
-          loading={callEstimateLoading}
-          error={callEstimateError}
-          estimate={callEstimate}
-          history={callHistory}
-          historyLoading={callHistoryLoading}
-          historyError={callHistoryError}
-          onSelectCallTimeEntry={onSelectCallTimeEntry}
-          onAddCallTimeEntry={onAddCallTimeEntry}
-          onRemoveCallTimeEntry={onRemoveCallTimeEntry}
-          onChangeCallTimeEntry={onChangeCallTimeEntry}
-          onUseNow={onUseCurrentCallTime}
-          onCompute={onComputeCallEstimate}
-          onRestoreHistory={onRestoreCallEstimateHistory}
-        />
       ) : null}
 
       {activeTab === "requests" ? (

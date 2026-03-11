@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CallTimeEstimatorPanel } from "@/components/CallTimeEstimatorPanel";
 import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
@@ -1565,63 +1566,86 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         />
 
         <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr] lg:gap-4">
-          <DestinationList
-            rows={rows}
-            origin={origin}
-            autoSearch={settings.autoSearch}
-            resolvedCount={orderedRouteStops.length}
-            routeableCount={routeableStops.length}
-            skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
-            routeProviderLabel={getNavigationAppLabel(settings.navigationApp)}
-            routeMaxStops={maxMultiRouteStops}
-            highlightedRowIndex={highlightedRowIndex}
-            activeRouteBatchIndex={activeRouteBatchIndex}
-            routeBatchButtons={routeBatches.map((batch, index) => ({
-              key: batch.key,
-              label: batch.label,
-              count: batch.stops.length,
-              onClick: () => onNavigateBatch(index),
-            }))}
-            onAdd={onAddRow}
-            onReset={() => setRows([createRow()])}
-            onNavigateAll={onNavigateAll}
-            canUndoRouteRemoval={rowsUndoStack.length > 0}
-            undoRouteMessage={lastAutoRemovedMessage}
-            onUndoRouteRemoval={undoLastAutoRemove}
-            onMoveRow={onMoveRow}
-            onChangeInput={(id, value) =>
-              setRows((prev) =>
-                prev.map((item) =>
-                  item.id === id
-                    ? {
-                        ...item,
-                        input: value,
-                        status: "idle",
-                        error: undefined,
-                        geocodeItems: [],
-                        selectedIndex: 0,
-                        coord: undefined,
-                        label: undefined,
-                      }
-                    : item,
-                ),
-              )
-            }
-            onSearch={onSearch}
-            onDelete={(id) =>
-              setRows((prev) => {
-                const next = prev.filter((item) => item.id !== id);
-                return next.length > 0 ? next : [createRow()];
-              })
-            }
-            onSelectCandidate={onSelectCandidate}
-            onNavigate={onNavigate}
-            onNavigateKakao={onNavigateKakao}
-            preferredNavigationApp={settings.navigationApp}
-            isAdmin={Boolean(sessionUser?.isAdmin)}
-            canUseAttachment={canUseDestinationAttachment}
-            onApplyOcrToRow={applyAddressToRowAndSearch}
-          />
+          <div className="space-y-3">
+            <DestinationList
+              rows={rows}
+              origin={origin}
+              autoSearch={settings.autoSearch}
+              resolvedCount={orderedRouteStops.length}
+              routeableCount={routeableStops.length}
+              skippedCountForAllRoute={Math.max(0, orderedRouteStops.length - routeableStops.length)}
+              routeProviderLabel={getNavigationAppLabel(settings.navigationApp)}
+              routeMaxStops={maxMultiRouteStops}
+              highlightedRowIndex={highlightedRowIndex}
+              activeRouteBatchIndex={activeRouteBatchIndex}
+              routeBatchButtons={routeBatches.map((batch, index) => ({
+                key: batch.key,
+                label: batch.label,
+                count: batch.stops.length,
+                onClick: () => onNavigateBatch(index),
+              }))}
+              onAdd={onAddRow}
+              onReset={() => setRows([createRow()])}
+              onNavigateAll={onNavigateAll}
+              canUndoRouteRemoval={rowsUndoStack.length > 0}
+              undoRouteMessage={lastAutoRemovedMessage}
+              onUndoRouteRemoval={undoLastAutoRemove}
+              onMoveRow={onMoveRow}
+              onChangeInput={(id, value) =>
+                setRows((prev) =>
+                  prev.map((item) =>
+                    item.id === id
+                      ? {
+                          ...item,
+                          input: value,
+                          status: "idle",
+                          error: undefined,
+                          geocodeItems: [],
+                          selectedIndex: 0,
+                          coord: undefined,
+                          label: undefined,
+                        }
+                      : item,
+                  ),
+                )
+              }
+              onSearch={onSearch}
+              onDelete={(id) =>
+                setRows((prev) => {
+                  const next = prev.filter((item) => item.id !== id);
+                  return next.length > 0 ? next : [createRow()];
+                })
+              }
+              onSelectCandidate={onSelectCandidate}
+              onNavigate={onNavigate}
+              onNavigateKakao={onNavigateKakao}
+              preferredNavigationApp={settings.navigationApp}
+              isAdmin={Boolean(sessionUser?.isAdmin)}
+              canUseAttachment={canUseDestinationAttachment}
+              onApplyOcrToRow={applyAddressToRowAndSearch}
+            />
+
+            <CallTimeEstimatorPanel
+              callTimeEntries={callTimeEntries}
+              activeCallTimeId={activeCallTimeId}
+              loading={callEstimateLoading}
+              error={callEstimateError}
+              estimate={callEstimate}
+              history={callEstimateHistory}
+              historyLoading={callEstimateHistoryLoading}
+              historyError={callEstimateHistoryError}
+              onSelectCallTimeEntry={(id) => setActiveCallTimeId(id)}
+              onAddCallTimeEntry={onAddCallTimeEntry}
+              onRemoveCallTimeEntry={onRemoveCallTimeEntry}
+              onChangeCallTimeEntry={onChangeCallTimeEntry}
+              onUseNow={() => {
+                if (!activeCallTime) return;
+                onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
+              }}
+              onCompute={() => void onComputeCallEstimate()}
+              onRestoreHistory={onRestoreCallEstimateHistory}
+            />
+          </div>
 
           <div className="space-y-3">
             {isMobileLayout ? (
@@ -1680,24 +1704,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                       onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                       onReorderRecommendation={onReorderRecommendation}
                       onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-                      callTimeEntries={callTimeEntries}
-                      activeCallTimeId={activeCallTimeId}
-                      callEstimateLoading={callEstimateLoading}
-                      callEstimateError={callEstimateError}
-                      callEstimate={callEstimate}
-                      callHistory={callEstimateHistory}
-                      callHistoryLoading={callEstimateHistoryLoading}
-                      callHistoryError={callEstimateHistoryError}
-                      onSelectCallTimeEntry={setActiveCallTimeId}
-                      onAddCallTimeEntry={onAddCallTimeEntry}
-                      onRemoveCallTimeEntry={onRemoveCallTimeEntry}
-                      onChangeCallTimeEntry={onChangeCallTimeEntry}
-                      onUseCurrentCallTime={() => {
-                        if (!activeCallTime) return;
-                        onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
-                      }}
-                      onComputeCallEstimate={() => void onComputeCallEstimate()}
-                      onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                       developmentRequests={developmentRequests}
                       developmentRequestsLoading={developmentRequestsLoading}
                       developmentRequestsError={developmentRequestsError}
@@ -1743,24 +1749,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                 onReorderRecommendation={onReorderRecommendation}
                 onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-                callTimeEntries={callTimeEntries}
-                activeCallTimeId={activeCallTimeId}
-                callEstimateLoading={callEstimateLoading}
-                callEstimateError={callEstimateError}
-                callEstimate={callEstimate}
-                callHistory={callEstimateHistory}
-                callHistoryLoading={callEstimateHistoryLoading}
-                callHistoryError={callEstimateHistoryError}
-                onSelectCallTimeEntry={setActiveCallTimeId}
-                onAddCallTimeEntry={onAddCallTimeEntry}
-                onRemoveCallTimeEntry={onRemoveCallTimeEntry}
-                onChangeCallTimeEntry={onChangeCallTimeEntry}
-                onUseCurrentCallTime={() => {
-                  if (!activeCallTime) return;
-                  onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
-                }}
-                onComputeCallEstimate={() => void onComputeCallEstimate()}
-                onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                 developmentRequests={developmentRequests}
                 developmentRequestsLoading={developmentRequestsLoading}
                 developmentRequestsError={developmentRequestsError}
