@@ -314,7 +314,7 @@ export function ResultPanel({
             onFocus={(event) => event.target.select()}
           />
 
-          <p className="mt-2 text-xs text-slate-500">숫자 동은 주안1동, 주안2동처럼 보이더라도 주안동처럼 묶어서 표시합니다.</p>
+          <p className="mt-2 text-xs text-slate-500">최종 동 리스트는 각 동의 앞 2글자 표기만 표시합니다.</p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
