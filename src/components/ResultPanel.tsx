@@ -6,6 +6,7 @@ import { DevelopmentRequestBoard } from "@/components/DevelopmentRequestBoard";
 import { makeSegmentDongDisplayList } from "@/lib/geo";
 import type {
   CallEstimateHistoryRow,
+  CallTimeEntry,
   DevelopmentRequestRow,
   RouteCallEstimateResult,
   RouteRecommendationItem,
@@ -28,14 +29,18 @@ type Props = {
   onResetRecommendationOrder: () => void;
   onChangeRecommendationMode: (mode: RouteRecommendationMode) => void;
   onComputeRoadRecommendation: () => void;
-  callTime: string;
+  callTimeEntries: CallTimeEntry[];
+  activeCallTimeId: string | null;
   callEstimateLoading: boolean;
   callEstimateError: string | null;
   callEstimate: RouteCallEstimateResult | null;
   callHistory: CallEstimateHistoryRow[];
   callHistoryLoading: boolean;
   callHistoryError: string | null;
-  onChangeCallTime: (value: string) => void;
+  onSelectCallTimeEntry: (id: string) => void;
+  onAddCallTimeEntry: () => void;
+  onRemoveCallTimeEntry: (id: string) => void;
+  onChangeCallTimeEntry: (id: string, value: string) => void;
   onUseCurrentCallTime: () => void;
   onComputeCallEstimate: () => void;
   onRestoreCallEstimateHistory: (row: CallEstimateHistoryRow) => void;
@@ -74,14 +79,18 @@ export function ResultPanel({
   onResetRecommendationOrder,
   onChangeRecommendationMode,
   onComputeRoadRecommendation,
-  callTime,
+  callTimeEntries,
+  activeCallTimeId,
   callEstimateLoading,
   callEstimateError,
   callEstimate,
   callHistory,
   callHistoryLoading,
   callHistoryError,
-  onChangeCallTime,
+  onSelectCallTimeEntry,
+  onAddCallTimeEntry,
+  onRemoveCallTimeEntry,
+  onChangeCallTimeEntry,
   onUseCurrentCallTime,
   onComputeCallEstimate,
   onRestoreCallEstimateHistory,
@@ -114,7 +123,7 @@ export function ResultPanel({
 
   const onShare = async () => {
     if (!canShare) return;
-    await navigator.share({ title: "퀵·배달 동 리스트", text });
+    await navigator.share({ title: "최종 동 리스트", text });
   };
 
   return (
@@ -194,15 +203,15 @@ export function ResultPanel({
               </button>
               <span className="text-xs leading-5 text-slate-500">
                 {recommendationMode === "road"
-                  ? "네이버 실제 도로거리/시간 기준 추천 순서입니다."
-                  : "내 위치 → 첫 도착지 → 다음 가까운 곳 순서(직선거리)입니다."}
+                  ? "실제 내비 거리와 시간을 기준으로 추천 순서를 계산합니다."
+                  : "내 위치에서 첫 목적지를 고른 뒤, 각 목적지에서 다음 가까운 곳을 연쇄로 추천합니다."}
               </span>
             </div>
 
             {roadRecommendationError ? <p className="mt-2 text-xs text-rose-600">{roadRecommendationError}</p> : null}
 
             <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="text-xs text-slate-500">드래그하거나 ↑ ↓ 버튼으로 추천 순서를 직접 수정할 수 있습니다.</p>
+              <p className="text-xs text-slate-500">드래그하거나 ↑↓ 버튼으로 추천 순서를 직접 수정할 수 있습니다.</p>
               {manualOrderActive ? (
                 <button
                   type="button"
@@ -249,9 +258,7 @@ export function ResultPanel({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="text-sm font-medium text-slate-800">
-                            {item.step}. 도착지 {item.rowIndex + 1}
-                          </div>
+                          <div className="text-sm font-medium text-slate-800">{item.step}. 도착지 {item.rowIndex + 1}</div>
                           <div className="mt-0.5 line-clamp-2 text-xs text-slate-600">{item.label}</div>
                           <div className="mt-1 text-xs text-slate-500">
                             구간 {item.distanceKm}km / {formatMinutes(item.durationMin)}
@@ -266,7 +273,7 @@ export function ResultPanel({
 
                     <div className="grid grid-rows-3 gap-1">
                       <div className="flex h-[26px] w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-[11px] text-slate-500">
-                        ≡
+                        이동
                       </div>
                       <button
                         type="button"
@@ -307,9 +314,7 @@ export function ResultPanel({
             onFocus={(event) => event.target.select()}
           />
 
-          <p className="mt-2 text-xs text-slate-500">
-            숫자 동(예: 주안1동, 주안2동)은 같은 이름으로 묶어서 표시합니다.
-          </p>
+          <p className="mt-2 text-xs text-slate-500">숫자 동은 주안1동, 주안2동처럼 보이더라도 주안동처럼 묶어서 표시합니다.</p>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
@@ -352,14 +357,18 @@ export function ResultPanel({
 
       {activeTab === "call" ? (
         <CallTimeEstimatorPanel
-          callTime={callTime}
+          callTimeEntries={callTimeEntries}
+          activeCallTimeId={activeCallTimeId}
           loading={callEstimateLoading}
           error={callEstimateError}
           estimate={callEstimate}
           history={callHistory}
           historyLoading={callHistoryLoading}
           historyError={callHistoryError}
-          onChangeCallTime={onChangeCallTime}
+          onSelectCallTimeEntry={onSelectCallTimeEntry}
+          onAddCallTimeEntry={onAddCallTimeEntry}
+          onRemoveCallTimeEntry={onRemoveCallTimeEntry}
+          onChangeCallTimeEntry={onChangeCallTimeEntry}
           onUseNow={onUseCurrentCallTime}
           onCompute={onComputeCallEstimate}
           onRestoreHistory={onRestoreCallEstimateHistory}

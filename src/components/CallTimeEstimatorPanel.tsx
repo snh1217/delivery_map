@@ -1,22 +1,26 @@
 "use client";
 
-import type { CallEstimateHistoryRow, RouteCallEstimateResult } from "@/types";
+import type { CallEstimateHistoryRow, CallTimeEntry, RouteCallEstimateResult } from "@/types";
 
 type Props = {
-  callTime: string;
+  callTimeEntries: CallTimeEntry[];
+  activeCallTimeId: string | null;
   loading: boolean;
   error: string | null;
   estimate: RouteCallEstimateResult | null;
   history: CallEstimateHistoryRow[];
   historyLoading: boolean;
   historyError: string | null;
-  onChangeCallTime: (value: string) => void;
+  onSelectCallTimeEntry: (id: string) => void;
+  onAddCallTimeEntry: () => void;
+  onRemoveCallTimeEntry: (id: string) => void;
+  onChangeCallTimeEntry: (id: string, value: string) => void;
   onUseNow: () => void;
   onCompute: () => void;
   onRestoreHistory: (row: CallEstimateHistoryRow) => void;
 };
 
-function formatDuration(minutes: number | null) {
+function formatDuration(minutes: number | null | undefined) {
   if (typeof minutes !== "number" || !Number.isFinite(minutes)) {
     return "-";
   }
@@ -28,14 +32,18 @@ function formatDuration(minutes: number | null) {
 }
 
 export function CallTimeEstimatorPanel({
-  callTime,
+  callTimeEntries,
+  activeCallTimeId,
   loading,
   error,
   estimate,
   history,
   historyLoading,
   historyError,
-  onChangeCallTime,
+  onSelectCallTimeEntry,
+  onAddCallTimeEntry,
+  onRemoveCallTimeEntry,
+  onChangeCallTimeEntry,
   onUseNow,
   onCompute,
   onRestoreHistory,
@@ -47,24 +55,66 @@ export function CallTimeEstimatorPanel({
           <div>
             <h3 className="text-sm font-semibold text-slate-800">콜 시간 계산</h3>
             <p className="text-xs text-slate-500">
-              실제 내비 시간 기준으로 가장 오래 걸리는 구간을 잡고, 150% 가산 + 픽업 20분을 더해 마감 시간을 계산합니다.
+              콜 시간을 여러 개 넣고 하나씩 선택해 계산할 수 있습니다. 가장 오래 걸리는 구간을 기준으로 운행 시간을
+              150% 가산하고, 픽업 20분을 더해 마감 시간을 계산합니다.
             </p>
           </div>
+          <button
+            type="button"
+            className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium"
+            onClick={onAddCallTimeEntry}
+          >
+            + 콜 시간 추가
+          </button>
         </div>
 
-        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-          <input
-            type="time"
-            className="h-11 rounded-lg border border-slate-300 px-3 text-sm"
-            value={callTime}
-            onChange={(event) => onChangeCallTime(event.target.value)}
-          />
+        <div className="mt-3 space-y-2">
+          {callTimeEntries.map((entry, index) => {
+            const isActive = entry.id === activeCallTimeId;
+            return (
+              <div
+                key={entry.id}
+                className={`rounded-xl border p-3 ${
+                  isActive ? "border-cyan-500 bg-cyan-50" : "border-slate-200 bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <button type="button" className="text-left" onClick={() => onSelectCallTimeEntry(entry.id)}>
+                    <div className="text-xs font-semibold text-slate-700">콜 {index + 1}</div>
+                    <div className={`text-[11px] ${isActive ? "text-cyan-700" : "text-slate-500"}`}>
+                      {isActive ? "현재 계산 대상" : "선택하면 이 시간으로 계산"}
+                    </div>
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                      value={entry.time}
+                      onFocus={() => onSelectCallTimeEntry(entry.id)}
+                      onChange={(event) => onChangeCallTimeEntry(entry.id, event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-40"
+                      onClick={() => onRemoveCallTimeEntry(entry.id)}
+                      disabled={callTimeEntries.length === 1}
+                    >
+                      삭제
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-3 grid gap-2 sm:grid-cols-[auto_auto_1fr]">
           <button
             type="button"
             className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"
             onClick={onUseNow}
           >
-            현재 시간
+            현재 시간 넣기
           </button>
           <button
             type="button"
@@ -74,6 +124,9 @@ export function CallTimeEstimatorPanel({
           >
             {loading ? "계산 중..." : "시간 계산"}
           </button>
+          <div className="flex items-center rounded-lg border border-dashed border-slate-200 px-3 text-xs text-slate-500">
+            선택된 콜 시간 1건을 기준으로 계산하고, 나머지 시간은 목록에 유지됩니다.
+          </div>
         </div>
 
         {error ? <p className="mt-2 text-xs text-rose-600">{error}</p> : null}
@@ -82,7 +135,7 @@ export function CallTimeEstimatorPanel({
           <div className="mt-3 space-y-2">
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                가장 오래 걸린 구간
+                기준이 된 최장 구간
                 <div className="mt-1 text-sm font-semibold text-slate-800">{estimate.referenceLeg}</div>
               </div>
               <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
@@ -121,7 +174,7 @@ export function CallTimeEstimatorPanel({
                       {index + 1}. {leg.fromLabel} → {leg.toLabel}
                     </div>
                     <div className="mt-1">
-                      거리 {typeof leg.distanceKm === "number" ? `${leg.distanceKm.toFixed(1)}km` : "-"} / 시간{" "}
+                      거리 {typeof leg.distanceKm === "number" ? `${leg.distanceKm.toFixed(1)}km` : "-"} / 시간 {" "}
                       {formatDuration(leg.durationMin)}
                     </div>
                   </div>
@@ -131,7 +184,7 @@ export function CallTimeEstimatorPanel({
           </div>
         ) : (
           <div className="mt-3 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500">
-            콜 잡은 시간과 현재 추천 방문 순서를 기준으로 계산합니다. 먼저 시간 계산 버튼을 눌러 주세요.
+            콜 시간을 추가하고 계산 대상을 선택한 뒤 시간 계산을 누르면, 현재 추천 방문 순서를 기준으로 마감 시간을 계산합니다.
           </div>
         )}
 

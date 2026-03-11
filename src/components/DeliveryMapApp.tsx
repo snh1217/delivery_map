@@ -34,6 +34,7 @@ import {
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
+  CallTimeEntry,
   CallEstimateHistoryRow,
   DevelopmentRequestRow,
   DestinationRowState,
@@ -246,6 +247,13 @@ type OrderedRouteStop = RoutePoint & {
   rowIndex: number;
 };
 
+function createCallTimeEntry(time = getCurrentKstTimeValue()): CallTimeEntry {
+  return {
+    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+    time,
+  };
+}
+
 export function DeliveryMapApp({ sessionUser }: Props) {
   const router = useRouter();
   const [origin, setOrigin] = useState<LatLng>(DEFAULT_ORIGIN);
@@ -278,7 +286,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
   const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
-  const [callTimeInput, setCallTimeInput] = useState(getCurrentKstTimeValue);
+  const [callTimeEntries, setCallTimeEntries] = useState<CallTimeEntry[]>(() => [createCallTimeEntry()]);
+  const [activeCallTimeId, setActiveCallTimeId] = useState<string | null>(null);
   const [callEstimateLoading, setCallEstimateLoading] = useState(false);
   const [callEstimateError, setCallEstimateError] = useState<string | null>(null);
   const [callEstimate, setCallEstimate] = useState<RouteCallEstimateResult | null>(null);
@@ -298,6 +307,23 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   });
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
+  const activeCallTime = useMemo(
+    () => callTimeEntries.find((item) => item.id === activeCallTimeId) ?? callTimeEntries[0] ?? null,
+    [activeCallTimeId, callTimeEntries],
+  );
+
+  useEffect(() => {
+    if (callTimeEntries.length === 0) {
+      const fallback = createCallTimeEntry();
+      setCallTimeEntries([fallback]);
+      setActiveCallTimeId(fallback.id);
+      return;
+    }
+
+    if (!activeCallTimeId || !callTimeEntries.some((entry) => entry.id === activeCallTimeId)) {
+      setActiveCallTimeId(callTimeEntries[0].id);
+    }
+  }, [activeCallTimeId, callTimeEntries]);
 
   const syncCurrentLocation = (silent = false) => {
     if (!navigator.geolocation) {
@@ -727,6 +753,26 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
     await loadDevelopmentRequests();
     setLastAutoRemovedMessage("개발 요청이 등록되었습니다.");
+  };
+
+  const onAddCallTimeEntry = () => {
+    const next = createCallTimeEntry(activeCallTime?.time || getCurrentKstTimeValue());
+    setCallTimeEntries((prev) => [...prev, next]);
+    setActiveCallTimeId(next.id);
+  };
+
+  const onChangeCallTimeEntry = (id: string, value: string) => {
+    setCallTimeEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, time: value } : entry)));
+  };
+
+  const onRemoveCallTimeEntry = (id: string) => {
+    setCallTimeEntries((prev) => {
+      const next = prev.filter((entry) => entry.id !== id);
+      return next.length > 0 ? next : [createCallTimeEntry()];
+    });
+    if (activeCallTimeId === id) {
+      setActiveCallTimeId(null);
+    }
   };
 
   const straightRecommendedOrder = useMemo(
@@ -1209,6 +1255,11 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       setCallEstimateError("좌표가 확정된 도착지가 없습니다.");
       return;
     }
+    if (!activeCallTime?.time) {
+      setCallEstimate(null);
+      setCallEstimateError("계산할 콜 시간을 먼저 입력하세요.");
+      return;
+    }
 
     setCallEstimateLoading(true);
     setCallEstimateError(null);
@@ -1265,7 +1316,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         adjustedDriveMin,
         pickupMin,
         totalRequiredMin,
-        deadlineLabel: addMinutesToKstTime(callTimeInput, totalRequiredMin),
+        deadlineLabel: addMinutesToKstTime(activeCallTime.time, totalRequiredMin),
         referenceLeg: `${longestLeg.fromLabel} → ${longestLeg.toLabel}`,
         legs,
       } satisfies RouteCallEstimateResult;
@@ -1277,8 +1328,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           const response = await fetch("/api/call-times", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              callTime: callTimeInput,
+              body: JSON.stringify({
+              callTime: activeCallTime.time,
               deadlineLabel: nextEstimate.deadlineLabel,
               longestLegMin: nextEstimate.longestLegMin,
               adjustedDriveMin: nextEstimate.adjustedDriveMin,
@@ -1309,7 +1360,15 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   const onRestoreCallEstimateHistory = (row: CallEstimateHistoryRow) => {
-    setCallTimeInput(row.call_time);
+    if (!activeCallTime) {
+      const next = createCallTimeEntry(row.call_time);
+      setCallTimeEntries([next]);
+      setActiveCallTimeId(next.id);
+    } else {
+      setCallTimeEntries((prev) =>
+        prev.map((entry) => (entry.id === activeCallTime.id ? { ...entry, time: row.call_time } : entry)),
+      );
+    }
     setCallEstimate({
       longestLegMin: row.longest_leg_min,
       adjustedDriveMin: row.adjusted_drive_min,
@@ -1621,15 +1680,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                       onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                       onReorderRecommendation={onReorderRecommendation}
                       onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-                      callTime={callTimeInput}
+                      callTimeEntries={callTimeEntries}
+                      activeCallTimeId={activeCallTimeId}
                       callEstimateLoading={callEstimateLoading}
                       callEstimateError={callEstimateError}
                       callEstimate={callEstimate}
                       callHistory={callEstimateHistory}
                       callHistoryLoading={callEstimateHistoryLoading}
                       callHistoryError={callEstimateHistoryError}
-                      onChangeCallTime={setCallTimeInput}
-                      onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
+                      onSelectCallTimeEntry={setActiveCallTimeId}
+                      onAddCallTimeEntry={onAddCallTimeEntry}
+                      onRemoveCallTimeEntry={onRemoveCallTimeEntry}
+                      onChangeCallTimeEntry={onChangeCallTimeEntry}
+                      onUseCurrentCallTime={() => {
+                        if (!activeCallTime) return;
+                        onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
+                      }}
                       onComputeCallEstimate={() => void onComputeCallEstimate()}
                       onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                       developmentRequests={developmentRequests}
@@ -1677,15 +1743,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 onResetRecommendationOrder={() => setManualRecommendationRowOrder(null)}
                 onReorderRecommendation={onReorderRecommendation}
                 onComputeRoadRecommendation={() => void onComputeRoadRecommendation()}
-                callTime={callTimeInput}
+                callTimeEntries={callTimeEntries}
+                activeCallTimeId={activeCallTimeId}
                 callEstimateLoading={callEstimateLoading}
                 callEstimateError={callEstimateError}
                 callEstimate={callEstimate}
                 callHistory={callEstimateHistory}
                 callHistoryLoading={callEstimateHistoryLoading}
                 callHistoryError={callEstimateHistoryError}
-                onChangeCallTime={setCallTimeInput}
-                onUseCurrentCallTime={() => setCallTimeInput(getCurrentKstTimeValue())}
+                onSelectCallTimeEntry={setActiveCallTimeId}
+                onAddCallTimeEntry={onAddCallTimeEntry}
+                onRemoveCallTimeEntry={onRemoveCallTimeEntry}
+                onChangeCallTimeEntry={onChangeCallTimeEntry}
+                onUseCurrentCallTime={() => {
+                  if (!activeCallTime) return;
+                  onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
+                }}
                 onComputeCallEstimate={() => void onComputeCallEstimate()}
                 onRestoreCallEstimateHistory={onRestoreCallEstimateHistory}
                 developmentRequests={developmentRequests}

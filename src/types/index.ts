@@ -264,3 +264,8 @@ export type CallEstimateHistoryRow = {
   reference_leg: string;
   route_legs: RouteCallEstimateLeg[];
 };
+
+export type CallTimeEntry = {
+  id: string;
+  time: string;
+};
