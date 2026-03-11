@@ -23,6 +23,10 @@ export type DestinationRowState = {
   selectedIndex: number;
   coord?: LatLng;
   label?: string;
+  callTime: string;
+  callEstimate?: RouteCallEstimateResult | null;
+  callEstimateLoading?: boolean;
+  callEstimateError?: string;
 };
 
 export type SettingsState = {

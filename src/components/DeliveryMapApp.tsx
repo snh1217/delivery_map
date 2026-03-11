@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CallTimeEstimatorPanel } from "@/components/CallTimeEstimatorPanel";
 import { DestinationList } from "@/components/DestinationList";
 import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
@@ -35,8 +34,6 @@ import {
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
-  CallTimeEntry,
-  CallEstimateHistoryRow,
   DevelopmentRequestRow,
   DestinationRowState,
   GeocodeItem,
@@ -141,7 +138,9 @@ function loadRouteUndoState(): { stack: DestinationRowState[][]; message: string
     };
 
     const stack = Array.isArray(parsed?.stack)
-      ? parsed.stack.filter((snapshot): snapshot is DestinationRowState[] => Array.isArray(snapshot))
+      ? parsed.stack
+          .filter((snapshot): snapshot is Array<Partial<DestinationRowState>> => Array.isArray(snapshot))
+          .map((snapshot) => snapshot.map((row) => hydrateRow(row)))
       : [];
 
     const message = typeof parsed?.message === "string" ? parsed.message : null;
@@ -185,6 +184,23 @@ function createRow(): DestinationRowState {
     status: "idle",
     geocodeItems: [],
     selectedIndex: 0,
+    callTime: getCurrentKstTimeValue(),
+    callEstimate: null,
+    callEstimateLoading: false,
+    callEstimateError: undefined,
+  };
+}
+
+function hydrateRow(row: Partial<DestinationRowState> | null | undefined): DestinationRowState {
+  return {
+    ...createRow(),
+    ...row,
+    callTime: typeof row?.callTime === "string" ? row.callTime : getCurrentKstTimeValue(),
+    callEstimate: row?.callEstimate ?? null,
+    callEstimateLoading: Boolean(row?.callEstimateLoading),
+    callEstimateError: row?.callEstimateError,
+    geocodeItems: Array.isArray(row?.geocodeItems) ? row.geocodeItems : [],
+    selectedIndex: typeof row?.selectedIndex === "number" ? row.selectedIndex : 0,
   };
 }
 
@@ -230,6 +246,9 @@ function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number
     coord: { lat: item.lat, lon: item.lon },
     label: item.title,
     error: undefined,
+    callEstimate: null,
+    callEstimateError: undefined,
+    callEstimateLoading: false,
   };
 }
 
@@ -247,13 +266,6 @@ type OrderedRouteStop = RoutePoint & {
   rowId: string;
   rowIndex: number;
 };
-
-function createCallTimeEntry(time = getCurrentKstTimeValue()): CallTimeEntry {
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    time,
-  };
-}
 
 export function DeliveryMapApp({ sessionUser }: Props) {
   const router = useRouter();
@@ -287,14 +299,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
   const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
-  const [callTimeEntries, setCallTimeEntries] = useState<CallTimeEntry[]>(() => [createCallTimeEntry()]);
-  const [activeCallTimeId, setActiveCallTimeId] = useState<string | null>(null);
-  const [callEstimateLoading, setCallEstimateLoading] = useState(false);
-  const [callEstimateError, setCallEstimateError] = useState<string | null>(null);
-  const [callEstimate, setCallEstimate] = useState<RouteCallEstimateResult | null>(null);
-  const [callEstimateHistory, setCallEstimateHistory] = useState<CallEstimateHistoryRow[]>([]);
-  const [callEstimateHistoryLoading, setCallEstimateHistoryLoading] = useState(false);
-  const [callEstimateHistoryError, setCallEstimateHistoryError] = useState<string | null>(null);
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
@@ -308,23 +312,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   });
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
-  const activeCallTime = useMemo(
-    () => callTimeEntries.find((item) => item.id === activeCallTimeId) ?? callTimeEntries[0] ?? null,
-    [activeCallTimeId, callTimeEntries],
-  );
-
-  useEffect(() => {
-    if (callTimeEntries.length === 0) {
-      const fallback = createCallTimeEntry();
-      setCallTimeEntries([fallback]);
-      setActiveCallTimeId(fallback.id);
-      return;
-    }
-
-    if (!activeCallTimeId || !callTimeEntries.some((entry) => entry.id === activeCallTimeId)) {
-      setActiveCallTimeId(callTimeEntries[0].id);
-    }
-  }, [activeCallTimeId, callTimeEntries]);
 
   const syncCurrentLocation = (silent = false) => {
     if (!navigator.geolocation) {
@@ -338,6 +325,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setOrigin({ lat: position.coords.latitude, lon: position.coords.longitude });
+        setRows((prev) =>
+          prev.map((row) => ({
+            ...row,
+            callEstimate: null,
+            callEstimateLoading: false,
+            callEstimateError: undefined,
+          })),
+        );
         setLocationStatus("현재 위치를 출발지로 사용합니다.");
         setLocationSyncing(false);
       },
@@ -504,34 +499,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     void loadDevelopmentRequests();
   }, [loadDevelopmentRequests]);
 
-  const loadCallEstimateHistory = useCallback(async () => {
-    if (!sessionUser?.isAllowed) {
-      setCallEstimateHistory([]);
-      setCallEstimateHistoryError(null);
-      return;
-    }
-
-    try {
-      setCallEstimateHistoryLoading(true);
-      setCallEstimateHistoryError(null);
-      const response = await fetch("/api/call-times", { cache: "no-store" });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(payload.message ?? "콜 시간 이력 조회 실패");
-      }
-      const payload = (await response.json()) as { rows: CallEstimateHistoryRow[] };
-      setCallEstimateHistory(Array.isArray(payload.rows) ? payload.rows : []);
-    } catch (error) {
-      setCallEstimateHistoryError(error instanceof Error ? error.message : "콜 시간 이력 조회 실패");
-    } finally {
-      setCallEstimateHistoryLoading(false);
-    }
-  }, [sessionUser?.isAllowed]);
-
-  useEffect(() => {
-    void loadCallEstimateHistory();
-  }, [loadCallEstimateHistory]);
-
   useEffect(() => {
     if (!sessionUser?.isAdmin) return;
     const pending = consumePendingOcrDestination();
@@ -554,11 +521,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setActiveRouteBatchIndex(null);
   }, [origin, rows]);
 
-  useEffect(() => {
-    setCallEstimate(null);
-    setCallEstimateError(null);
-  }, [origin, rows, recommendationMode, manualRecommendationRowOrder]);
-
   const onSearch = async (id: string) => {
     const row = rowsRef.current.find((item) => item.id === id);
     if (!row || !row.input.trim()) {
@@ -566,7 +528,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
 
     setRows((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, status: "loading", error: undefined } : item)),
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: "loading",
+              error: undefined,
+              callEstimate: null,
+              callEstimateError: undefined,
+            }
+          : item,
+      ),
     );
 
     try {
@@ -598,6 +570,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 coord: undefined,
                 label: undefined,
                 error: error instanceof Error ? error.message : "검색 실패",
+                callEstimate: null,
+                callEstimateError: undefined,
               }
             : item,
         ),
@@ -675,6 +649,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               selectedIndex: 0,
               coord: undefined,
               label: undefined,
+              callEstimate: null,
+              callEstimateError: undefined,
             }
           : item,
       ),
@@ -756,24 +732,23 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setLastAutoRemovedMessage("개발 요청이 등록되었습니다.");
   };
 
-  const onAddCallTimeEntry = () => {
-    const next = createCallTimeEntry(activeCallTime?.time || getCurrentKstTimeValue());
-    setCallTimeEntries((prev) => [...prev, next]);
-    setActiveCallTimeId(next.id);
+  const onChangeCallTime = (id: string, value: string) => {
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === id
+          ? {
+              ...row,
+              callTime: value,
+              callEstimate: null,
+              callEstimateError: undefined,
+            }
+          : row,
+      ),
+    );
   };
 
-  const onChangeCallTimeEntry = (id: string, value: string) => {
-    setCallTimeEntries((prev) => prev.map((entry) => (entry.id === id ? { ...entry, time: value } : entry)));
-  };
-
-  const onRemoveCallTimeEntry = (id: string) => {
-    setCallTimeEntries((prev) => {
-      const next = prev.filter((entry) => entry.id !== id);
-      return next.length > 0 ? next : [createCallTimeEntry()];
-    });
-    if (activeCallTimeId === id) {
-      setActiveCallTimeId(null);
-    }
+  const onUseCurrentCallTime = (id: string) => {
+    onChangeCallTime(id, getCurrentKstTimeValue());
   };
 
   const straightRecommendedOrder = useMemo(
@@ -1250,87 +1225,101 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   };
 
-  const onComputeCallEstimate = async () => {
-    if (orderedRouteStops.length === 0) {
-      setCallEstimate(null);
-      setCallEstimateError("좌표가 확정된 도착지가 없습니다.");
+  const onComputeCallEstimate = async (rowId: string) => {
+    const targetRow = rowsRef.current.find((row) => row.id === rowId);
+    if (!targetRow?.coord) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId ? { ...row, callEstimate: null, callEstimateError: "좌표가 확정된 도착지가 아닙니다." } : row,
+        ),
+      );
       return;
     }
-    if (!activeCallTime?.time) {
-      setCallEstimate(null);
-      setCallEstimateError("계산할 콜 시간을 먼저 입력하세요.");
+    if (!targetRow.callTime) {
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId ? { ...row, callEstimate: null, callEstimateError: "콜 잡은 시간을 먼저 입력하세요." } : row,
+        ),
+      );
       return;
     }
 
-    setCallEstimateLoading(true);
-    setCallEstimateError(null);
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === rowId
+          ? {
+              ...row,
+              callEstimateLoading: true,
+              callEstimateError: undefined,
+            }
+          : row,
+      ),
+    );
 
     try {
-      const legs: RouteCallEstimateResult["legs"] = [];
-      let current = origin;
-      let currentLabel = "현재 위치";
+      const response = await fetch(
+        `/api/directions5?startLat=${origin.lat}&startLon=${origin.lon}&goalLat=${targetRow.coord.lat}&goalLon=${targetRow.coord.lon}&option=trafast`,
+        { cache: "no-store" },
+      );
 
-      for (const stop of orderedRouteStops) {
-        const response = await fetch(
-          `/api/directions5?startLat=${current.lat}&startLon=${current.lon}&goalLat=${stop.lat}&goalLon=${stop.lon}&option=trafast`,
-          { cache: "no-store" },
-        );
-
-        if (!response.ok) {
-          const payload = (await response.json().catch(() => ({}))) as { message?: string };
-          throw new Error(payload.message ?? "실제 경로 시간 조회 실패");
-        }
-
-        const payload = (await response.json()) as DirectionsApiResponse;
-        const route = payload.raw?.route ? Object.values(payload.raw.route)[0] : undefined;
-        const summary = route?.[0]?.summary;
-        legs.push({
-          fromLabel: currentLabel,
-          toLabel: stop.name,
-          distanceKm: typeof summary?.distance === "number" ? summary.distance / 1000 : null,
-          durationMin: typeof summary?.duration === "number" ? summary.duration / 60000 : null,
-        });
-
-        current = { lat: stop.lat, lon: stop.lon };
-        currentLabel = stop.name;
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { message?: string };
+        throw new Error(payload.message ?? "실제 경로 시간 조회 실패");
       }
 
-      const longestLeg = legs.reduce<RouteCallEstimateResult["legs"][number] | null>((best, leg) => {
-        if (typeof leg.durationMin !== "number") return best;
-        if (!best || (best.durationMin ?? 0) < leg.durationMin) {
-          return leg;
-        }
-        return best;
-      }, null);
+      const payload = (await response.json()) as DirectionsApiResponse;
+      const route = payload.raw?.route ? Object.values(payload.raw.route)[0] : undefined;
+      const summary = route?.[0]?.summary;
+      const durationMin = typeof summary?.duration === "number" ? summary.duration / 60000 : null;
+      const distanceKm = typeof summary?.distance === "number" ? summary.distance / 1000 : null;
 
-      if (!longestLeg || typeof longestLeg.durationMin !== "number") {
+      if (typeof durationMin !== "number" || !Number.isFinite(durationMin)) {
         throw new Error("실제 경로 시간을 계산하지 못했습니다.");
       }
 
-      const longestLegMin = Math.round(longestLeg.durationMin);
-      const adjustedDriveMin = Math.round(longestLegMin * 2.5);
+      const longestLegMin = Math.round(durationMin);
+      const adjustedDriveMin = Math.round(longestLegMin * 1.5);
       const pickupMin = 20;
       const totalRequiredMin = adjustedDriveMin + pickupMin;
+      const label = targetRow.label ?? targetRow.input ?? `도착지 ${rowsRef.current.findIndex((row) => row.id === rowId) + 1}`;
 
       const nextEstimate = {
         longestLegMin,
         adjustedDriveMin,
         pickupMin,
         totalRequiredMin,
-        deadlineLabel: addMinutesToKstTime(activeCallTime.time, totalRequiredMin),
-        referenceLeg: `${longestLeg.fromLabel} → ${longestLeg.toLabel}`,
-        legs,
+        deadlineLabel: addMinutesToKstTime(targetRow.callTime, totalRequiredMin),
+        referenceLeg: `현재 위치 → ${label}`,
+        legs: [
+          {
+            fromLabel: "현재 위치",
+            toLabel: label,
+            distanceKm,
+            durationMin,
+          },
+        ],
       } satisfies RouteCallEstimateResult;
 
-      setCallEstimate(nextEstimate);
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                callEstimateLoading: false,
+                callEstimateError: undefined,
+                callEstimate: nextEstimate,
+              }
+            : row,
+        ),
+      );
 
       if (sessionUser?.isAllowed) {
         try {
-          const response = await fetch("/api/call-times", {
+          await fetch("/api/call-times", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-              callTime: activeCallTime.time,
+            body: JSON.stringify({
+              callTime: targetRow.callTime,
               deadlineLabel: nextEstimate.deadlineLabel,
               longestLegMin: nextEstimate.longestLegMin,
               adjustedDriveMin: nextEstimate.adjustedDriveMin,
@@ -1340,46 +1329,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               routeLegs: nextEstimate.legs,
             }),
           });
-          if (response.ok) {
-            const payload = (await response.json()) as { row?: CallEstimateHistoryRow };
-            if (payload.row) {
-              setCallEstimateHistory((prev) => [payload.row as CallEstimateHistoryRow, ...prev].slice(0, 10));
-            } else {
-              void loadCallEstimateHistory();
-            }
-          }
         } catch {
           // keep estimate visible even if history save fails
         }
       }
     } catch (error) {
-      setCallEstimate(null);
-      setCallEstimateError(error instanceof Error ? error.message : "콜 시간 계산 실패");
-    } finally {
-      setCallEstimateLoading(false);
-    }
-  };
-
-  const onRestoreCallEstimateHistory = (row: CallEstimateHistoryRow) => {
-    if (!activeCallTime) {
-      const next = createCallTimeEntry(row.call_time);
-      setCallTimeEntries([next]);
-      setActiveCallTimeId(next.id);
-    } else {
-      setCallTimeEntries((prev) =>
-        prev.map((entry) => (entry.id === activeCallTime.id ? { ...entry, time: row.call_time } : entry)),
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === rowId
+            ? {
+                ...row,
+                callEstimateLoading: false,
+                callEstimate: null,
+                callEstimateError: error instanceof Error ? error.message : "콜 시간 계산 실패",
+              }
+            : row,
+        ),
       );
     }
-    setCallEstimate({
-      longestLegMin: row.longest_leg_min,
-      adjustedDriveMin: row.adjusted_drive_min,
-      pickupMin: row.pickup_min,
-      totalRequiredMin: row.total_required_min,
-      deadlineLabel: row.deadline_label,
-      referenceLeg: row.reference_leg,
-      legs: Array.isArray(row.route_legs) ? row.route_legs : [],
-    });
-    setCallEstimateError(null);
   };
 
   return (
@@ -1604,6 +1571,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                           selectedIndex: 0,
                           coord: undefined,
                           label: undefined,
+                          callEstimate: null,
+                          callEstimateError: undefined,
                         }
                       : item,
                   ),
@@ -1623,27 +1592,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               isAdmin={Boolean(sessionUser?.isAdmin)}
               canUseAttachment={canUseDestinationAttachment}
               onApplyOcrToRow={applyAddressToRowAndSearch}
-            />
-
-            <CallTimeEstimatorPanel
-              callTimeEntries={callTimeEntries}
-              activeCallTimeId={activeCallTimeId}
-              loading={callEstimateLoading}
-              error={callEstimateError}
-              estimate={callEstimate}
-              history={callEstimateHistory}
-              historyLoading={callEstimateHistoryLoading}
-              historyError={callEstimateHistoryError}
-              onSelectCallTimeEntry={(id) => setActiveCallTimeId(id)}
-              onAddCallTimeEntry={onAddCallTimeEntry}
-              onRemoveCallTimeEntry={onRemoveCallTimeEntry}
-              onChangeCallTimeEntry={onChangeCallTimeEntry}
-              onUseNow={() => {
-                if (!activeCallTime) return;
-                onChangeCallTimeEntry(activeCallTime.id, getCurrentKstTimeValue());
-              }}
-              onCompute={() => void onComputeCallEstimate()}
-              onRestoreHistory={onRestoreCallEstimateHistory}
+              onChangeCallTime={onChangeCallTime}
+              onUseCurrentCallTime={onUseCurrentCallTime}
+              onComputeCallEstimate={(id) => void onComputeCallEstimate(id)}
             />
           </div>
 

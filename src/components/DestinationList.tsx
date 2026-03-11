@@ -39,6 +39,9 @@ type Props = {
   isAdmin?: boolean;
   canUseAttachment?: boolean;
   onApplyOcrToRow?: (id: string, address: string) => void;
+  onChangeCallTime: (id: string, value: string) => void;
+  onUseCurrentCallTime: (id: string) => void;
+  onComputeCallEstimate: (id: string) => void;
 };
 
 export function DestinationList({
@@ -70,6 +73,9 @@ export function DestinationList({
   isAdmin = false,
   canUseAttachment = false,
   onApplyOcrToRow,
+  onChangeCallTime,
+  onUseCurrentCallTime,
+  onComputeCallEstimate,
 }: Props) {
   const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
 
@@ -193,6 +199,9 @@ export function DestinationList({
             isAdmin={isAdmin}
             canUseAttachment={canUseAttachment}
             onApplyOcrToRow={onApplyOcrToRow}
+            onChangeCallTime={onChangeCallTime}
+            onUseCurrentCallTime={onUseCurrentCallTime}
+            onComputeCallEstimate={onComputeCallEstimate}
           />
         ))}
       </div>

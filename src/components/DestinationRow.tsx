@@ -35,6 +35,9 @@ type Props = {
   isAdmin?: boolean;
   canUseAttachment?: boolean;
   onApplyOcrToRow?: (id: string, address: string) => void;
+  onChangeCallTime: (id: string, value: string) => void;
+  onUseCurrentCallTime: (id: string) => void;
+  onComputeCallEstimate: (id: string) => void;
 };
 
 const VOICE_SILENCE_TIMEOUT_MS = 900;
@@ -44,12 +47,12 @@ const LOW_CONFIDENCE_THRESHOLD = 0.45;
 function removeVoiceHabitPhrases(value: string) {
   let text = value || "";
   const patterns = [
-    /(검색|찾기)(해주세요|해줘요|좀|요)?$/giu,
-    /(추가|입력|적용)(해주세요|해줘요|좀|요)?$/giu,
-    /(검색|찾기)(해주세요|해줘요|좀|요)?/giu,
-    /(추가|입력|적용)(해주세요|해줘요|좀|요)?/giu,
+    /(검색|찾기)(해줘요|해줘|좀|요)?$/giu,
+    /(추가|입력|적용)(해줘요|해줘|좀|요)?$/giu,
+    /(검색|찾기)(해줘요|해줘|좀|요)?/giu,
+    /(추가|입력|적용)(해줘요|해줘|좀|요)?/giu,
     /^(여기|이거|저기)\s*/giu,
-    /^(주소는?|주소)\s*/giu,
+    /^(주소는|주소)\s*/giu,
   ];
 
   for (const pattern of patterns) {
@@ -64,7 +67,7 @@ function normalizeVoiceText(text: string) {
     .replace(/서울시/giu, "서울")
     .replace(/경기도/giu, "경기")
     .replace(/\s*-\s*/g, "-")
-    .replace(/[()[\]{}]/g, (value) => (value === "(" || value === ")" ? value : " "))
+    .replace(/[\[\]{}]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -84,10 +87,21 @@ function getVoiceErrorMessage(code: string) {
     "audio-capture": "마이크를 찾을 수 없습니다.",
     network: "네트워크 문제로 음성 인식에 실패했습니다.",
     nomatch: "인식 결과가 불확실합니다. 다시 시도해 주세요.",
-    unsupported: "이 브라우저는 음성 입력을 지원하지 않습니다. Chrome/Edge를 권장합니다.",
+    unsupported: "이 브라우저는 음성 입력을 지원하지 않습니다. 모바일 Chrome/Edge를 권장합니다.",
   };
 
   return messages[code] ?? `음성 입력 오류: ${code}`;
+}
+
+function formatDuration(minutes: number | null | undefined) {
+  if (typeof minutes !== "number" || !Number.isFinite(minutes)) {
+    return "-";
+  }
+  const rounded = Math.max(0, Math.round(minutes));
+  if (rounded < 60) return `${rounded}분`;
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  return `${hours}시간 ${mins}분`;
 }
 
 export function DestinationRow({
@@ -109,6 +123,9 @@ export function DestinationRow({
   isAdmin = false,
   canUseAttachment = false,
   onApplyOcrToRow,
+  onChangeCallTime,
+  onUseCurrentCallTime,
+  onComputeCallEstimate,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const onSearchRef = useRef(onSearch);
@@ -256,7 +273,7 @@ export function DestinationRow({
 
         if (isLowConfidence) {
           setVoicePreviewText(finalText);
-          setVoiceError("음성 인식 신뢰도가 낮습니다. 내용을 확인한 뒤 검색/적용을 눌러 주세요.");
+          setVoiceError("음성 인식 정확도가 낮습니다. 내용을 확인한 뒤 검색/적용을 눌러 주세요.");
           return;
         }
 
@@ -331,9 +348,7 @@ export function DestinationRow({
         </div>
       </div>
 
-      <p className="mb-2 text-xs text-slate-500">
-        예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)
-      </p>
+      <p className="mb-2 text-xs text-slate-500">예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)</p>
 
       <div className="grid gap-2">
         <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -364,7 +379,7 @@ export function DestinationRow({
             } disabled:cursor-not-allowed disabled:opacity-50`}
             onClick={toggleVoiceInput}
             disabled={!speechSupported && !isListening}
-            title={speechSupported ? "한 번 탭해서 음성 입력 시작/중지" : "브라우저에서 음성 입력을 지원하지 않습니다."}
+            title={speechSupported ? "한 번 탭해 음성 입력 시작/중지" : "브라우저에서 음성 입력을 지원하지 않습니다."}
           >
             <span className="inline-flex items-center gap-1">
               <span
@@ -372,7 +387,7 @@ export function DestinationRow({
                   isListening ? "animate-pulse bg-rose-500" : "bg-slate-400"
                 }`}
               />
-              {isListening ? "듣는 중…" : "음성입력"}
+              {isListening ? "듣는 중" : "음성입력"}
             </span>
           </button>
         </div>
@@ -381,7 +396,7 @@ export function DestinationRow({
           <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
             <div className="font-medium">듣는 중입니다. 주소를 말해 주세요.</div>
             <div className="mt-1 text-cyan-700">
-              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동으로 종료됩니다."}
+              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동 종료됩니다."}
             </div>
           </div>
         ) : null}
@@ -389,7 +404,7 @@ export function DestinationRow({
         {voicePreviewText ? (
           <p className="text-xs text-emerald-700">
             음성 인식 미리보기: <span className="font-medium">{voicePreviewText}</span>
-            {!voiceLowConfidence ? " (0.5초 뒤 자동 검색)" : " (내용 확인 후 검색/적용 권장)"}
+            {!voiceLowConfidence ? " (0.5초 후 자동 검색)" : " (내용 확인 후 검색/적용 권장)"}
           </p>
         ) : null}
 
@@ -410,9 +425,7 @@ export function DestinationRow({
         {!speechSupported ? (
           <p className="text-xs text-slate-500">브라우저에서 마이크 권한이 필요합니다. 모바일 Chrome/Edge를 권장합니다.</p>
         ) : (
-          <p className="text-xs text-slate-500">
-            음성 입력: 버튼 한 번 탭해서 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용
-          </p>
+          <p className="text-xs text-slate-500">음성 입력: 탭하여 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용</p>
         )}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -422,7 +435,7 @@ export function DestinationRow({
             disabled={!row.input.trim() || row.status === "loading"}
             onClick={runSearchNow}
           >
-            {row.status === "loading" ? "검색 중…" : "검색/적용"}
+            {row.status === "loading" ? "검색 중..." : "검색/적용"}
           </button>
           <button
             type="button"
@@ -484,6 +497,75 @@ export function DestinationRow({
           }}
         />
       ) : null}
+
+      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold text-slate-700">콜 시간 계산</div>
+            <p className="mt-1 text-[11px] text-slate-500">콜 잡은 시간 + (실제 내비시간 150%) + 픽업 20분 기준입니다.</p>
+          </div>
+          <div className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-500">출발지: 현재 위치</div>
+        </div>
+
+        <div className="mt-2 grid grid-cols-[1fr_auto_auto] gap-2">
+          <input
+            type="time"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+            value={row.callTime}
+            onChange={(event) => onChangeCallTime(row.id, event.target.value)}
+          />
+          <button
+            type="button"
+            className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+            onClick={() => onUseCurrentCallTime(row.id)}
+          >
+            지금
+          </button>
+          <button
+            type="button"
+            className="h-10 rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white disabled:opacity-50"
+            onClick={() => onComputeCallEstimate(row.id)}
+            disabled={!row.coord || row.callEstimateLoading}
+          >
+            {row.callEstimateLoading ? "계산 중" : "시간 계산"}
+          </button>
+        </div>
+
+        {!row.coord ? (
+          <p className="mt-2 text-[11px] text-slate-500">좌표가 확정되면 이 도착지의 마감 시간을 바로 계산할 수 있습니다.</p>
+        ) : null}
+        {row.callEstimateError ? <p className="mt-2 text-xs text-rose-600">{row.callEstimateError}</p> : null}
+
+        {row.callEstimate ? (
+          <div className="mt-2 space-y-2">
+            <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+              이 콜은 <span className="font-semibold">{row.callEstimate.deadlineLabel}</span>까지 들어가면 됩니다.
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                실제 내비시간
+                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.longestLegMin)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                150% 반영
+                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.adjustedDriveMin)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                픽업 시간
+                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.pickupMin)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                총 필요 시간
+                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.totalRequiredMin)}</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+              기준 구간
+              <div className="mt-1 font-medium text-slate-800">{row.callEstimate.referenceLeg}</div>
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {canNavigate ? (
         <>
