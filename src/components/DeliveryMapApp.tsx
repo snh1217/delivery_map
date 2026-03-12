@@ -1950,7 +1950,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       <div className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] lg:hidden">
         <div
           className={`mx-auto grid w-full max-w-6xl gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur ${
-            rowsUndoStack.length > 0 ? "grid-cols-3" : "grid-cols-[1fr_auto]"
+            rowsUndoStack.length > 0 ? "grid-cols-2" : "grid-cols-[1fr_auto]"
           }`}
         >
           <button
@@ -1964,7 +1964,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           {rowsUndoStack.length > 0 ? (
             <button
               type="button"
-              className="flex h-12 items-center justify-center rounded-xl border border-cyan-300 bg-cyan-50 px-2 text-xs font-semibold text-cyan-900"
+              className="col-span-2 flex h-11 items-center justify-center rounded-xl border border-cyan-300 bg-cyan-50 px-2 text-xs font-semibold text-cyan-900"
               onClick={undoLastAutoRemove}
             >
               최근 목적지 되돌리기
