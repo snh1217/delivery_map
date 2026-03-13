@@ -135,8 +135,43 @@ export function makeFinalShortList(results: SegmentResult[]) {
   );
 }
 
+function normalizeDongDisplayName(dong: DongCentroid) {
+  const short2 = (dong.short2 ?? "").trim();
+  if (short2 && !/\d/.test(short2)) {
+    return short2;
+  }
+
+  const source = (dong.dong ?? "").replace(/\s+/g, "");
+  const numberedDongMatch = source.match(/^([가-힣]+?)(\d+)동$/);
+  if (numberedDongMatch) {
+    const base = numberedDongMatch[1];
+    if (base.length >= 2) {
+      return base.slice(0, 2);
+    }
+    return `${base}동`;
+  }
+
+  const stripped = short2.replace(/\d+/g, "").trim();
+  if (stripped.length >= 2) {
+    return stripped.slice(0, 2);
+  }
+  if (stripped.length === 1) {
+    return `${stripped}동`;
+  }
+
+  const fallback = source.replace(/\d+/g, "").replace(/동$/, "");
+  if (fallback.length >= 2) {
+    return fallback.slice(0, 2);
+  }
+  if (fallback.length === 1) {
+    return `${fallback}동`;
+  }
+
+  return short2 || source.slice(0, 2);
+}
+
 export function makeSegmentDongDisplayList(segment: SegmentResult) {
-  return [...new Set(segment.dongs.map((dong) => dong.short2).filter(Boolean))].sort((a, b) =>
+  return [...new Set(segment.dongs.map((dong) => normalizeDongDisplayName(dong)).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, "ko"),
   );
 }
