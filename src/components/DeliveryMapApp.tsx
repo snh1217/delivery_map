@@ -245,6 +245,19 @@ function addMinutesToKstTime(baseTime: string, minutesToAdd: number) {
   return `${outHours}:${outMinutes}`;
 }
 
+function distanceMeters(a: LatLng, b: LatLng) {
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadius = 6371000;
+  const dLat = toRadians(b.lat - a.lat);
+  const dLon = toRadians(b.lon - a.lon);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const sinLat = Math.sin(dLat / 2);
+  const sinLon = Math.sin(dLon / 2);
+  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+  return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
 function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number) {
   return {
     ...row,
@@ -279,6 +292,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [origin, setOrigin] = useState<LatLng>(DEFAULT_ORIGIN);
   const [locationStatus, setLocationStatus] = useState("내 위치를 확인하는 중입니다...");
   const [locationSyncing, setLocationSyncing] = useState(false);
+  const [locationWatching, setLocationWatching] = useState(false);
   const [rows, setRows] = useState<DestinationRowState[]>([createRow()]);
   const [settings, setSettings] = useState<SettingsState>(loadSavedSettings);
   const [storeModal, setStoreModal] = useState<
@@ -294,6 +308,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>(() => loadRouteUndoState().stack);
   const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(() => loadRouteUndoState().message);
   const rowsRef = useRef(rows);
+  const originRef = useRef(origin);
+  const geoWatchIdRef = useRef<number | null>(null);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
@@ -322,7 +338,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
-  const syncCurrentLocation = (silent = false) => {
+  useEffect(() => {
+    originRef.current = origin;
+  }, [origin]);
+
+  const applyOriginUpdate = useCallback((nextOrigin: LatLng, statusText: string) => {
+    setOrigin(nextOrigin);
+    setRows((prev) =>
+      prev.map((row) => ({
+        ...row,
+        callEstimate: null,
+        callEstimateLoading: false,
+        callEstimateError: undefined,
+        ...(row.callOriginLabel === "현재 위치"
+          ? {
+              callOriginCoord: nextOrigin,
+            }
+          : {}),
+      })),
+    );
+    setLocationStatus(statusText);
+  }, []);
+
+  const syncCurrentLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
       setLocationStatus("위치 기능 미지원: 서울시청 좌표를 사용합니다.");
       return;
@@ -333,21 +371,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setOrigin({ lat: position.coords.latitude, lon: position.coords.longitude });
-        setRows((prev) =>
-          prev.map((row) => ({
-            ...row,
-            callEstimate: null,
-            callEstimateLoading: false,
-            callEstimateError: undefined,
-            ...(row.callOriginLabel === "현재 위치"
-              ? {
-                  callOriginCoord: { lat: position.coords.latitude, lon: position.coords.longitude },
-                }
-              : {}),
-          })),
+        applyOriginUpdate(
+          { lat: position.coords.latitude, lon: position.coords.longitude },
+          locationWatching ? "현재 위치를 자동 동기화 중입니다." : "현재 위치를 출발지로 사용합니다.",
         );
-        setLocationStatus("현재 위치를 출발지로 사용합니다.");
         setLocationSyncing(false);
       },
       () => {
@@ -356,11 +383,47 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       },
       { enableHighAccuracy: true, timeout: 8000 },
     );
-  };
+  }, [applyOriginUpdate, locationWatching]);
 
   useEffect(() => {
     syncCurrentLocation(true);
-  }, []);
+  }, [syncCurrentLocation]);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      return;
+    }
+
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const nextOrigin = { lat: position.coords.latitude, lon: position.coords.longitude };
+        const movedMeters = distanceMeters(originRef.current, nextOrigin);
+        setLocationWatching(true);
+        if (movedMeters < 20) {
+          setLocationStatus("현재 위치를 자동 동기화 중입니다.");
+          return;
+        }
+        applyOriginUpdate(nextOrigin, "현재 위치를 자동 동기화 중입니다.");
+      },
+      () => {
+        setLocationWatching(false);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 15000,
+      },
+    );
+
+    geoWatchIdRef.current = watchId;
+
+    return () => {
+      if (geoWatchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(geoWatchIdRef.current);
+        geoWatchIdRef.current = null;
+      }
+    };
+  }, [applyOriginUpdate]);
 
   useEffect(() => {
     try {
@@ -1582,14 +1645,23 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </p>
             </div>
           ) : null}
-          <div className="mt-2">
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
+                locationWatching
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border border-slate-200 bg-slate-50 text-slate-600"
+              }`}
+            >
+              {locationWatching ? "실시간 위치 자동 동기화 중" : "자동 위치 동기화 대기 중"}
+            </span>
             <button
               type="button"
-              className="h-10 rounded-lg border border-cyan-300 bg-white px-3 text-sm text-cyan-700 disabled:opacity-50"
+              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 disabled:opacity-50"
               onClick={() => syncCurrentLocation(false)}
               disabled={locationSyncing}
             >
-              {locationSyncing ? "내 위치 동기화 중..." : "내 위치 동기화"}
+              {locationSyncing ? "재확인 중..." : "수동 재확인"}
             </button>
           </div>
           <p className="mt-1 text-sm text-slate-600">출발지: 내 현재 위치(GPS), 권한 거부 시 서울시청 좌표</p>
