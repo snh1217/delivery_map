@@ -11,7 +11,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { normalizeDongCentroids } from "@/lib/dong";
-import { calculateSegments, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
+import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
 import {
   openNaverDirections,
   openNaverMultiDirections,
@@ -306,6 +306,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
   const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
+  const [mapRenderKey, setMapRenderKey] = useState(0);
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
@@ -381,17 +382,42 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
-    const apply = () => {
+
+    const apply = (forceMapRefresh = false) => {
       const mobile = media.matches;
       setIsMobileLayout(mobile);
       if (!mobile) {
         setResultPanelOpenMobile(true);
         setMapPanelOpenMobile(true);
       }
+      if (forceMapRefresh) {
+        window.setTimeout(() => {
+          setMapRenderKey((prev) => prev + 1);
+          window.dispatchEvent(new Event("resize"));
+        }, 120);
+      }
     };
+
+    const onMediaChange = () => apply(true);
+    const onPageShow = () => apply(true);
+    const onFocus = () => apply(true);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        apply(true);
+      }
+    };
+
     apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
+    media.addEventListener("change", onMediaChange);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      media.removeEventListener("change", onMediaChange);
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
   }, []);
 
   useEffect(() => {
@@ -945,6 +971,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [centroids, orderedDestinationsForSegments, origin, settings]);
 
   const finalShortList = useMemo(() => makeFinalDongDisplayList(segments), [segments]);
+  const finalDongEntries = useMemo(() => makeFinalDongDisplayEntries(segments), [segments]);
 
   const maxMultiRouteStops = settings.navigationApp === "naver" ? 6 : 2;
 
@@ -1751,6 +1778,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                     <ResultPanel
                       segments={segments}
                       finalDongList={finalShortList}
+                      finalDongEntries={finalDongEntries}
                       viewMode={settings.viewMode}
                       recommendedOrder={recommendedOrder}
                       manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
@@ -1796,6 +1824,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               <ResultPanel
                 segments={segments}
                 finalDongList={finalShortList}
+                finalDongEntries={finalDongEntries}
                 viewMode={settings.viewMode}
                 recommendedOrder={recommendedOrder}
                 manualOrderActive={Boolean(manualRecommendationRowOrder?.length)}
@@ -1900,6 +1929,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             </div>
           ) : (
             <NaverMap
+              key={mapRenderKey}
               origin={origin}
               destinations={rows.map((row, index) => ({
                 coord: row.coord,

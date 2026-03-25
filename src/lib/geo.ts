@@ -9,7 +9,15 @@
   union,
 } from "@turf/turf";
 import type { Feature, MultiPolygon, Polygon } from "geojson";
-import type { DongCentroid, LatLng, RouteRecommendationItem, SegmentResult, SettingsState } from "@/types";
+import dongDisplayExceptions from "@/data/dong_display_exceptions.json";
+import type {
+  DongCentroid,
+  DongDisplayEntry,
+  LatLng,
+  RouteRecommendationItem,
+  SegmentResult,
+  SettingsState,
+} from "@/types";
 
 function toCoord(value: LatLng): [number, number] {
   return [value.lon, value.lat];
@@ -136,12 +144,17 @@ export function makeFinalShortList(results: SegmentResult[]) {
 }
 
 function normalizeDongDisplayName(dong: DongCentroid) {
+  const source = (dong.dong ?? "").replace(/\s+/g, "");
+  const exceptionName = dongDisplayExceptions[source as keyof typeof dongDisplayExceptions];
+  if (typeof exceptionName === "string" && exceptionName.trim()) {
+    return exceptionName.trim();
+  }
+
   const short2 = (dong.short2 ?? "").trim();
   if (short2 && !/\d/.test(short2)) {
     return short2;
   }
 
-  const source = (dong.dong ?? "").replace(/\s+/g, "");
   const numberedDongMatch = source.match(/^([가-힣]+?)(\d+)동$/);
   if (numberedDongMatch) {
     const base = numberedDongMatch[1];
@@ -170,16 +183,41 @@ function normalizeDongDisplayName(dong: DongCentroid) {
   return short2 || source.slice(0, 2);
 }
 
+function buildDongDisplayEntries(dongs: DongCentroid[]): DongDisplayEntry[] {
+  const grouped = new Map<string, Set<string>>();
+
+  dongs.forEach((dong) => {
+    const label = normalizeDongDisplayName(dong);
+    if (!label) return;
+    const originals = grouped.get(label) ?? new Set<string>();
+    if (dong.dong) {
+      originals.add(dong.dong);
+    }
+    grouped.set(label, originals);
+  });
+
+  return [...grouped.entries()]
+    .map(([label, originals]) => ({
+      label,
+      originals: [...originals].sort((a, b) => a.localeCompare(b, "ko")),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, "ko"));
+}
+
 export function makeSegmentDongDisplayList(segment: SegmentResult) {
-  return [...new Set(segment.dongs.map((dong) => normalizeDongDisplayName(dong)).filter(Boolean))].sort((a, b) =>
-    a.localeCompare(b, "ko"),
-  );
+  return buildDongDisplayEntries(segment.dongs).map((entry) => entry.label);
 }
 
 export function makeFinalDongDisplayList(results: SegmentResult[]) {
-  return [...new Set(results.flatMap((segment) => makeSegmentDongDisplayList(segment)))].sort((a, b) =>
-    a.localeCompare(b, "ko"),
-  );
+  return buildDongDisplayEntries(results.flatMap((segment) => segment.dongs)).map((entry) => entry.label);
+}
+
+export function makeSegmentDongDisplayEntries(segment: SegmentResult) {
+  return buildDongDisplayEntries(segment.dongs);
+}
+
+export function makeFinalDongDisplayEntries(results: SegmentResult[]) {
+  return buildDongDisplayEntries(results.flatMap((segment) => segment.dongs));
 }
 
 export function recommendVisitOrder(params: {
@@ -231,7 +269,5 @@ export function polygonPaths(geometry: Polygon | MultiPolygon) {
     return [geometry.coordinates[0].map(([lon, lat]) => ({ lat, lng: lon }))];
   }
 
-  return geometry.coordinates.map((poly) =>
-    poly[0].map(([lon, lat]) => ({ lat, lng: lon })),
-  );
+  return geometry.coordinates.map((poly) => poly[0].map(([lon, lat]) => ({ lat, lng: lon })));
 }

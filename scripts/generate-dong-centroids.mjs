@@ -17,6 +17,13 @@ function stripAdministrativeSuffix(dong) {
 
 function toShort2(dong, exceptions) {
   if (exceptions[dong]) return exceptions[dong];
+  const numberedDongMatch = String(dong).trim().match(/^([가-힣]+?)(\d+)동$/);
+  if (numberedDongMatch) {
+    const base = numberedDongMatch[1];
+    const chars = Array.from(base);
+    if (chars.length >= 2) return chars.slice(0, 2).join("");
+    if (chars.length === 1) return `${chars[0]}동`;
+  }
   const base = stripAdministrativeSuffix(dong);
   const chars = Array.from(base);
   if (chars.length >= 2) return chars.slice(0, 2).join("");

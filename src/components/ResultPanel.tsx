@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { DevelopmentRequestBoard } from "@/components/DevelopmentRequestBoard";
-import { makeSegmentDongDisplayList } from "@/lib/geo";
+import { makeSegmentDongDisplayEntries, makeSegmentDongDisplayList } from "@/lib/geo";
 import type {
   DevelopmentRequestRow,
+  DongDisplayEntry,
   RouteRecommendationItem,
   RouteRecommendationMode,
   SegmentResult,
@@ -13,6 +14,7 @@ import type {
 type Props = {
   segments: SegmentResult[];
   finalDongList: string[];
+  finalDongEntries: DongDisplayEntry[];
   viewMode: "segment" | "all";
   recommendedOrder: RouteRecommendationItem[];
   manualOrderActive: boolean;
@@ -48,6 +50,7 @@ function formatMinutes(value?: number | null) {
 export function ResultPanel({
   segments,
   finalDongList,
+  finalDongEntries,
   viewMode,
   recommendedOrder,
   manualOrderActive,
@@ -273,6 +276,20 @@ export function ResultPanel({
 
           <p className="mt-2 text-xs text-slate-500">최종 동 리스트는 각 동의 앞 2글자 표기만 표시합니다.</p>
 
+          {finalDongEntries.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {finalDongEntries.map((entry) => (
+                <span
+                  key={entry.label}
+                  title={entry.originals.join(", ")}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600"
+                >
+                  {entry.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
               type="button"
@@ -296,12 +313,26 @@ export function ResultPanel({
             <div className="mt-3 space-y-2">
               {segments.map((segment) => {
                 const dongs = makeSegmentDongDisplayList(segment);
+                const entries = makeSegmentDongDisplayEntries(segment);
                 return (
                   <details key={segment.index} className="rounded-lg border border-slate-200 p-2">
                     <summary className="cursor-pointer text-sm font-medium text-slate-700">
                       구간 {segment.index + 1} ({dongs.length}개)
                     </summary>
                     <p className="mt-1 text-xs text-slate-600">{dongs.join(", ") || "없음"}</p>
+                    {entries.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {entries.map((entry) => (
+                          <span
+                            key={`${segment.index}-${entry.label}`}
+                            title={entry.originals.join(", ")}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500"
+                          >
+                            {entry.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </details>
                 );
               })}

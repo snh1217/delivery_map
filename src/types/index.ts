@@ -54,6 +54,11 @@ export type DongCentroid = {
   lon: number;
 };
 
+export type DongDisplayEntry = {
+  label: string;
+  originals: string[];
+};
+
 export type SegmentResult = {
   index: number;
   polygon: Feature<Polygon | MultiPolygon>;

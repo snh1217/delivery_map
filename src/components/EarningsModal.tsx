@@ -79,6 +79,10 @@ export function EarningsModal({ open, onClose }: Props) {
 
   const parsedItems = useMemo(() => lines.map(lineToItem).filter((item): item is DailyEarningItem => Boolean(item)), [lines]);
   const totalAmount = useMemo(() => sumNet(parsedItems), [parsedItems]);
+  const totalGrossAmount = useMemo(
+    () => parsedItems.reduce((sum, item) => sum + (Number.isFinite(item.amount_gross) ? item.amount_gross : 0), 0),
+    [parsedItems],
+  );
 
   const resetDraft = () => {
     setSelectedTargetValue("self");
@@ -332,10 +336,19 @@ export function EarningsModal({ open, onClose }: Props) {
               + 운임 추가
             </button>
 
-            <div className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-medium text-cyan-900">
-              합계: {formatKRW(totalAmount)}
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2">
+                <div className="text-xs text-cyan-800">합계(순익)</div>
+                <div className="mt-1 text-sm font-semibold text-cyan-950">{formatKRW(totalAmount)}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="text-xs text-slate-600">매출금액(원금 기준)</div>
+                <div className="mt-1 text-sm font-semibold text-slate-900">{formatKRW(totalGrossAmount)}</div>
+              </div>
             </div>
-            <p className="mt-1 text-xs text-slate-500">합계는 실수령 기준(로지 23% 반영)입니다.</p>
+            <p className="mt-1 text-xs text-slate-500">
+              합계는 실수령 기준이며, 매출금액은 입력한 원금 기준입니다.
+            </p>
           </div>
 
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
