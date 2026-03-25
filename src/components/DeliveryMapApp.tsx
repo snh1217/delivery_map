@@ -310,6 +310,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
+  const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
     keyExists: false,
@@ -459,6 +460,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useEffect(() => {
+    if (!pendingFocusRowId) return;
+    if (!rows.some((row) => row.id === pendingFocusRowId)) return;
+    const timer = window.setTimeout(() => setPendingFocusRowId(null), 1200);
+    return () => window.clearTimeout(timer);
+  }, [pendingFocusRowId, rows]);
 
   useEffect(() => {
     let mounted = true;
@@ -710,6 +718,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     const newRow = createRow();
     newRow.input = normalized;
     setRows((prev) => [...prev, newRow]);
+    setPendingFocusRowId(newRow.id);
     window.setTimeout(() => {
       void onSearch(newRow.id);
     }, 0);
@@ -729,7 +738,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   const onAddRow = () => {
-    setRows((prev) => (prev.length >= MAX_DESTINATIONS ? prev : [...prev, createRow()]));
+    const newRow = createRow();
+    setRows((prev) => (prev.length >= MAX_DESTINATIONS ? prev : [...prev, newRow]));
+    setPendingFocusRowId(newRow.id);
   };
 
   const onMoveRow = (id: string, direction: "up" | "down") => {
@@ -1696,6 +1707,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               routeProviderLabel={getNavigationAppLabel(settings.navigationApp)}
               routeMaxStops={maxMultiRouteStops}
               highlightedRowIndex={highlightedRowIndex}
+              pendingFocusRowId={pendingFocusRowId}
               activeRouteBatchIndex={activeRouteBatchIndex}
               routeBatchButtons={routeBatches.map((batch, index) => ({
                 key: batch.key,

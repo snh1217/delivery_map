@@ -20,6 +20,7 @@ type Props = {
   routeProviderLabel: "네이버" | "카카오" | "카카오내비";
   routeMaxStops: number;
   highlightedRowIndex: number | null;
+  pendingFocusRowId?: string | null;
   routeBatchButtons: RouteBatchButton[];
   activeRouteBatchIndex: number | null;
   canUndoRouteRemoval: boolean;
@@ -57,6 +58,7 @@ export function DestinationList({
   routeProviderLabel,
   routeMaxStops,
   highlightedRowIndex,
+  pendingFocusRowId,
   routeBatchButtons,
   activeRouteBatchIndex,
   canUndoRouteRemoval,
@@ -192,6 +194,7 @@ export function DestinationList({
             origin={origin}
             autoSearch={autoSearch}
             highlighted={highlightedRowIndex === index}
+            shouldAutofocus={pendingFocusRowId === row.id}
             canMoveUp={index > 0}
             canMoveDown={index < rows.length - 1}
             onMoveRow={onMoveRow}

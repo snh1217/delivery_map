@@ -22,6 +22,7 @@ type Props = {
   origin: LatLng;
   autoSearch: boolean;
   highlighted?: boolean;
+  shouldAutofocus?: boolean;
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMoveRow: (id: string, direction: "up" | "down") => void;
@@ -113,6 +114,7 @@ export function DestinationRow({
   origin,
   autoSearch,
   highlighted = false,
+  shouldAutofocus = false,
   canMoveUp,
   canMoveDown,
   onMoveRow,
@@ -134,6 +136,7 @@ export function DestinationRow({
   onResolveCallOrigin,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const onSearchRef = useRef(onSearch);
   const recognizerRef = useRef<ReturnType<typeof createSpeechRecognizer> | null>(null);
   const autoSearchTimerRef = useRef<number | null>(null);
@@ -160,6 +163,16 @@ export function DestinationRow({
     if (!highlighted) return;
     rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [highlighted]);
+
+  useEffect(() => {
+    if (!shouldAutofocus) return;
+    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [shouldAutofocus]);
 
   useEffect(() => {
     return () => {
@@ -359,6 +372,7 @@ export function DestinationRow({
       <div className="grid gap-2">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
           <input
+            ref={inputRef}
             className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
             placeholder="주소 또는 구/동 입력"
             value={row.input}
