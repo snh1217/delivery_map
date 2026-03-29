@@ -12,6 +12,8 @@ import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
+import { addNativeResumeListener } from "@/lib/native/app";
+import { getCurrentLocation, watchCurrentLocation, type NativeLocationWatchHandle } from "@/lib/native/geolocation";
 import {
   openNaverDirections,
   openNaverMultiDirections,
@@ -315,7 +317,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(() => loadRouteUndoState().message);
   const rowsRef = useRef(rows);
   const originRef = useRef(origin);
-  const geoWatchIdRef = useRef<number | null>(null);
+  const geoWatchIdRef = useRef<NativeLocationWatchHandle | null>(null);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
@@ -367,28 +369,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, []);
 
   const syncCurrentLocation = useCallback((silent = false) => {
-    if (!navigator.geolocation) {
-      setLocationStatus("위치 기능 미지원: 서울시청 좌표를 사용합니다.");
-      return;
-    }
     setLocationSyncing(true);
     if (!silent) {
       setLocationStatus("현재 위치를 다시 동기화하는 중입니다...");
     }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    void getCurrentLocation()
+      .then((position) => {
         applyOriginUpdate(
-          { lat: position.coords.latitude, lon: position.coords.longitude },
+          position,
           locationWatching ? "현재 위치를 자동 동기화 중입니다." : "현재 위치를 출발지로 사용합니다.",
         );
         setLocationSyncing(false);
-      },
-      () => {
+      })
+      .catch(() => {
         setLocationStatus("위치 권한 거부: 서울시청 좌표를 사용합니다.");
         setLocationSyncing(false);
-      },
-      { enableHighAccuracy: true, timeout: 8000 },
-    );
+      });
   }, [applyOriginUpdate, locationWatching]);
 
   useEffect(() => {
@@ -396,13 +392,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [syncCurrentLocation]);
 
   useEffect(() => {
-    if (!navigator.geolocation) {
-      return;
-    }
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const nextOrigin = { lat: position.coords.latitude, lon: position.coords.longitude };
+    let mounted = true;
+    void watchCurrentLocation(
+      (nextOrigin) => {
+        if (!mounted) return;
         const movedMeters = distanceMeters(originRef.current, nextOrigin);
         setLocationWatching(true);
         if (movedMeters < 20) {
@@ -412,21 +405,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         applyOriginUpdate(nextOrigin, "현재 위치를 자동 동기화 중입니다.");
       },
       () => {
+        if (!mounted) return;
         setLocationWatching(false);
       },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 15000,
-      },
-    );
-
-    geoWatchIdRef.current = watchId;
-
+    ).then((handle) => {
+      if (!mounted) {
+        if (handle) {
+          void handle.remove();
+        }
+        return;
+      }
+      geoWatchIdRef.current = handle;
+    });
     return () => {
-      if (geoWatchIdRef.current !== null) {
-        navigator.geolocation.clearWatch(geoWatchIdRef.current);
-        geoWatchIdRef.current = null;
+      mounted = false;
+      const watchHandle = geoWatchIdRef.current;
+      geoWatchIdRef.current = null;
+      if (watchHandle) {
+        void watchHandle.remove();
       }
     };
   }, [applyOriginUpdate]);
@@ -499,11 +495,16 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
+    let cleanupNativeResume = () => {};
+    void addNativeResumeListener(() => apply(true)).then((cleanup) => {
+      cleanupNativeResume = cleanup;
+    });
     return () => {
       media.removeEventListener("change", onMediaChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisibility);
+      cleanupNativeResume();
     };
   }, []);
 

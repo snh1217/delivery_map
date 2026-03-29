@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { pickImageFileFromDevice } from "@/lib/native/camera";
 
 type Props = {
   isAdmin: boolean;
@@ -39,6 +40,15 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
     setToast(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(picked ? URL.createObjectURL(picked) : null);
+  };
+
+  const onPickImage = async () => {
+    const nativeFile = await pickImageFileFromDevice().catch(() => null);
+    if (nativeFile) {
+      setPickedFile(nativeFile);
+      return;
+    }
+    inputRef.current?.click();
   };
 
   const runOcr = async () => {
@@ -97,7 +107,7 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
           <button
             type="button"
             className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs"
-            onClick={() => inputRef.current?.click()}
+            onClick={() => void onPickImage()}
           >
             사진
           </button>

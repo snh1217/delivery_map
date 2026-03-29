@@ -37,6 +37,7 @@ Capacitor 초기 세팅이 포함되어 있습니다.
 ```bash
 npm install
 npm run cap:add:android   # 최초 1회
+npm run cap:assets:android
 npm run cap:sync
 npm run cap:open:android
 ```
@@ -46,6 +47,47 @@ npm run cap:open:android
 - Android Studio에서 `Build > Build Bundle(s) / APK(s) > Build APK(s)`로 디버그 APK를 만들 수 있습니다.
 - APK는 플레이스토어 등록 없이 직접 전달/설치 가능합니다.
 - 설치 시 안드로이드에서 `알 수 없는 앱 설치 허용`이 필요할 수 있습니다.
+
+자동화 스크립트:
+
+```bash
+npm run android:apk:debug
+npm run android:apk:release
+npm run android:install:debug
+```
+
+- `android:apk:debug`: 디버그 APK 생성
+- `android:apk:release`: 릴리즈 APK 생성(서명은 별도 설정 필요)
+- `android:install:debug`: USB 연결된 안드로이드 기기에 디버그 APK 설치
+
+APK 위치 예시:
+
+- 디버그: `android/app/build/outputs/apk/debug/app-debug.apk`
+- 릴리즈: `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+
+### Capacitor 네이티브 플러그인 연결
+
+현재 연결된 플러그인:
+
+- `@capacitor/geolocation`
+  - 앱 환경에서는 브라우저 geolocation 대신 네이티브 위치 추적 사용
+  - 출발지 자동 동기화, watchPosition에 연결
+- `@capacitor/camera`
+  - OCR 스크린샷/사진 첨부 버튼이 앱에서는 카메라/앨범 prompt로 동작
+- `@capacitor/share`
+  - 결과 공유 버튼이 앱에서는 네이티브 공유 시트 사용
+- `@capacitor/app`
+  - 외부 내비 앱 복귀 시 `resume` 이벤트로 레이아웃 복구 보강
+
+아이콘/스플래시 리소스:
+
+- 소스 파일: `resources/icon.png`, `resources/splash.png`
+- Android 리소스 재생성:
+
+```bash
+npm run cap:assets:android
+npm run cap:sync
+```
 
 ### 참고
 

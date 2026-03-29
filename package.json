@@ -11,7 +11,11 @@
     "data:generate-dong-centroids": "node scripts/generate-dong-centroids.mjs",
     "cap:sync": "npx cap sync",
     "cap:add:android": "npx cap add android",
-    "cap:open:android": "npx cap open android"
+    "cap:open:android": "npx cap open android",
+    "cap:assets:android": "npx @capacitor/assets generate --android",
+    "android:apk:debug": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
+    "android:apk:release": "npm run cap:sync && cd android && gradlew.bat assembleRelease",
+    "android:install:debug": "npm run cap:sync && cd android && gradlew.bat installDebug"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.0",
@@ -28,6 +32,11 @@
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/camera": "^8.0.2",
+    "@capacitor/geolocation": "^8.1.0",
+    "@capacitor/share": "^8.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.11",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { pickImageFileFromDevice } from "@/lib/native/camera";
 import { extractAddressFromScreenshotFile } from "@/lib/ocr/ocrProvider";
 
 type Props = {
@@ -44,6 +45,15 @@ export function ScreenshotAdd({ onApplyAddress }: Props) {
     setOcrAddressDraft("");
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImagePreviewUrl(picked ? URL.createObjectURL(picked) : null);
+  };
+
+  const onPickImage = async () => {
+    const nativeFile = await pickImageFileFromDevice().catch(() => null);
+    if (nativeFile) {
+      onPickFile(nativeFile);
+      return;
+    }
+    fileInputRef.current?.click();
   };
 
   const runOcr = async () => {
@@ -116,7 +126,7 @@ export function ScreenshotAdd({ onApplyAddress }: Props) {
         <button
           type="button"
           className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => void onPickImage()}
         >
           스크린샷 선택/촬영
         </button>
@@ -249,4 +259,3 @@ export function ScreenshotAdd({ onApplyAddress }: Props) {
     </section>
   );
 }
-

@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { DevelopmentRequestBoard } from "@/components/DevelopmentRequestBoard";
 import { makeSegmentDongDisplayEntries, makeSegmentDongDisplayList } from "@/lib/geo";
+import { isNativeApp } from "@/lib/native/runtime";
+import { shareText } from "@/lib/native/share";
 import type {
   DevelopmentRequestRow,
   DongDisplayEntry,
@@ -72,7 +74,7 @@ export function ResultPanel({
   const [activeTab, setActiveTab] = useState<ResultTab>("route");
   const [draggingRowIndex, setDraggingRowIndex] = useState<number | null>(null);
   const text = useMemo(() => finalDongList.join(", "), [finalDongList]);
-  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const canShare = isNativeApp() || (typeof navigator !== "undefined" && typeof navigator.share === "function");
 
   const totals = useMemo(() => {
     const totalKm = recommendedOrder.reduce((sum, item) => sum + (item.distanceKm || 0), 0);
@@ -92,7 +94,7 @@ export function ResultPanel({
 
   const onShare = async () => {
     if (!canShare) return;
-    await navigator.share({ title: "최종 동 리스트", text });
+    await shareText({ title: "최종 동 리스트", text });
   };
 
   return (
