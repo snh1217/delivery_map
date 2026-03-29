@@ -258,6 +258,12 @@ function distanceMeters(a: LatLng, b: LatLng) {
   return 2 * earthRadius * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+function syncViewportCssVar() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty("--app-vh", `${viewportHeight * 0.01}px`);
+}
+
 function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number) {
   return {
     ...row,
@@ -426,6 +432,21 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [applyOriginUpdate]);
 
   useEffect(() => {
+    syncViewportCssVar();
+    const onViewportResize = () => syncViewportCssVar();
+    window.addEventListener("resize", onViewportResize);
+    window.addEventListener("orientationchange", onViewportResize);
+    window.visualViewport?.addEventListener("resize", onViewportResize);
+    window.visualViewport?.addEventListener("scroll", onViewportResize);
+    return () => {
+      window.removeEventListener("resize", onViewportResize);
+      window.removeEventListener("orientationchange", onViewportResize);
+      window.visualViewport?.removeEventListener("resize", onViewportResize);
+      window.visualViewport?.removeEventListener("scroll", onViewportResize);
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch {
@@ -454,8 +475,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         setResultPanelOpenMobile(true);
         setMapPanelOpenMobile(true);
       }
+      syncViewportCssVar();
       if (forceMapRefresh) {
         window.setTimeout(() => {
+          syncViewportCssVar();
           setMapRenderKey((prev) => prev + 1);
           window.dispatchEvent(new Event("resize"));
         }, 120);

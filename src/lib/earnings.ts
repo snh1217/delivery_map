@@ -22,6 +22,12 @@ export function calcNet(amountGross: number, isLogi: boolean): number {
   return Math.round(gross * (1 - LOGI_DEDUCTION_RATE));
 }
 
+export function calcGrossFromNet(amountNet: number, isLogi: boolean): number {
+  const net = Number.isFinite(amountNet) ? Math.max(0, Math.trunc(amountNet)) : 0;
+  if (!isLogi) return net;
+  return Math.round(net * (1 + LOGI_DEDUCTION_RATE));
+}
+
 export function normalizeEarningItem(item: unknown): DailyEarningItem | null {
   if (!item || typeof item !== "object") return null;
 

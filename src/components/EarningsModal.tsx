@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EarningsTargetSelect } from "@/components/EarningsTargetSelect";
 import {
-  calcNet,
+  calcGrossFromNet,
   formatKRW,
   MY_EARNING_TARGET_NAME,
   normalizeEarningItem,
@@ -33,7 +33,7 @@ function createLine(seed?: Partial<LocalLine>): LocalLine {
 
 function itemToLine(item: DailyEarningItem): LocalLine {
   return createLine({
-    amountGrossText: item.amount_gross > 0 ? String(item.amount_gross) : "",
+    amountGrossText: item.amount_net > 0 ? String(item.amount_net) : "",
     isLogi: item.is_logi,
   });
 }
@@ -44,12 +44,12 @@ function normalizeSavedItemsToLines(items: unknown[]): LocalLine[] {
 }
 
 function lineToItem(line: LocalLine): DailyEarningItem | null {
-  const gross = parseAmount(line.amountGrossText);
-  if (!gross) return null;
+  const net = parseAmount(line.amountGrossText);
+  if (!net) return null;
   return {
-    amount_gross: gross,
+    amount_gross: calcGrossFromNet(net, line.isLogi),
     is_logi: line.isLogi,
-    amount_net: calcNet(gross, line.isLogi),
+    amount_net: net,
     createdAt: new Date().toISOString(),
   };
 }
@@ -291,8 +291,8 @@ export function EarningsModal({ open, onClose }: Props) {
 
             <div className="space-y-2">
               {lines.map((line, index) => {
-                const gross = parseAmount(line.amountGrossText);
-                const net = calcNet(gross, line.isLogi);
+                const net = parseAmount(line.amountGrossText);
+                const gross = calcGrossFromNet(net, line.isLogi);
                 return (
                   <div key={line.id} className="rounded-lg border border-slate-200 p-2">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -302,7 +302,7 @@ export function EarningsModal({ open, onClose }: Props) {
                           inputMode="numeric"
                           pattern="[0-9]*"
                           className="h-11 w-full rounded-lg border border-slate-300 pl-7 pr-3 text-sm"
-                          placeholder={`${index + 1}건 금액(원금)`}
+                          placeholder={`${index + 1}건 실운임`}
                           value={line.amountGrossText ? Number(line.amountGrossText).toLocaleString("ko-KR") : ""}
                           onChange={(e) => updateLineGross(line.id, e.target.value)}
                         />
@@ -323,9 +323,11 @@ export function EarningsModal({ open, onClose }: Props) {
                           onChange={() => toggleLineLogi(line.id)}
                           className="h-4 w-4 rounded border-slate-300"
                         />
-                        로지(-23%)
+                        로지(+23% 매출 환산)
                       </label>
-                      <span className="text-xs text-slate-500">실수령: <span className="font-medium text-slate-800">{formatKRW(net)}</span></span>
+                      <span className="text-xs text-slate-500">
+                        매출금액: <span className="font-medium text-slate-800">{formatKRW(gross)}</span>
+                      </span>
                     </div>
                   </div>
                 );
@@ -342,12 +344,12 @@ export function EarningsModal({ open, onClose }: Props) {
                 <div className="mt-1 text-sm font-semibold text-cyan-950">{formatKRW(totalAmount)}</div>
               </div>
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <div className="text-xs text-slate-600">매출금액(원금 기준)</div>
+                <div className="text-xs text-slate-600">매출금액</div>
                 <div className="mt-1 text-sm font-semibold text-slate-900">{formatKRW(totalGrossAmount)}</div>
               </div>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              합계는 실수령 기준이며, 매출금액은 입력한 원금 기준입니다.
+              합계는 실운임(순익) 기준이며, 로지 체크 건은 매출금액에 23%를 더해 계산합니다.
             </p>
           </div>
 
