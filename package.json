@@ -8,9 +8,15 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "data:generate-dong-centroids": "node scripts/generate-dong-centroids.mjs"
+    "data:generate-dong-centroids": "node scripts/generate-dong-centroids.mjs",
+    "cap:sync": "npx cap sync",
+    "cap:add:android": "npx cap add android",
+    "cap:open:android": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.0",
+    "@capacitor/cli": "^8.3.0",
+    "@capacitor/core": "^8.3.0",
     "@supabase/supabase-js": "^2.95.3",
     "@turf/turf": "^7.3.4",
     "firebase": "^12.9.0",

@@ -1,5 +1,6 @@
-﻿import type { Metadata } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
+import { PwaRegister } from "@/components/app/PwaRegister";
 import "./globals.css";
 
 const notoSansKr = Noto_Sans_KR({
@@ -8,8 +9,25 @@ const notoSansKr = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "퀵서비스 구설정 자동 생성",
-  description: "네이버 지도 기반 동 단위 권역 자동 생성 앱",
+  title: "퀵·배달 구역메이커",
+  description: "퀵/배달 경유지 구설정, 팬 권역, 길찾기를 모바일에서 빠르게 처리하는 앱",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "퀵·배달 구역메이커",
+    statusBarStyle: "default",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f766e",
 };
 
 export default function RootLayout({
@@ -19,7 +37,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${notoSansKr.variable} antialiased`}>{children}</body>
+      <body className={`${notoSansKr.variable} antialiased`}>
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }

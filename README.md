@@ -17,6 +17,42 @@ npm run typecheck
 npm run build
 ```
 
+## PWA / APK(스토어 없이 설치)
+
+현재 프로젝트는 **무료 운영 기준**으로 아래 방식을 권장합니다.
+
+- Android: `Capacitor`로 APK 생성 후 직접 설치
+- iPhone/iPad: PWA(`홈 화면에 추가`)
+
+### PWA 사용
+
+- 앱은 `manifest.webmanifest`와 서비스워커(`public/sw.js`)가 포함되어 있습니다.
+- 모바일 브라우저에서 `https://deliverymap.vercel.app` 접속 후 홈 화면에 추가하면 앱처럼 실행할 수 있습니다.
+- iPhone/iPad는 앱스토어 없이 설치 가능한 현실적인 방식이 PWA입니다.
+
+### Android APK 생성
+
+Capacitor 초기 세팅이 포함되어 있습니다.
+
+```bash
+npm install
+npm run cap:add:android   # 최초 1회
+npm run cap:sync
+npm run cap:open:android
+```
+
+- Capacitor 설정 파일: `capacitor.config.ts`
+- 기본 연결 주소: `https://deliverymap.vercel.app`
+- Android Studio에서 `Build > Build Bundle(s) / APK(s) > Build APK(s)`로 디버그 APK를 만들 수 있습니다.
+- APK는 플레이스토어 등록 없이 직접 전달/설치 가능합니다.
+- 설치 시 안드로이드에서 `알 수 없는 앱 설치 허용`이 필요할 수 있습니다.
+
+### 참고
+
+- APK는 Android 전용입니다.
+- iPhone은 APK 설치가 불가능하므로 PWA를 사용해야 합니다.
+- 스토어 배포를 하지 않아도 내부 배포/개인 사용은 가능합니다.
+
 ## 주요 기능
 
 - 회원가입 요청(이름+전화번호) -> 관리자 승인 -> 전화번호 로그인
