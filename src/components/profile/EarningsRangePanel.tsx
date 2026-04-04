@@ -90,7 +90,7 @@ export function EarningsRangePanel() {
           {loading ? "조회 중..." : "새로고침"}
         </button>
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">모든 합계는 실수령 기준(로지 23% 반영)입니다.</p>
+      <p className="mt-1 text-[11px] text-slate-500">모든 합계는 실수령 기준이며, 매출/실운임은 23% 공제 기준으로 환산합니다.</p>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {PRESETS.map((item) => (

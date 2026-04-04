@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { EarningsTargetSelect } from "@/components/EarningsTargetSelect";
 import {
+  calcNet,
   calcGrossFromNet,
   formatKRW,
   MY_EARNING_TARGET_NAME,
@@ -14,8 +15,8 @@ import type { DailyEarningItem, DailyEarningRow, EarningTargetRow } from "@/type
 
 type LocalLine = {
   id: string;
-  amountGrossText: string;
-  isLogi: boolean;
+  amountText: string;
+  isGrossInput: boolean;
 };
 
 type Props = {
@@ -26,15 +27,17 @@ type Props = {
 function createLine(seed?: Partial<LocalLine>): LocalLine {
   return {
     id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    amountGrossText: seed?.amountGrossText ?? "",
-    isLogi: seed?.isLogi ?? false,
+    amountText: seed?.amountText ?? "",
+    isGrossInput: seed?.isGrossInput ?? false,
   };
 }
 
 function itemToLine(item: DailyEarningItem): LocalLine {
+  const inputMode = item.input_mode === "gross" ? "gross" : "net";
+  const inputAmount = inputMode === "gross" ? item.amount_gross : item.amount_net;
   return createLine({
-    amountGrossText: item.amount_net > 0 ? String(item.amount_net) : "",
-    isLogi: item.is_logi,
+    amountText: inputAmount > 0 ? String(inputAmount) : "",
+    isGrossInput: inputMode === "gross",
   });
 }
 
@@ -44,12 +47,15 @@ function normalizeSavedItemsToLines(items: unknown[]): LocalLine[] {
 }
 
 function lineToItem(line: LocalLine): DailyEarningItem | null {
-  const net = parseAmount(line.amountGrossText);
-  if (!net) return null;
+  const inputAmount = parseAmount(line.amountText);
+  if (!inputAmount) return null;
+  const gross = line.isGrossInput ? inputAmount : calcGrossFromNet(inputAmount, true);
+  const net = line.isGrossInput ? calcNet(inputAmount, true) : inputAmount;
   return {
-    amount_gross: calcGrossFromNet(net, line.isLogi),
-    is_logi: line.isLogi,
+    amount_gross: gross,
+    is_logi: true,
     amount_net: net,
+    input_mode: line.isGrossInput ? "gross" : "net",
     createdAt: new Date().toISOString(),
   };
 }
@@ -136,15 +142,15 @@ export function EarningsModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const hasExistingDraft = lines.some((line) => parseAmount(line.amountGrossText) > 0);
+  const hasExistingDraft = lines.some((line) => parseAmount(line.amountText) > 0);
 
   const applyLoadedRow = (row: DailyEarningRow, mode: "merge" | "overwrite") => {
     const loadedLines = normalizeSavedItemsToLines(Array.isArray(row.items) ? row.items : []);
     setLines((prev) => {
       if (mode === "overwrite") return loadedLines;
       const merged = [
-        ...prev.filter((line) => parseAmount(line.amountGrossText) > 0),
-        ...loadedLines.filter((line) => parseAmount(line.amountGrossText) > 0),
+        ...prev.filter((line) => parseAmount(line.amountText) > 0),
+        ...loadedLines.filter((line) => parseAmount(line.amountText) > 0),
       ];
       return merged.length > 0 ? merged : [createLine()];
     });
@@ -244,13 +250,13 @@ export function EarningsModal({ open, onClose }: Props) {
     setToastMessage(`대상 '${payload.row.target_name}' 추가 완료`);
   };
 
-  const updateLineGross = (lineId: string, rawValue: string) => {
+  const updateLineAmount = (lineId: string, rawValue: string) => {
     const digits = rawValue.replace(/[^\d]/g, "");
-    setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, amountGrossText: digits } : line)));
+    setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, amountText: digits } : line)));
   };
 
-  const toggleLineLogi = (lineId: string) => {
-    setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, isLogi: !line.isLogi } : line)));
+  const toggleInputMode = (lineId: string) => {
+    setLines((prev) => prev.map((line) => (line.id === lineId ? { ...line, isGrossInput: !line.isGrossInput } : line)));
   };
 
   const deleteLine = (lineId: string) => {
@@ -291,8 +297,9 @@ export function EarningsModal({ open, onClose }: Props) {
 
             <div className="space-y-2">
               {lines.map((line, index) => {
-                const net = parseAmount(line.amountGrossText);
-                const gross = calcGrossFromNet(net, line.isLogi);
+                const inputAmount = parseAmount(line.amountText);
+                const gross = line.isGrossInput ? inputAmount : calcGrossFromNet(inputAmount, true);
+                const net = line.isGrossInput ? calcNet(inputAmount, true) : inputAmount;
                 return (
                   <div key={line.id} className="rounded-lg border border-slate-200 p-2">
                     <div className="grid grid-cols-[1fr_auto] gap-2">
@@ -302,9 +309,9 @@ export function EarningsModal({ open, onClose }: Props) {
                           inputMode="numeric"
                           pattern="[0-9]*"
                           className="h-11 w-full rounded-lg border border-slate-300 pl-7 pr-3 text-sm"
-                          placeholder={`${index + 1}건 실운임`}
-                          value={line.amountGrossText ? Number(line.amountGrossText).toLocaleString("ko-KR") : ""}
-                          onChange={(e) => updateLineGross(line.id, e.target.value)}
+                          placeholder={`${index + 1}건 ${line.isGrossInput ? "매출금액" : "실운임"}`}
+                          value={line.amountText ? Number(line.amountText).toLocaleString("ko-KR") : ""}
+                          onChange={(e) => updateLineAmount(line.id, e.target.value)}
                         />
                       </div>
                       <button
@@ -319,15 +326,20 @@ export function EarningsModal({ open, onClose }: Props) {
                       <label className="inline-flex items-center gap-2 text-xs text-slate-700">
                         <input
                           type="checkbox"
-                          checked={line.isLogi}
-                          onChange={() => toggleLineLogi(line.id)}
+                          checked={line.isGrossInput}
+                          onChange={() => toggleInputMode(line.id)}
                           className="h-4 w-4 rounded border-slate-300"
                         />
-                        로지(+23% 매출 환산)
+                        매출 입력
                       </label>
-                      <span className="text-xs text-slate-500">
-                        매출금액: <span className="font-medium text-slate-800">{formatKRW(gross)}</span>
-                      </span>
+                      <div className="text-right text-xs text-slate-500">
+                        <div>
+                          실운임: <span className="font-medium text-slate-800">{formatKRW(net)}</span>
+                        </div>
+                        <div>
+                          매출금액: <span className="font-medium text-slate-800">{formatKRW(gross)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );
@@ -349,7 +361,7 @@ export function EarningsModal({ open, onClose }: Props) {
               </div>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              합계는 실운임(순익) 기준이며, 로지 체크 건은 매출금액에 23%를 더해 계산합니다.
+              합계는 실운임(순익) 기준입니다. 매출 입력 체크 시 입력값을 매출금액으로 보고 실운임을 23% 공제해 계산합니다.
             </p>
           </div>
 

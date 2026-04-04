@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
 
@@ -146,7 +147,9 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
 
       {previewUrl ? (
         <div className="mt-2 flex items-start gap-2">
-          <img src={previewUrl} alt="첨부 사진" className="h-16 w-16 rounded object-cover" />
+          <div className="relative h-16 w-16 overflow-hidden rounded">
+            <Image src={previewUrl} alt="첨부 사진" fill unoptimized className="object-cover" />
+          </div>
           <div className="min-w-0 flex-1 text-[11px] text-slate-500">
             <p>관리자만 OCR로 주소 자동 입력 가능</p>
             {!isAdmin ? <p className="mt-1">현재 계정은 관리자 권한이 없어 OCR 기능이 숨김 처리됩니다.</p> : null}
@@ -184,7 +187,9 @@ export function DestinationAttachment({ isAdmin, onApplyAddress }: Props) {
           <p className="text-[11px] text-slate-600">{ocrStatus || (running ? "인식 중..." : "대기")}</p>
 
           {ocrPreviewImage ? (
-            <img src={ocrPreviewImage} alt="OCR 전처리 미리보기" className="max-h-40 w-full rounded object-contain" />
+            <div className="relative h-40 w-full overflow-hidden rounded">
+              <Image src={ocrPreviewImage} alt="OCR 전처리 미리보기" fill unoptimized className="object-contain" />
+            </div>
           ) : null}
 
           <label className="block text-[11px] text-slate-700">

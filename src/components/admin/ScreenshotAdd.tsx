@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
 import { extractAddressFromScreenshotFile } from "@/lib/ocr/ocrProvider";
@@ -163,7 +164,9 @@ export function ScreenshotAdd({ onApplyAddress }: Props) {
           <div className="space-y-2">
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
               <div className="mb-1 text-xs font-medium text-slate-700">원본 미리보기</div>
-              <img src={imagePreviewUrl} alt="스크린샷 미리보기" className="max-h-64 w-full rounded object-contain" />
+              <div className="relative h-64 w-full overflow-hidden rounded">
+                <Image src={imagePreviewUrl} alt="스크린샷 미리보기" fill unoptimized className="object-contain" />
+              </div>
             </div>
 
             <div className="rounded-lg border border-slate-200 p-2">
@@ -211,7 +214,9 @@ export function ScreenshotAdd({ onApplyAddress }: Props) {
             {preprocessedPreviewUrl ? (
               <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
                 <div className="mb-1 text-xs font-medium text-slate-700">전처리/OCR 대상 미리보기</div>
-                <img src={preprocessedPreviewUrl} alt="전처리 미리보기" className="max-h-48 w-full rounded object-contain" />
+                <div className="relative h-48 w-full overflow-hidden rounded">
+                  <Image src={preprocessedPreviewUrl} alt="전처리 미리보기" fill unoptimized className="object-contain" />
+                </div>
               </div>
             ) : null}
 

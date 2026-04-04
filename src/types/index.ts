@@ -149,6 +149,7 @@ export type DailyEarningItem = {
   amount_gross: number;
   is_logi: boolean;
   amount_net: number;
+  input_mode?: "gross" | "net";
   memo?: string;
   createdAt?: string;
 };

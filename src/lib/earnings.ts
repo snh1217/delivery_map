@@ -25,7 +25,7 @@ export function calcNet(amountGross: number, isLogi: boolean): number {
 export function calcGrossFromNet(amountNet: number, isLogi: boolean): number {
   const net = Number.isFinite(amountNet) ? Math.max(0, Math.trunc(amountNet)) : 0;
   if (!isLogi) return net;
-  return Math.round(net * (1 + LOGI_DEDUCTION_RATE));
+  return Math.round(net / (1 - LOGI_DEDUCTION_RATE));
 }
 
 export function normalizeEarningItem(item: unknown): DailyEarningItem | null {
@@ -50,6 +50,7 @@ export function normalizeEarningItem(item: unknown): DailyEarningItem | null {
       typeof amountNetRaw === "number" && Number.isFinite(amountNetRaw)
         ? Math.max(0, Math.trunc(amountNetRaw))
         : calcNet(amountGross, isLogi);
+    const inputMode = asNew.input_mode === "gross" ? "gross" : "net";
 
     if (!amountGross && !amountNet) return null;
 
@@ -57,6 +58,7 @@ export function normalizeEarningItem(item: unknown): DailyEarningItem | null {
       amount_gross: amountGross,
       is_logi: isLogi,
       amount_net: amountNet,
+      input_mode: inputMode,
       ...(typeof asNew.memo === "string" && asNew.memo.trim() ? { memo: asNew.memo.trim().slice(0, 100) } : {}),
       ...(typeof asNew.createdAt === "string" && asNew.createdAt ? { createdAt: asNew.createdAt } : {}),
     };
@@ -76,6 +78,7 @@ export function normalizeEarningItem(item: unknown): DailyEarningItem | null {
     amount_gross: amountLegacy,
     is_logi: false,
     amount_net: amountLegacy,
+    input_mode: "net",
     ...(typeof asLegacy.memo === "string" && asLegacy.memo.trim() ? { memo: asLegacy.memo.trim().slice(0, 100) } : {}),
     ...(typeof asLegacy.createdAt === "string" && asLegacy.createdAt ? { createdAt: asLegacy.createdAt } : {}),
   };
