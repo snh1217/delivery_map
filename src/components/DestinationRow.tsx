@@ -149,6 +149,7 @@ export function DestinationRow({
   const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
   const [voiceInterimText, setVoiceInterimText] = useState("");
   const [voiceLowConfidence, setVoiceLowConfidence] = useState(false);
+  const [callPanelOpen, setCallPanelOpen] = useState(false);
 
   const canNavigate = Boolean(row.coord);
   const speechSupported = isSpeechRecognitionSupported();
@@ -324,6 +325,16 @@ export function DestinationRow({
     setVoicePreviewText(null);
     onSearchRef.current(row.id);
   };
+
+  const callSummaryText = row.callEstimate
+    ? `마감 ${row.callEstimate.deadlineLabel} · 총 ${formatDuration(row.callEstimate.totalRequiredMin)}`
+    : row.callEstimateLoading
+      ? "실시간 길찾기 시간을 계산하는 중입니다."
+      : row.callOriginLabel
+        ? `출발지 ${row.callOriginLabel}`
+        : row.coord
+          ? "필요할 때만 펼쳐서 마감 시간을 계산하세요."
+          : "좌표가 확정되면 이 도착지의 마감 시간을 계산할 수 있습니다.";
 
   return (
     <div
@@ -519,118 +530,139 @@ export function DestinationRow({
       ) : null}
 
       <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <button
+          type="button"
+          className="flex w-full items-start justify-between gap-3 text-left"
+          onClick={() => setCallPanelOpen((prev) => !prev)}
+          aria-expanded={callPanelOpen}
+        >
+          <div className="min-w-0">
             <div className="text-xs font-semibold text-slate-700">콜 시간 계산</div>
-            <p className="mt-1 text-[11px] text-slate-500">출발지 주소를 적용한 뒤, 콜 시간 + (실제 내비시간 150%) + 픽업 20분으로 계산합니다.</p>
+            <p className="mt-1 text-[11px] leading-5 text-slate-500">{callSummaryText}</p>
           </div>
-          <div className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-500">
-            출발지: {row.callOriginLabel ?? "미설정"}
-          </div>
-        </div>
+          <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+            {callPanelOpen ? "접기" : "열기"}
+          </span>
+        </button>
 
-        <div className="mt-2 grid gap-2">
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-            <input
-              type="text"
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
-              placeholder="출발지 주소 입력"
-              value={row.callOriginInput}
-              onChange={(event) => onChangeCallOriginInput(row.id, event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onResolveCallOrigin(row.id);
-                }
-              }}
-            />
-            <div className="grid grid-cols-2 gap-2 sm:contents">
-              <button
-                type="button"
-                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
-                onClick={() => onUseCurrentLocationForCall(row.id)}
-              >
-                현재 위치
-              </button>
-              <button
-                type="button"
-                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-50"
-                onClick={() => onResolveCallOrigin(row.id)}
-                disabled={row.callOriginStatus === "loading"}
-              >
-                {row.callOriginStatus === "loading" ? "적용 중" : "출발지 적용"}
-              </button>
+        {callPanelOpen ? (
+          <div className="mt-3 space-y-2">
+            <div className="rounded-full bg-white px-2 py-1 text-[11px] text-slate-500">
+              출발지: {row.callOriginLabel ?? "미설정"}
             </div>
-          </div>
 
-          {row.callOriginError ? <p className="text-xs text-rose-600">{row.callOriginError}</p> : null}
-          {row.callOriginCoord ? (
-            <p className="text-[11px] text-slate-500">
-              출발지 좌표: {row.callOriginCoord.lat.toFixed(5)}, {row.callOriginCoord.lon.toFixed(5)}
-            </p>
-          ) : null}
-
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-            <input
-              type="time"
-              className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
-              value={row.callTime}
-              onChange={(event) => onChangeCallTime(row.id, event.target.value)}
-            />
-            <div className="grid grid-cols-2 gap-2 sm:contents">
-              <button
-                type="button"
-                className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
-                onClick={() => onUseCurrentCallTime(row.id)}
-              >
-                지금
-              </button>
-              <button
-                type="button"
-                className="h-10 rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white disabled:opacity-50"
-                onClick={() => onComputeCallEstimate(row.id)}
-                disabled={!row.coord || !row.callOriginCoord || row.callEstimateLoading}
-              >
-                {row.callEstimateLoading ? "계산 중" : "시간 계산"}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {!row.coord ? (
-          <p className="mt-2 text-[11px] text-slate-500">좌표가 확정되면 이 도착지의 마감 시간을 바로 계산할 수 있습니다.</p>
-        ) : !row.callOriginCoord ? (
-          <p className="mt-2 text-[11px] text-slate-500">출발지를 입력하고 적용하면 이 도착지의 마감 시간을 계산할 수 있습니다.</p>
-        ) : null}
-        {row.callEstimateError ? <p className="mt-2 text-xs text-rose-600">{row.callEstimateError}</p> : null}
-
-        {row.callEstimate ? (
-          <div className="mt-2 space-y-2">
-            <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
-              이 콜은 <span className="font-semibold">{row.callEstimate.deadlineLabel}</span>까지 들어가면 됩니다.
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                실제 내비시간
-                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.longestLegMin)}</div>
+            <div className="grid gap-2">
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                <input
+                  type="text"
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  placeholder="출발지 주소 입력"
+                  value={row.callOriginInput}
+                  onChange={(event) => onChangeCallOriginInput(row.id, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      onResolveCallOrigin(row.id);
+                    }
+                  }}
+                />
+                <div className="grid grid-cols-2 gap-2 sm:contents">
+                  <button
+                    type="button"
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    onClick={() => onUseCurrentLocationForCall(row.id)}
+                  >
+                    현재 위치
+                  </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-50"
+                    onClick={() => onResolveCallOrigin(row.id)}
+                    disabled={row.callOriginStatus === "loading"}
+                  >
+                    {row.callOriginStatus === "loading" ? "적용 중" : "출발지 적용"}
+                  </button>
+                </div>
               </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                150% 반영
-                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.adjustedDriveMin)}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                픽업 시간
-                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.pickupMin)}</div>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-                총 필요 시간
-                <div className="mt-1 text-sm font-semibold text-slate-800">{formatDuration(row.callEstimate.totalRequiredMin)}</div>
+
+              {row.callOriginError ? <p className="text-xs text-rose-600">{row.callOriginError}</p> : null}
+              {row.callOriginCoord ? (
+                <p className="text-[11px] text-slate-500">
+                  출발지 좌표: {row.callOriginCoord.lat.toFixed(5)}, {row.callOriginCoord.lon.toFixed(5)}
+                </p>
+              ) : null}
+
+              <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                <input
+                  type="time"
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  value={row.callTime}
+                  onChange={(event) => onChangeCallTime(row.id, event.target.value)}
+                />
+                <div className="grid grid-cols-2 gap-2 sm:contents">
+                  <button
+                    type="button"
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    onClick={() => onUseCurrentCallTime(row.id)}
+                  >
+                    지금
+                  </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white disabled:opacity-50"
+                    onClick={() => onComputeCallEstimate(row.id)}
+                    disabled={!row.coord || !row.callOriginCoord || row.callEstimateLoading}
+                  >
+                    {row.callEstimateLoading ? "계산 중" : "시간 계산"}
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
-              기준 구간
-              <div className="mt-1 font-medium text-slate-800">{row.callEstimate.referenceLeg}</div>
-            </div>
+
+            {!row.coord ? (
+              <p className="text-[11px] text-slate-500">좌표가 확정되면 이 도착지의 마감 시간을 바로 계산할 수 있습니다.</p>
+            ) : !row.callOriginCoord ? (
+              <p className="text-[11px] text-slate-500">출발지를 입력하고 적용하면 이 도착지의 마감 시간을 계산할 수 있습니다.</p>
+            ) : null}
+            {row.callEstimateError ? <p className="text-xs text-rose-600">{row.callEstimateError}</p> : null}
+
+            {row.callEstimate ? (
+              <div className="space-y-2">
+                <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+                  이 콜은 <span className="font-semibold">{row.callEstimate.deadlineLabel}</span>까지 들어가면 됩니다.
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    실제 내비시간
+                    <div className="mt-1 text-sm font-semibold text-slate-800">
+                      {formatDuration(row.callEstimate.longestLegMin)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    150% 반영
+                    <div className="mt-1 text-sm font-semibold text-slate-800">
+                      {formatDuration(row.callEstimate.adjustedDriveMin)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    픽업 시간
+                    <div className="mt-1 text-sm font-semibold text-slate-800">
+                      {formatDuration(row.callEstimate.pickupMin)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                    총 필요 시간
+                    <div className="mt-1 text-sm font-semibold text-slate-800">
+                      {formatDuration(row.callEstimate.totalRequiredMin)}
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                  기준 구간
+                  <div className="mt-1 font-medium text-slate-800">{row.callEstimate.referenceLeg}</div>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

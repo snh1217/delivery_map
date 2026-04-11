@@ -60,6 +60,8 @@ const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
 const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
+const ROUTE_UI_SNAPSHOT_STORAGE_KEY = "delivery_map_route_ui_snapshot_v1";
+const ROUTE_UI_SNAPSHOT_TTL_MS = 2 * 60 * 60 * 1000;
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
@@ -150,6 +152,88 @@ function loadRouteUndoState(): { stack: DestinationRowState[][]; message: string
     return { stack, message };
   } catch {
     return { stack: [], message: null };
+  }
+}
+
+type RouteUiSnapshot = {
+  updatedAt: number;
+  handoffPending: boolean;
+  rows: DestinationRowState[];
+  undoStack: DestinationRowState[][];
+  message: string | null;
+  manualRecommendationRowOrder: number[] | null;
+  roadRecommendedOrder: RouteRecommendationItem[] | null;
+  recommendationMode: RouteRecommendationMode;
+  activeRouteBatchIndex: number | null;
+  highlightedRowIndex: number | null;
+};
+
+function loadRouteUiSnapshot(): RouteUiSnapshot | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<RouteUiSnapshot>;
+    if (!Number.isFinite(parsed.updatedAt)) {
+      return null;
+    }
+
+    const rows = Array.isArray(parsed.rows) ? parsed.rows.map((row) => hydrateRow(row)) : [];
+    const undoStack = Array.isArray(parsed.undoStack)
+      ? (parsed.undoStack as unknown[])
+          .filter((snapshot) => Array.isArray(snapshot))
+          .map((snapshot) => (snapshot as Array<Partial<DestinationRowState>>).map((row) => hydrateRow(row)))
+      : [];
+
+    return {
+      updatedAt: Number(parsed.updatedAt),
+      handoffPending: Boolean(parsed.handoffPending),
+      rows,
+      undoStack,
+      message: typeof parsed.message === "string" ? parsed.message : null,
+      manualRecommendationRowOrder: Array.isArray(parsed.manualRecommendationRowOrder)
+        ? parsed.manualRecommendationRowOrder.filter((value): value is number => typeof value === "number")
+        : null,
+      roadRecommendedOrder: Array.isArray(parsed.roadRecommendedOrder)
+        ? parsed.roadRecommendedOrder.filter(
+            (item): item is RouteRecommendationItem =>
+              Boolean(item) &&
+              typeof item === "object" &&
+              typeof item.step === "number" &&
+              typeof item.rowIndex === "number" &&
+              typeof item.label === "string",
+          )
+        : null,
+      recommendationMode: parsed.recommendationMode === "road" ? "road" : "straight",
+      activeRouteBatchIndex:
+        typeof parsed.activeRouteBatchIndex === "number" ? parsed.activeRouteBatchIndex : null,
+      highlightedRowIndex: typeof parsed.highlightedRowIndex === "number" ? parsed.highlightedRowIndex : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistRouteUiSnapshot(snapshot: RouteUiSnapshot | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (!snapshot) {
+      window.sessionStorage.removeItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY);
+      return;
+    }
+
+    window.sessionStorage.setItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // ignore storage failures
   }
 }
 
@@ -316,7 +400,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [rowsUndoStack, setRowsUndoStack] = useState<DestinationRowState[][]>(() => loadRouteUndoState().stack);
   const [lastAutoRemovedMessage, setLastAutoRemovedMessage] = useState<string | null>(() => loadRouteUndoState().message);
   const rowsRef = useRef(rows);
+  const rowsUndoStackRef = useRef(rowsUndoStack);
   const originRef = useRef(origin);
+  const recommendationModeRef = useRef(recommendationMode);
+  const routeUiSnapshotVersionRef = useRef(0);
   const geoWatchIdRef = useRef<NativeLocationWatchHandle | null>(null);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
@@ -346,9 +433,79 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
   const centroids = useMemo(() => normalizeDongCentroids(centroidsRaw), []);
 
+  const persistCurrentRouteUiSnapshot = useCallback(
+    (params: {
+      rows: DestinationRowState[];
+      undoStack: DestinationRowState[][];
+      message: string | null;
+      manualOrder: number[] | null;
+      roadOrder: RouteRecommendationItem[] | null;
+      recommendationMode: RouteRecommendationMode;
+      activeBatchIndex: number | null;
+      highlightedRowIndex: number | null;
+      handoffPending: boolean;
+    }) => {
+      const snapshot: RouteUiSnapshot = {
+        updatedAt: Date.now(),
+        handoffPending: params.handoffPending,
+        rows: params.rows.map((row) => hydrateRow(row)),
+        undoStack: params.undoStack.map((stackRow) => stackRow.map((row) => hydrateRow(row))),
+        message: params.message,
+        manualRecommendationRowOrder: params.manualOrder,
+        roadRecommendedOrder: params.roadOrder,
+        recommendationMode: params.recommendationMode,
+        activeRouteBatchIndex: params.activeBatchIndex,
+        highlightedRowIndex: params.highlightedRowIndex,
+      };
+
+      routeUiSnapshotVersionRef.current = snapshot.updatedAt;
+      persistRouteUiSnapshot(snapshot);
+    },
+    [],
+  );
+
+  const restorePendingRouteUiSnapshot = useCallback(() => {
+    const snapshot = loadRouteUiSnapshot();
+    if (!snapshot) {
+      return;
+    }
+
+    const isExpired = Date.now() - snapshot.updatedAt > ROUTE_UI_SNAPSHOT_TTL_MS;
+    if (isExpired) {
+      persistRouteUiSnapshot(null);
+      return;
+    }
+
+    if (!snapshot.handoffPending || snapshot.updatedAt <= routeUiSnapshotVersionRef.current) {
+      return;
+    }
+
+    routeUiSnapshotVersionRef.current = snapshot.updatedAt;
+    setRows(snapshot.rows.length > 0 ? snapshot.rows : [createRow()]);
+    setRowsUndoStack(snapshot.undoStack);
+    setLastAutoRemovedMessage(snapshot.message);
+    setManualRecommendationRowOrder(snapshot.manualRecommendationRowOrder);
+    setRoadRecommendedOrder(snapshot.roadRecommendedOrder);
+    setRecommendationMode(snapshot.recommendationMode);
+    setActiveRouteBatchIndex(snapshot.activeRouteBatchIndex);
+    setHighlightedRowIndex(snapshot.highlightedRowIndex);
+    persistRouteUiSnapshot({
+      ...snapshot,
+      handoffPending: false,
+    });
+  }, []);
+
   useEffect(() => {
     originRef.current = origin;
   }, [origin]);
+
+  useEffect(() => {
+    rowsUndoStackRef.current = rowsUndoStack;
+  }, [rowsUndoStack]);
+
+  useEffect(() => {
+    recommendationModeRef.current = recommendationMode;
+  }, [recommendationMode]);
 
   const applyOriginUpdate = useCallback((nextOrigin: LatLng, statusText: string) => {
     setOrigin(nextOrigin);
@@ -475,10 +632,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       if (forceMapRefresh) {
         window.setTimeout(() => {
           syncViewportCssVar();
+          restorePendingRouteUiSnapshot();
           setMapRenderKey((prev) => prev + 1);
           window.dispatchEvent(new Event("resize"));
         }, 120);
+        return;
       }
+
+      restorePendingRouteUiSnapshot();
     };
 
     const onMediaChange = () => apply(true);
@@ -506,7 +667,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       document.removeEventListener("visibilitychange", onVisibility);
       cleanupNativeResume();
     };
-  }, []);
+  }, [restorePendingRouteUiSnapshot]);
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
@@ -1178,31 +1339,68 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (rowIds.length === 0) {
       return;
     }
-    const snapshot = rowsRef.current;
-    if (snapshot.length > 0) {
-      setRowsUndoStack((undoPrev) => [...undoPrev, snapshot]);
-    }
-    setRows((prev) => {
-      const next = prev.filter((row) => !rowIds.includes(row.id));
-      return next.length > 0 ? next : [createRow()];
+    const currentRows = rowsRef.current.map((row) => hydrateRow(row));
+    const nextUndoStack =
+      currentRows.length > 0 ? [...rowsUndoStackRef.current, currentRows] : rowsUndoStackRef.current.slice();
+    const nextRows = currentRows.filter((row) => !rowIds.includes(row.id));
+    const safeNextRows = nextRows.length > 0 ? nextRows : [createRow()];
+    const nextRecommendationMode = recommendationModeRef.current === "road" ? "straight" : recommendationModeRef.current;
+
+    persistCurrentRouteUiSnapshot({
+      rows: safeNextRows,
+      undoStack: nextUndoStack,
+      message,
+      manualOrder: null,
+      roadOrder: null,
+      recommendationMode: nextRecommendationMode,
+      activeBatchIndex: null,
+      highlightedRowIndex: null,
+      handoffPending: true,
     });
+
+    setRowsUndoStack(nextUndoStack);
+    setRows(safeNextRows);
     setHighlightedRowIndex(null);
+    setRoadRecommendedOrder(null);
+    setManualRecommendationRowOrder(null);
+    setRecommendationMode(nextRecommendationMode);
+    setActiveRouteBatchIndex(null);
     setLastAutoRemovedMessage(message);
   };
 
   const undoLastAutoRemove = () => {
-    setRowsUndoStack((prev) => {
-      if (prev.length === 0) {
-        return prev;
-      }
-      const next = [...prev];
-      const restored = next.pop();
-      if (restored) {
-        setRows(restored);
-        setLastAutoRemovedMessage(null);
-      }
-      return next;
+    const currentUndoStack = rowsUndoStackRef.current;
+    if (currentUndoStack.length === 0) {
+      return;
+    }
+
+    const nextUndoStack = [...currentUndoStack];
+    const restored = nextUndoStack.pop();
+    if (!restored) {
+      return;
+    }
+
+    const nextRecommendationMode = recommendationModeRef.current === "road" ? "straight" : recommendationModeRef.current;
+    persistCurrentRouteUiSnapshot({
+      rows: restored,
+      undoStack: nextUndoStack,
+      message: null,
+      manualOrder: null,
+      roadOrder: null,
+      recommendationMode: nextRecommendationMode,
+      activeBatchIndex: null,
+      highlightedRowIndex: null,
+      handoffPending: false,
     });
+
+    setRowsUndoStack(nextUndoStack);
+    setRows(restored);
+    setRoadRecommendedOrder(null);
+    setManualRecommendationRowOrder(null);
+    setRecommendationMode(nextRecommendationMode);
+    setActiveRouteBatchIndex(null);
+    setHighlightedRowIndex(null);
+    setLastAutoRemovedMessage(null);
   };
 
   const onNavigateAll = () => {
