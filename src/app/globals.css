@@ -18,3 +18,23 @@ body {
   background-image: radial-gradient(circle at 15% 15%, #d8f3ff 0%, transparent 35%),
     radial-gradient(circle at 85% 10%, #dffbe6 0%, transparent 30%);
 }
+
+html,
+body {
+  min-height: 100%;
+}
+
+html.app-env-native body {
+  overscroll-behavior-y: contain;
+  -webkit-tap-highlight-color: transparent;
+  background-attachment: scroll;
+}
+
+html.app-env-native body,
+html.app-env-pwa body {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+html.app-platform-ios body {
+  -webkit-text-size-adjust: 100%;
+}

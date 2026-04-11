@@ -18,7 +18,9 @@ export function EarningsStatsModal({ open, onClose }: Props) {
           <div className="mb-3 flex items-center justify-between gap-2">
             <div>
               <h3 className="text-lg font-semibold text-slate-800">운임 통계</h3>
-              <p className="text-xs text-slate-500">실수령 기준 요약/기간 통계를 조회합니다. 매출/실운임은 23% 공제 기준으로 환산합니다.</p>
+              <p className="text-xs text-slate-500">
+                오늘 요약과 기간 통계를 확인합니다. 매출/순익은 23% 공제 기준으로 계산됩니다.
+              </p>
             </div>
             <button type="button" className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm" onClick={onClose}>
               닫기
