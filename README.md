@@ -460,10 +460,17 @@ npm run android:install:debug
 NEXT_PUBLIC_ANDROID_APK_URL=https://<공개-다운로드-링크>/app-release.apk
 ```
 
+- Play Store 링크가 생기면 아래 값도 같이 넣으세요.
+
+```bash
+NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.snh.deliverymap
+```
+
 - 가장 쉬운 무료 방식:
   - GitHub Releases asset 링크 사용
   - 또는 다른 정적 파일 링크 사용
 - iPhone은 APK 설치가 불가능하므로 `홈 화면에 추가(PWA)` 방식을 사용합니다.
+- 설치 페이지(`/install/android`)는 APK 링크와 Play 링크가 있으면 자동으로 둘 다 노출합니다.
 
 ## Google Play Store 등록 경로
 
@@ -478,6 +485,7 @@ NEXT_PUBLIC_ANDROID_APK_URL=https://<공개-다운로드-링크>/app-release.apk
 참고:
 - 내부 테스트/비공개 테스트로 먼저 검증한 뒤 정식 배포하는 흐름이 가장 안전합니다.
 - 스토어 등록은 Google Play Console 개발자 계정이 필요합니다.
+- 상세 체크리스트/설명 문구는 `docs/google-play-publishing.md`를 참고하세요.
 
 ## 네이버 콘솔 설정
 

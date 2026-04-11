@@ -1,4 +1,5 @@
 const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
+const playUrl = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
 
 export const metadata = {
   title: "안드로이드 설치 안내 | 퀵·배달 구역메이커",
@@ -27,16 +28,32 @@ export default function AndroidInstallPage() {
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-950">다운로드</h2>
-        {apkUrl ? (
+        {apkUrl || playUrl ? (
           <div className="mt-4 space-y-4">
-            <a
-              href={apkUrl}
-              className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-800"
-            >
-              APK 다운로드
-            </a>
+            {playUrl ? (
+              <a
+                href={playUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+              >
+                Google Play에서 설치
+              </a>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">
+                Google Play 등록은 준비 중입니다. 지금은 아래 APK 다운로드로 바로 설치할 수 있습니다.
+              </div>
+            )}
+            {apkUrl ? (
+              <a
+                href={apkUrl}
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-800"
+              >
+                APK 다운로드
+              </a>
+            ) : null}
             <p className="text-xs leading-5 text-slate-500">
-              링크는 관리자가 갱신합니다. 설치가 막히면 브라우저 다운로드 권한과 알 수 없는 앱 설치 허용을 확인하세요.
+              APK는 스토어 없이 바로 설치할 수 있고, Play 링크가 등록되면 스토어 설치도 함께 제공됩니다.
             </p>
           </div>
         ) : (
@@ -52,6 +69,15 @@ export default function AndroidInstallPage() {
           <li>- 테스트/내부 배포: APK 링크 직접 배포</li>
           <li>- 정식 배포: Google Play Console 내부 테스트 → 정식 출시</li>
           <li>- iPhone: APK 설치 불가, 홈 화면 추가(PWA) 방식 권장</li>
+        </ul>
+      </section>
+
+      <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-950">관리자용 연결 정보</h2>
+        <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
+          <li>- APK 공개 링크는 GitHub Release asset로 연결하는 방식이 가장 간단합니다.</li>
+          <li>- Play Store 등록이 끝나면 `NEXT_PUBLIC_ANDROID_PLAY_URL` 값만 추가하면 이 페이지 버튼이 자동으로 열립니다.</li>
+          <li>- 현재 설치 페이지 주소: `/install/android`</li>
         </ul>
       </section>
     </main>
