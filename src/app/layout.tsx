@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { NativeAppBootstrap } from "@/components/app/NativeAppBootstrap";
+import { NativeAppUpdatePrompt } from "@/components/app/NativeAppUpdatePrompt";
 import { PwaRegister } from "@/components/app/PwaRegister";
 import "./globals.css";
 
@@ -41,6 +42,7 @@ export default function RootLayout({
       <body className={`${notoSansKr.variable} antialiased`}>
         <NativeAppBootstrap />
         <PwaRegister />
+        <NativeAppUpdatePrompt />
         {children}
       </body>
     </html>

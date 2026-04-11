@@ -4,9 +4,12 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
+import { getMicrophonePermissionState, requestMicrophonePermission } from "@/lib/native/permissions";
+import { isNativeApp } from "@/lib/native/runtime";
 import {
   createSpeechRecognizer,
   isSpeechRecognitionSupported,
+  supportsMicrophoneCapture,
   type SpeechResultPayload,
 } from "@/lib/speech/recognizer";
 import type { DestinationRowState, LatLng } from "@/types";
@@ -84,7 +87,9 @@ function getNavigationAppLabel(app: Props["preferredNavigationApp"]) {
 
 function getVoiceErrorMessage(code: string) {
   const messages: Record<string, string> = {
-    "not-allowed": "브라우저에서 마이크 권한을 허용해 주세요.",
+    "not-allowed": isNativeApp()
+      ? "앱에서 마이크 권한을 허용해 주세요. 권한 창이 보이지 않으면 기기 설정에서 허용 후 다시 시도해 주세요."
+      : "브라우저에서 마이크 권한을 허용해 주세요.",
     "service-not-allowed": "음성 인식 서비스를 사용할 수 없습니다.",
     "no-speech": "음성이 인식되지 않았습니다. 다시 시도해 주세요.",
     aborted: "음성 입력이 취소되었습니다.",
@@ -149,10 +154,13 @@ export function DestinationRow({
   const [voicePreviewText, setVoicePreviewText] = useState<string | null>(null);
   const [voiceInterimText, setVoiceInterimText] = useState("");
   const [voiceLowConfidence, setVoiceLowConfidence] = useState(false);
+  const [micPermissionState, setMicPermissionState] = useState<"granted" | "prompt" | "denied" | "unsupported" | "unknown">("unknown");
   const [callPanelOpen, setCallPanelOpen] = useState(false);
 
   const canNavigate = Boolean(row.coord);
   const speechSupported = isSpeechRecognitionSupported();
+  const canCaptureAudio = supportsMicrophoneCapture();
+  const canUseVoiceInput = speechSupported && canCaptureAudio;
   const naverLinks = row.coord ? createNaverDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
   const kakaoLinks = row.coord ? createKakaoMapDirectionLinks(origin, row.coord, row.label ?? row.input) : null;
 
@@ -186,6 +194,19 @@ export function DestinationRow({
         // no-op
       }
       recognizerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    void getMicrophonePermissionState().then((state) => {
+      if (mounted) {
+        setMicPermissionState(state);
+      }
+    });
+
+    return () => {
+      mounted = false;
     };
   }, []);
 
@@ -243,8 +264,8 @@ export function DestinationRow({
     }
   };
 
-  const beginVoiceInput = () => {
-    if (!speechSupported) {
+  const beginVoiceInput = async () => {
+    if (!canUseVoiceInput) {
       setVoiceError(getVoiceErrorMessage("unsupported"));
       return;
     }
@@ -258,6 +279,13 @@ export function DestinationRow({
     onChangeInput(row.id, "");
     finalVoiceTextRef.current = "";
     finalConfidenceRef.current = undefined;
+
+    const permission = await requestMicrophonePermission();
+    setMicPermissionState(permission.state);
+    if (!permission.granted) {
+      setVoiceError(getVoiceErrorMessage(permission.state === "denied" ? "not-allowed" : permission.state));
+      return;
+    }
 
     try {
       navigator.vibrate?.(15);
@@ -317,7 +345,7 @@ export function DestinationRow({
       stopVoiceRecognition();
       return;
     }
-    beginVoiceInput();
+    void beginVoiceInput();
   };
 
   const runSearchNow = () => {
@@ -409,8 +437,8 @@ export function DestinationRow({
                 : "border border-slate-300 bg-white text-slate-700"
             } disabled:cursor-not-allowed disabled:opacity-50`}
             onClick={toggleVoiceInput}
-            disabled={!speechSupported && !isListening}
-            title={speechSupported ? "한 번 탭해 음성 입력 시작/중지" : "브라우저에서 음성 입력을 지원하지 않습니다."}
+            disabled={!canUseVoiceInput && !isListening}
+            title={canUseVoiceInput ? "한 번 탭해 음성 입력 시작/중지" : "이 환경에서는 음성 입력을 사용할 수 없습니다."}
           >
             <span className="inline-flex items-center gap-1">
               <span
@@ -445,16 +473,20 @@ export function DestinationRow({
             <button
               type="button"
               className="mt-2 h-8 rounded-lg border border-rose-300 bg-white px-2 text-xs text-rose-700"
-              onClick={beginVoiceInput}
-              disabled={isListening || !speechSupported}
+              onClick={() => void beginVoiceInput()}
+              disabled={isListening || !canUseVoiceInput}
             >
-              다시 시도
+              {micPermissionState === "denied" ? "권한 다시 요청" : "다시 시도"}
             </button>
           </div>
         ) : null}
 
-        {!speechSupported ? (
-          <p className="text-xs text-slate-500">브라우저에서 마이크 권한이 필요합니다. 모바일 Chrome/Edge를 권장합니다.</p>
+        {!canUseVoiceInput ? (
+          <p className="text-xs text-slate-500">
+            {isNativeApp()
+              ? "앱에서 마이크 권한과 음성 인식 지원이 필요합니다. 지원되지 않으면 텍스트 입력을 사용해 주세요."
+              : "브라우저에서 마이크 권한과 음성 인식 지원이 필요합니다. 모바일 Chrome/Edge를 권장합니다."}
+          </p>
         ) : (
           <p className="text-xs text-slate-500">음성 입력: 탭하여 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용</p>
         )}

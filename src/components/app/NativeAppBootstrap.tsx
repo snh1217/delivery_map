@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { requestCoreAppPermissions } from "@/lib/native/permissions";
 import { getAppEnvironment, getNativePlatform, isNativeApp, isStandalonePwa } from "@/lib/native/runtime";
+
+const NATIVE_PERMISSION_WARMUP_KEY = "delivery_map_native_permission_warmup_v1";
 
 function applyAppEnvironmentClasses() {
   if (typeof document === "undefined") return;
@@ -59,6 +62,22 @@ export function NativeAppBootstrap() {
     if (!isNativeApp() && !isStandalonePwa()) return;
     if (typeof document === "undefined") return;
     document.documentElement.style.setProperty("color-scheme", "light");
+  }, []);
+
+  useEffect(() => {
+    if (!isNativeApp() || typeof window === "undefined") return;
+    try {
+      if (window.sessionStorage.getItem(NATIVE_PERMISSION_WARMUP_KEY) === "1") return;
+      window.sessionStorage.setItem(NATIVE_PERMISSION_WARMUP_KEY, "1");
+    } catch {
+      // ignore storage issues
+    }
+
+    const timer = window.setTimeout(() => {
+      void requestCoreAppPermissions();
+    }, 700);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   return null;

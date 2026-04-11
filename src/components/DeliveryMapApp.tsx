@@ -14,6 +14,7 @@ import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
 import { addNativeResumeListener } from "@/lib/native/app";
 import { getCurrentLocation, watchCurrentLocation, type NativeLocationWatchHandle } from "@/lib/native/geolocation";
+import { isNativeApp } from "@/lib/native/runtime";
 import {
   openNaverDirections,
   openNaverMultiDirections,
@@ -331,6 +332,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [bootClientErrors, setBootClientErrors] = useState<string[]>([]);
   const [iosSafeMode, setIosSafeMode] = useState<boolean>(loadIosSafeModeDefault);
   const [mapDeferred, setMapDeferred] = useState<boolean>(loadIosSafeModeDefault);
+  const [showApkInstallShortcut] = useState(() => !isNativeApp());
   const [iosBrowserInfo] = useState(() => ({ isIos: detectIosLikeBrowser(), isIosChrome: detectIosChrome() }));
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
@@ -1726,26 +1728,28 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                 Quick + Delivery
               </span>
             </div>
-            <a
-              href="/install/android"
-              className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {showApkInstallShortcut ? (
+              <a
+                href="/install/android"
+                className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
               >
-                <path d="M12 3v11" />
-                <path d="m8 10 4 4 4-4" />
-                <path d="M5 20h14" />
-              </svg>
-              APK 설치
-            </a>
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3v11" />
+                  <path d="m8 10 4 4 4-4" />
+                  <path d="M5 20h14" />
+                </svg>
+                APK 설치
+              </a>
+            ) : null}
           </div>
           <p className="mt-1 text-xs text-slate-500">퀵/배달 경유지 구설정 · 팬 권역 · 길찾기 자동 생성</p>
           {bootClientErrors.length > 0 ? (

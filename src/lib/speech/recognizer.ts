@@ -51,6 +51,11 @@ export function isSpeechRecognitionSupported() {
   return Boolean(w.SpeechRecognition ?? w.webkitSpeechRecognition);
 }
 
+export function supportsMicrophoneCapture() {
+  if (typeof navigator === "undefined") return false;
+  return Boolean(navigator.mediaDevices?.getUserMedia);
+}
+
 function getCtor(): SpeechRecognitionCtor | null {
   if (typeof window === "undefined") return null;
   const w = window as WindowWithSpeech;
