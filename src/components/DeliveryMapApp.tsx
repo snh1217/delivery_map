@@ -33,6 +33,7 @@ import {
   type KakaoNaviCapability,
   type KakaoNaviInstallLinks,
 } from "@/lib/kakao/navi";
+import { loadRouteUiSnapshot, persistRouteUiSnapshot, ROUTE_UI_SNAPSHOT_TTL_MS, type RouteUiSnapshot } from "@/lib/routeUiSnapshot";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
 import type {
@@ -55,13 +56,12 @@ const EarningsStatsModal = dynamic(
   () => import("@/components/EarningsStatsModal").then((m) => m.EarningsStatsModal),
   { ssr: false },
 );
+const IosPwaHint = dynamic(() => import("@/components/app/IosPwaHint").then((m) => m.IosPwaHint), { ssr: false });
 
 const DEFAULT_ORIGIN: LatLng = { lat: 37.5665, lon: 126.978 };
 const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
-const ROUTE_UI_SNAPSHOT_STORAGE_KEY = "delivery_map_route_ui_snapshot_v1";
-const ROUTE_UI_SNAPSHOT_TTL_MS = 2 * 60 * 60 * 1000;
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
@@ -152,88 +152,6 @@ function loadRouteUndoState(): { stack: DestinationRowState[][]; message: string
     return { stack, message };
   } catch {
     return { stack: [], message: null };
-  }
-}
-
-type RouteUiSnapshot = {
-  updatedAt: number;
-  handoffPending: boolean;
-  rows: DestinationRowState[];
-  undoStack: DestinationRowState[][];
-  message: string | null;
-  manualRecommendationRowOrder: number[] | null;
-  roadRecommendedOrder: RouteRecommendationItem[] | null;
-  recommendationMode: RouteRecommendationMode;
-  activeRouteBatchIndex: number | null;
-  highlightedRowIndex: number | null;
-};
-
-function loadRouteUiSnapshot(): RouteUiSnapshot | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<RouteUiSnapshot>;
-    if (!Number.isFinite(parsed.updatedAt)) {
-      return null;
-    }
-
-    const rows = Array.isArray(parsed.rows) ? parsed.rows.map((row) => hydrateRow(row)) : [];
-    const undoStack = Array.isArray(parsed.undoStack)
-      ? (parsed.undoStack as unknown[])
-          .filter((snapshot) => Array.isArray(snapshot))
-          .map((snapshot) => (snapshot as Array<Partial<DestinationRowState>>).map((row) => hydrateRow(row)))
-      : [];
-
-    return {
-      updatedAt: Number(parsed.updatedAt),
-      handoffPending: Boolean(parsed.handoffPending),
-      rows,
-      undoStack,
-      message: typeof parsed.message === "string" ? parsed.message : null,
-      manualRecommendationRowOrder: Array.isArray(parsed.manualRecommendationRowOrder)
-        ? parsed.manualRecommendationRowOrder.filter((value): value is number => typeof value === "number")
-        : null,
-      roadRecommendedOrder: Array.isArray(parsed.roadRecommendedOrder)
-        ? parsed.roadRecommendedOrder.filter(
-            (item): item is RouteRecommendationItem =>
-              Boolean(item) &&
-              typeof item === "object" &&
-              typeof item.step === "number" &&
-              typeof item.rowIndex === "number" &&
-              typeof item.label === "string",
-          )
-        : null,
-      recommendationMode: parsed.recommendationMode === "road" ? "road" : "straight",
-      activeRouteBatchIndex:
-        typeof parsed.activeRouteBatchIndex === "number" ? parsed.activeRouteBatchIndex : null,
-      highlightedRowIndex: typeof parsed.highlightedRowIndex === "number" ? parsed.highlightedRowIndex : null,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function persistRouteUiSnapshot(snapshot: RouteUiSnapshot | null) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    if (!snapshot) {
-      window.sessionStorage.removeItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY);
-      return;
-    }
-
-    window.sessionStorage.setItem(ROUTE_UI_SNAPSHOT_STORAGE_KEY, JSON.stringify(snapshot));
-  } catch {
-    // ignore storage failures
   }
 }
 
@@ -465,7 +383,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   );
 
   const restorePendingRouteUiSnapshot = useCallback(() => {
-    const snapshot = loadRouteUiSnapshot();
+    const snapshot = loadRouteUiSnapshot(hydrateRow);
     if (!snapshot) {
       return;
     }
@@ -1834,6 +1752,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
             </div>
           ) : null}
+          <div className="mt-3">
+            <IosPwaHint />
+          </div>
           <div className="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-800">
             출발지(고정): 내 현재 위치
           </div>

@@ -56,17 +56,33 @@ npm run cap:open:android
 ```bash
 npm run android:apk:debug
 npm run android:apk:release
+npm run android:aab:release
 npm run android:install:debug
 ```
 
 - `android:apk:debug`: 디버그 APK 생성
-- `android:apk:release`: 릴리즈 APK 생성(서명은 별도 설정 필요)
+- `android:apk:release`: 릴리즈 APK 생성(서명이 연결되어 있으면 signed, 아니면 unsigned)
+- `android:aab:release`: 릴리즈 AAB 생성(서명이 연결되어 있으면 signed, 아니면 unsigned)
 - `android:install:debug`: USB 연결된 안드로이드 기기에 디버그 APK 설치
 
 APK 위치 예시:
 
 - 디버그: `android/app/build/outputs/apk/debug/app-debug.apk`
 - 릴리즈: `android/app/build/outputs/apk/release/app-release-unsigned.apk`
+
+### Android 릴리즈 서명 연결
+
+`android/app/build.gradle`은 아래 환경변수가 있으면 릴리즈 서명을 자동으로 연결합니다.
+
+```bash
+RELEASE_STORE_FILE=D:\Android\keystore\delivery-map-release.jks
+RELEASE_STORE_PASSWORD=...
+RELEASE_KEY_ALIAS=delivery-map
+RELEASE_KEY_PASSWORD=...
+```
+
+- 예시 파일: `android/release-signing.env.example`
+- 값이 없으면 릴리즈 빌드는 unsigned APK/AAB로 생성됩니다.
 
 ### Capacitor 네이티브 플러그인 연결
 
@@ -100,6 +116,19 @@ npm run cap:sync
 - APK는 Android 전용입니다.
 - iPhone은 APK 설치가 불가능하므로 PWA를 사용해야 합니다.
 - 스토어 배포를 하지 않아도 내부 배포/개인 사용은 가능합니다.
+
+### iPhone PWA 설치/복귀 점검
+
+- iPhone에서는 홈 화면에 추가한 PWA가 가장 안정적입니다.
+- 앱 상단에 `홈 화면에 추가` 안내 카드가 보이면:
+  - Safari/Chrome 공유 버튼
+  - `홈 화면에 추가`
+  순서로 설치할 수 있습니다.
+- 외부 길찾기 앱으로 나갔다가 돌아온 뒤에는:
+  - 최근 목적지 되돌리기
+  - 도착지 목록 상태
+  - 지도 레이아웃
+  이 최신 상태로 유지되는지 같이 점검하세요.
 
 ## 주요 기능
 

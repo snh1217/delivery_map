@@ -15,6 +15,7 @@
     "cap:assets:android": "npx @capacitor/assets generate --android",
     "android:apk:debug": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
     "android:apk:release": "npm run cap:sync && cd android && gradlew.bat assembleRelease",
+    "android:aab:release": "npm run cap:sync && cd android && gradlew.bat bundleRelease",
     "android:install:debug": "npm run cap:sync && cd android && gradlew.bat installDebug"
   },
   "dependencies": {
