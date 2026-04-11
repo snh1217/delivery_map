@@ -2,7 +2,7 @@ const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
 const playUrl = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
 
 export const metadata = {
-  title: "안드로이드 설치 안내 | 퀵·배달 구역메이커",
+  title: "안드로이드 설치 안내 | 퀵배달 메이커",
 };
 
 export default function AndroidInstallPage() {
@@ -10,7 +10,7 @@ export default function AndroidInstallPage() {
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-4 py-10">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Android Install</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">퀵·배달 구역메이커 APK 설치</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">퀵배달 메이커 APK 설치</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           안드로이드에서는 스토어 등록 없이 APK 링크로 직접 설치할 수 있습니다. 설치 전에{" "}
           <span className="font-medium text-slate-900">알 수 없는 앱 설치 허용</span>이 필요할 수 있습니다.
