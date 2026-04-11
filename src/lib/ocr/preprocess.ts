@@ -6,6 +6,12 @@ export type OcrPreprocessOptions = {
   upscale: number; // 1 ~ 2
   thresholdEnabled: boolean;
   thresholdValue: number; // 0-255
+  manualCropRect?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null; // normalized 0..1 rect on source image
 };
 
 export type OcrPreprocessResult = {
@@ -54,6 +60,21 @@ function cropBottom(img: ImageBitmap, ratio: number) {
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("크롭 캔버스 생성 실패");
   ctx.drawImage(img, 0, sy, img.width, cropHeight, 0, 0, img.width, cropHeight);
+  return canvas;
+}
+
+function cropManual(img: ImageBitmap, rect: NonNullable<OcrPreprocessOptions["manualCropRect"]>) {
+  const sx = clamp(Math.round(img.width * rect.x), 0, img.width - 1);
+  const sy = clamp(Math.round(img.height * rect.y), 0, img.height - 1);
+  const sw = clamp(Math.round(img.width * rect.width), 1, img.width - sx);
+  const sh = clamp(Math.round(img.height * rect.height), 1, img.height - sy);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = sw;
+  canvas.height = sh;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("선택 영역 캔버스 생성 실패");
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
   return canvas;
 }
 
@@ -222,7 +243,11 @@ export async function preprocessScreenshotForOcr(
 ): Promise<OcrPreprocessResult> {
   const bitmap = await loadImageBitmapFromFile(file);
   try {
-    const firstCrop = cropBottom(bitmap, options.bottomCropRatio);
+    const useManualCrop =
+      options.manualCropRect &&
+      options.manualCropRect.width > 0.02 &&
+      options.manualCropRect.height > 0.02;
+    const firstCrop = useManualCrop ? cropManual(bitmap, options.manualCropRect!) : cropBottom(bitmap, options.bottomCropRatio);
     const detectedBox = detectDarkBox(firstCrop);
     const secondCrop = detectedBox ? cropByBox(firstCrop, detectedBox) : firstCrop;
     const finalCanvas = applyPreprocess(secondCrop, options);
@@ -238,4 +263,3 @@ export async function preprocessScreenshotForOcr(
     bitmap.close();
   }
 }
-

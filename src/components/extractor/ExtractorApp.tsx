@@ -13,9 +13,13 @@ type Props = {
 
 export function ExtractorApp({ user }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const selectionSurfaceRef = useRef<HTMLDivElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState(42);
+  const [manualCropEnabled, setManualCropEnabled] = useState(false);
+  const [manualCropRect, setManualCropRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const [thresholdEnabled, setThresholdEnabled] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [ocrStatusText, setOcrStatusText] = useState("");
@@ -41,8 +45,43 @@ export function ExtractorApp({ user }: Props) {
     setPreprocessedPreviewUrl(null);
     setOcrRawText("");
     setOcrAddressDraft("");
+    setManualCropRect(null);
+    setDragStart(null);
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImagePreviewUrl(picked ? URL.createObjectURL(picked) : null);
+  };
+
+  const toRelativePoint = (clientX: number, clientY: number) => {
+    const el = selectionSurfaceRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const y = Math.min(1, Math.max(0, (clientY - rect.top) / rect.height));
+    return { x, y };
+  };
+
+  const beginSelection = (clientX: number, clientY: number) => {
+    if (!manualCropEnabled) return;
+    const point = toRelativePoint(clientX, clientY);
+    if (!point) return;
+    setDragStart(point);
+    setManualCropRect({ x: point.x, y: point.y, width: 0.001, height: 0.001 });
+  };
+
+  const updateSelection = (clientX: number, clientY: number) => {
+    if (!manualCropEnabled || !dragStart) return;
+    const point = toRelativePoint(clientX, clientY);
+    if (!point) return;
+    const x = Math.min(dragStart.x, point.x);
+    const y = Math.min(dragStart.y, point.y);
+    const width = Math.abs(point.x - dragStart.x);
+    const height = Math.abs(point.y - dragStart.y);
+    setManualCropRect({ x, y, width, height });
+  };
+
+  const endSelection = () => {
+    setDragStart(null);
   };
 
   const onPickImage = async () => {
@@ -71,6 +110,7 @@ export function ExtractorApp({ user }: Props) {
           upscale: 2,
           thresholdEnabled,
           thresholdValue: 165,
+          manualCropRect: manualCropEnabled ? manualCropRect : null,
         },
         onProgress: (progress, status) => {
           setOcrProgress(progress);
@@ -182,8 +222,38 @@ export function ExtractorApp({ user }: Props) {
               <div className="text-xs font-medium text-slate-700">원본 미리보기</div>
               <p className="mt-1 text-[11px] text-slate-500">{previewLabel}</p>
               {imagePreviewUrl ? (
-                <div className="relative mt-2 h-72 w-full overflow-hidden rounded-xl bg-white">
+                <div
+                  ref={selectionSurfaceRef}
+                  className="relative mt-2 h-72 w-full overflow-hidden rounded-xl bg-white touch-none"
+                  onPointerDown={(e) => beginSelection(e.clientX, e.clientY)}
+                  onPointerMove={(e) => updateSelection(e.clientX, e.clientY)}
+                  onPointerUp={endSelection}
+                  onPointerCancel={endSelection}
+                  onPointerLeave={() => {
+                    if (dragStart) endSelection();
+                  }}
+                >
                   <Image src={imagePreviewUrl} alt="추출 원본" fill unoptimized className="object-contain" />
+                  {manualCropEnabled ? (
+                    <>
+                      <div className="pointer-events-none absolute inset-0 bg-slate-950/10" />
+                      {manualCropRect ? (
+                        <div
+                          className="pointer-events-none absolute border-2 border-cyan-400 bg-cyan-300/15"
+                          style={{
+                            left: `${manualCropRect.x * 100}%`,
+                            top: `${manualCropRect.y * 100}%`,
+                            width: `${manualCropRect.width * 100}%`,
+                            height: `${manualCropRect.height * 100}%`,
+                          }}
+                        />
+                      ) : (
+                        <div className="pointer-events-none absolute inset-x-4 bottom-4 rounded-lg bg-slate-900/70 px-3 py-2 text-center text-xs text-white">
+                          원하는 위치 박스를 손가락으로 그려 주세요.
+                        </div>
+                      )}
+                    </>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-2 flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white text-sm text-slate-400">
@@ -198,9 +268,37 @@ export function ExtractorApp({ user }: Props) {
                 <input type="range" min={30} max={55} value={cropRatio} onChange={(e) => setCropRatio(Number(e.target.value))} className="mt-1 w-full" />
               </label>
               <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={manualCropEnabled}
+                  onChange={(e) => {
+                    setManualCropEnabled(e.target.checked);
+                    if (!e.target.checked) {
+                      setManualCropRect(null);
+                      setDragStart(null);
+                    }
+                  }}
+                />
+                원하는 구역 직접 선택
+              </label>
+              <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-700">
                 <input type="checkbox" checked={thresholdEnabled} onChange={(e) => setThresholdEnabled(e.target.checked)} />
                 threshold(이진화) 사용
               </label>
+              {manualCropEnabled ? (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    onClick={() => setManualCropRect(null)}
+                  >
+                    선택 초기화
+                  </button>
+                  <div className="flex items-center text-[11px] text-slate-500">
+                    선택 영역이 있으면 하단 42% 대신 직접 선택한 박스로 OCR합니다.
+                  </div>
+                </div>
+              ) : null}
               <button
                 type="button"
                 className="mt-3 h-11 w-full rounded-xl bg-slate-900 text-sm font-medium text-white disabled:opacity-50"
