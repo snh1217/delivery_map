@@ -1,0 +1,5 @@
+android/**
+resources/**
+.next-buildcheck/**
+android/release-signing.env.local
+android/local.properties
