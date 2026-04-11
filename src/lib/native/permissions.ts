@@ -14,6 +14,16 @@ function normalizePermissionState(value?: string | null): PermissionRequestResul
 }
 
 export async function getMicrophonePermissionState(): Promise<PermissionRequestResult["state"]> {
+  if (isNativeApp()) {
+    try {
+      const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+      const status = await SpeechRecognition.checkPermissions();
+      return normalizePermissionState(status.speechRecognition);
+    } catch {
+      return "unknown";
+    }
+  }
+
   if (typeof navigator === "undefined") return "unsupported";
 
   try {
@@ -29,6 +39,17 @@ export async function getMicrophonePermissionState(): Promise<PermissionRequestR
 }
 
 export async function requestMicrophonePermission(): Promise<PermissionRequestResult> {
+  if (isNativeApp()) {
+    try {
+      const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+      const status = await SpeechRecognition.requestPermissions();
+      const state = normalizePermissionState(status.speechRecognition);
+      return { granted: state === "granted", state };
+    } catch {
+      return { granted: false, state: "unknown" };
+    }
+  }
+
   if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
     return { granted: false, state: "unsupported" };
   }

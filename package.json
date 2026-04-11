@@ -22,6 +22,7 @@
     "android:install:debug": "npm run cap:sync && cd android && gradlew.bat installDebug"
   },
   "dependencies": {
+    "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.3.0",
     "@capacitor/cli": "^8.3.0",
     "@capacitor/core": "^8.3.0",

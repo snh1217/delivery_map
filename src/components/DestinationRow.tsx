@@ -332,7 +332,7 @@ export function DestinationRow({
     recognizerRef.current = recognizer;
 
     try {
-      recognizer.start();
+      await recognizer.start();
     } catch (error) {
       recognizerRef.current = null;
       const code = error instanceof Error ? error.message : "unknown";

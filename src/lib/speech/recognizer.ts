@@ -1,5 +1,7 @@
 "use client";
 
+import { isNativeApp } from "@/lib/native/runtime";
+
 type SpeechRecognitionEventLike = {
   resultIndex: number;
   results: ArrayLike<{
@@ -100,6 +102,18 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
   });
 
   const stopInternal = () => {
+    if (isNativeApp()) {
+      void (async () => {
+        try {
+          const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+          await SpeechRecognition.stop();
+        } catch {
+          // ignore stop race
+        }
+      })();
+      return;
+    }
+
     if (!recognition) return;
     try {
       recognition.stop();
@@ -126,7 +140,69 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     }, Math.max(100, waitMs));
   };
 
-  const start = () => {
+  const start = async () => {
+    if (isNativeApp()) {
+      clearTimer();
+      finalText = "";
+      interimText = "";
+      bestConfidence = undefined;
+      hasReceivedResult = false;
+      startedAt = Date.now();
+      lastResultAt = startedAt;
+
+      const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+      const availability = await SpeechRecognition.available();
+      if (!availability.available) {
+        throw new Error("unsupported");
+      }
+
+      await SpeechRecognition.removeAllListeners().catch(() => {});
+
+      await SpeechRecognition.addListener("partialResults", ({ matches }) => {
+        const transcript = joinParts(...(Array.isArray(matches) ? matches : []));
+        if (!transcript) return;
+        finalText = transcript;
+        interimText = "";
+        bestConfidence = 0.75;
+        hasReceivedResult = true;
+        lastResultAt = Date.now();
+        options.onResult?.(payload());
+        scheduleSilenceStop();
+      });
+
+      await SpeechRecognition.addListener("listeningState", ({ status }) => {
+        const nextListening = status === "started";
+        listening = nextListening;
+        options.onListeningChange?.(nextListening);
+        if (!nextListening) {
+          clearTimer();
+          options.onEnd?.(payload());
+          void SpeechRecognition.removeAllListeners().catch(() => {});
+        }
+      });
+
+      listening = true;
+      options.onListeningChange?.(true);
+
+      try {
+        await SpeechRecognition.start({
+          language: options.lang ?? "ko-KR",
+          maxResults: 1,
+          partialResults: true,
+          popup: false,
+          prompt: "주소를 말해 주세요",
+        });
+      } catch (error) {
+        listening = false;
+        options.onListeningChange?.(false);
+        const message = error instanceof Error ? error.message : "unknown";
+        options.onError?.(message);
+        throw error;
+      }
+
+      return;
+    }
+
     const Ctor = getCtor();
     if (!Ctor) {
       throw new Error("unsupported");
@@ -197,6 +273,18 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     stop: stopInternal,
     abort: () => {
       clearTimer();
+      if (isNativeApp()) {
+        void (async () => {
+          try {
+            const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+            await SpeechRecognition.stop();
+            await SpeechRecognition.removeAllListeners();
+          } catch {
+            // ignore
+          }
+        })();
+        return;
+      }
       if (!recognition) return;
       try {
         recognition.abort();
