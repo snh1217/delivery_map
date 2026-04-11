@@ -13,9 +13,12 @@
     "cap:add:android": "npx cap add android",
     "cap:open:android": "npx cap open android",
     "cap:assets:android": "npx @capacitor/assets generate --android",
+    "android:signing:init": "powershell -ExecutionPolicy Bypass -File scripts/android/Initialize-AndroidReleaseSigning.ps1",
     "android:apk:debug": "npm run cap:sync && cd android && gradlew.bat assembleDebug",
     "android:apk:release": "npm run cap:sync && cd android && gradlew.bat assembleRelease",
     "android:aab:release": "npm run cap:sync && cd android && gradlew.bat bundleRelease",
+    "android:apk:release:signed": "powershell -ExecutionPolicy Bypass -File scripts/android/Invoke-AndroidReleaseBuild.ps1 -Task assembleRelease",
+    "android:aab:release:signed": "powershell -ExecutionPolicy Bypass -File scripts/android/Invoke-AndroidReleaseBuild.ps1 -Task bundleRelease",
     "android:install:debug": "npm run cap:sync && cd android && gradlew.bat installDebug"
   },
   "dependencies": {

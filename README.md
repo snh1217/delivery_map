@@ -404,6 +404,81 @@ git push -u origin main
 3. 배포
 4. 네이버 콘솔 Web 서비스 URL에 프로덕션 도메인 등록
 
+## Android APK / AAB 빌드
+
+### 1) 서명 키 초기화(최초 1회)
+
+```bash
+npm run android:signing:init
+```
+
+- 서명 키 파일: `D:\Android\keystore\delivery-map-release.jks`
+- 로컬 서명 설정 파일: `android/release-signing.env.local`
+- 둘 다 업데이트에 꼭 필요하므로 별도로 백업하세요.
+
+### 2) 디버그 APK
+
+```bash
+npm run android:apk:debug
+```
+
+- 출력: `android/app/build/outputs/apk/debug/app-debug.apk`
+
+### 3) 서명된 릴리즈 APK
+
+```bash
+npm run android:apk:release:signed
+```
+
+- 출력: `android/app/build/outputs/apk/release/`
+
+### 4) 서명된 AAB (Play Store 업로드용)
+
+```bash
+npm run android:aab:release:signed
+```
+
+- 출력: `android/app/build/outputs/bundle/release/`
+
+### 5) USB 연결 기기에 디버그 설치
+
+```bash
+npm run android:install:debug
+```
+
+- 안드로이드 폰에서 `개발자 옵션 > USB 디버깅`을 켜야 합니다.
+- 기기가 연결되지 않으면 `No connected devices!`가 표시됩니다.
+
+## APK 링크 설치(스토어 없이 배포)
+
+- 안드로이드에서는 APK 파일 링크만 있어도 직접 설치할 수 있습니다.
+- 프로젝트에는 설치 안내 페이지를 추가했습니다:
+  - `/install/android`
+- 공개 다운로드 링크를 붙이려면 Vercel 환경변수에 아래 값을 넣으세요.
+
+```bash
+NEXT_PUBLIC_ANDROID_APK_URL=https://<공개-다운로드-링크>/app-release.apk
+```
+
+- 가장 쉬운 무료 방식:
+  - GitHub Releases asset 링크 사용
+  - 또는 다른 정적 파일 링크 사용
+- iPhone은 APK 설치가 불가능하므로 `홈 화면에 추가(PWA)` 방식을 사용합니다.
+
+## Google Play Store 등록 경로
+
+- 정식 배포는 APK보다 **AAB(App Bundle)** 업로드가 권장됩니다.
+- 현재 프로젝트는 `npm run android:aab:release:signed`로 AAB 준비가 가능합니다.
+- 추천 순서:
+  1. Google Play Console에서 앱 생성
+  2. 내부 테스트(Internal testing) 트랙 먼저 업로드
+  3. 기기 테스트
+  4. 프로덕션 출시
+
+참고:
+- 내부 테스트/비공개 테스트로 먼저 검증한 뒤 정식 배포하는 흐름이 가장 안전합니다.
+- 스토어 등록은 Google Play Console 개발자 계정이 필요합니다.
+
 ## 네이버 콘솔 설정
 
 - Dynamic Map: 필수

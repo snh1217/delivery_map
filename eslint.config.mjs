@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     ".next-buildcheck/**",
     "out/**",
     "build/**",
+    "android/**/build/**",
     "next-env.d.ts",
   ]),
 ]);
