@@ -1719,11 +1719,33 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     <main className="min-h-screen bg-slate-50 px-2 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32 lg:pb-4">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-bold tracking-tight text-slate-800">퀵·배달 구역메이커</h1>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-              Quick + Delivery
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-slate-800">퀵배달 메이커</h1>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                Quick + Delivery
+              </span>
+            </div>
+            <a
+              href="/install/android"
+              className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 3v11" />
+                <path d="m8 10 4 4 4-4" />
+                <path d="M5 20h14" />
+              </svg>
+              APK 설치
+            </a>
           </div>
           <p className="mt-1 text-xs text-slate-500">퀵/배달 경유지 구설정 · 팬 권역 · 길찾기 자동 생성</p>
           {bootClientErrors.length > 0 ? (
