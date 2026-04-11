@@ -8,6 +8,7 @@ import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
 import { ResultPanel } from "@/components/ResultPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { NativePermissionStatus } from "@/components/app/NativePermissionStatus";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { normalizeDongCentroids } from "@/lib/dong";
@@ -37,6 +38,7 @@ import {
 import { loadRouteUiSnapshot, persistRouteUiSnapshot, ROUTE_UI_SNAPSHOT_TTL_MS, type RouteUiSnapshot } from "@/lib/routeUiSnapshot";
 import { searchNaverGeocode } from "@/lib/naverGeocode";
 import { consumePendingOcrDestination } from "@/lib/ocr/pendingDestination";
+import type { OcrTransferRow } from "@/types";
 import type {
   DevelopmentRequestRow,
   DestinationRowState,
@@ -341,6 +343,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
+  const [incomingOcrTransfers, setIncomingOcrTransfers] = useState<OcrTransferRow[]>([]);
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
@@ -538,6 +541,24 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   }, [iosSafeMode]);
 
+  const loadIncomingOcrTransfers = useCallback(async () => {
+    if (!sessionUser?.isAllowed) {
+      setIncomingOcrTransfers([]);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/ocr-transfers?status=pending", { cache: "no-store" });
+      if (!response.ok) {
+        return;
+      }
+      const payload = (await response.json()) as { rows?: OcrTransferRow[] };
+      setIncomingOcrTransfers(Array.isArray(payload.rows) ? payload.rows : []);
+    } catch {
+      // keep inbox silent on normal user screen
+    }
+  }, [sessionUser?.isAllowed]);
+
   useEffect(() => {
     const media = window.matchMedia("(max-width: 1023px)");
 
@@ -549,10 +570,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         setMapPanelOpenMobile(true);
       }
       syncViewportCssVar();
+      void loadIncomingOcrTransfers();
       if (forceMapRefresh) {
         window.setTimeout(() => {
           syncViewportCssVar();
           restorePendingRouteUiSnapshot();
+          void loadIncomingOcrTransfers();
           setMapRenderKey((prev) => prev + 1);
           window.dispatchEvent(new Event("resize"));
         }, 120);
@@ -587,7 +610,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       document.removeEventListener("visibilitychange", onVisibility);
       cleanupNativeResume();
     };
-  }, [restorePendingRouteUiSnapshot]);
+  }, [loadIncomingOcrTransfers, restorePendingRouteUiSnapshot]);
 
   useEffect(() => {
     const onError = (event: ErrorEvent) => {
@@ -714,6 +737,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [loadDevelopmentRequests]);
 
   useEffect(() => {
+    void loadIncomingOcrTransfers();
+  }, [loadIncomingOcrTransfers]);
+
+  useEffect(() => {
     if (!sessionUser?.isAdmin) return;
     const pending = consumePendingOcrDestination();
     if (!pending?.address) return;
@@ -735,7 +762,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setActiveRouteBatchIndex(null);
   }, [origin, rows]);
 
-  const onSearch = async (id: string) => {
+  const onSearch = useCallback(async (id: string) => {
     const row = rowsRef.current.find((item) => item.id === id);
     if (!row || !row.input.trim()) {
       return;
@@ -791,7 +818,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         ),
       );
     }
-  };
+  }, []);
 
   const onSelectCandidate = (id: string, index: number) => {
     setRows((prev) =>
@@ -874,7 +901,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }, 0);
   };
 
-  const addDestinationFromAddress = (address: string) => {
+  const addDestinationFromAddress = useCallback((address: string) => {
     const normalized = address.trim();
     if (!normalized) {
       throw new Error("추출된 주소가 비어 있습니다.");
@@ -891,7 +918,42 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       void onSearch(newRow.id);
     }, 0);
     setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
-  };
+  }, [onSearch]);
+
+  const updateIncomingOcrTransferStatus = useCallback(
+    async (id: string, action: "consume" | "dismiss") => {
+      const response = await fetch(`/api/ocr-transfers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+
+      if (response.ok) {
+        setIncomingOcrTransfers((prev) => prev.filter((row) => row.id !== id));
+      }
+    },
+    [],
+  );
+
+  const onApplyIncomingOcrTransfer = useCallback(
+    async (id: string) => {
+      const target = incomingOcrTransfers.find((row) => row.id === id);
+      if (!target) {
+        return;
+      }
+
+      addDestinationFromAddress(target.extracted_text);
+      await updateIncomingOcrTransferStatus(id, "consume");
+    },
+    [addDestinationFromAddress, incomingOcrTransfers, updateIncomingOcrTransferStatus],
+  );
+
+  const onDismissIncomingOcrTransfer = useCallback(
+    async (id: string) => {
+      await updateIncomingOcrTransferStatus(id, "dismiss");
+    },
+    [updateIncomingOcrTransferStatus],
+  );
 
   const onNavigateKakao = (id: string) => {
     const row = rows.find((item) => item.id === id);
@@ -1729,26 +1791,34 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </span>
             </div>
             {showApkInstallShortcut ? (
-              <a
-                href="/install/android"
-                className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  className="h-4 w-4"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href="/extractor"
+                  className="inline-flex h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <path d="M12 3v11" />
-                  <path d="m8 10 4 4 4-4" />
-                  <path d="M5 20h14" />
-                </svg>
-                APK 설치
-              </a>
+                  구역 추출기
+                </a>
+                <a
+                  href="/install/android"
+                  className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3v11" />
+                    <path d="m8 10 4 4 4-4" />
+                    <path d="M5 20h14" />
+                  </svg>
+                  APK 설치
+                </a>
+              </div>
             ) : null}
           </div>
           <p className="mt-1 text-xs text-slate-500">퀵/배달 경유지 구설정 · 팬 권역 · 길찾기 자동 생성</p>
@@ -1877,6 +1947,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
               <div className="mt-1">위치 상태: {locationStatus}</div>
               <div>승인 상태: {sessionUser?.isAllowed ? "허용" : "미허용"}</div>
+              <NativePermissionStatus />
               {sessionUser?.isAllowed ? (
                 <div className="mt-2">
                   <button
@@ -1997,6 +2068,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               isAdmin={Boolean(sessionUser?.isAdmin)}
               canUseAttachment={canUseDestinationAttachment}
               onApplyOcrToRow={applyAddressToRowAndSearch}
+              incomingOcrTransfers={incomingOcrTransfers}
+              onApplyIncomingOcrTransfer={(id) => void onApplyIncomingOcrTransfer(id)}
+              onDismissIncomingOcrTransfer={(id) => void onDismissIncomingOcrTransfer(id)}
               onChangeCallTime={onChangeCallTime}
               onUseCurrentCallTime={onUseCurrentCallTime}
               onComputeCallEstimate={(id) => void onComputeCallEstimate(id)}
@@ -2272,4 +2346,5 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     </main>
   );
 }
+
 

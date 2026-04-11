@@ -1,7 +1,7 @@
 "use client";
 
 import { DestinationRow } from "@/components/DestinationRow";
-import type { DestinationRowState, LatLng } from "@/types";
+import type { DestinationRowState, LatLng, OcrTransferRow } from "@/types";
 
 export type RouteBatchButton = {
   key: string;
@@ -40,6 +40,9 @@ type Props = {
   isAdmin?: boolean;
   canUseAttachment?: boolean;
   onApplyOcrToRow?: (id: string, address: string) => void;
+  incomingOcrTransfers?: OcrTransferRow[];
+  onApplyIncomingOcrTransfer?: (id: string) => void;
+  onDismissIncomingOcrTransfer?: (id: string) => void;
   onChangeCallTime: (id: string, value: string) => void;
   onUseCurrentCallTime: (id: string) => void;
   onComputeCallEstimate: (id: string) => void;
@@ -78,6 +81,9 @@ export function DestinationList({
   isAdmin = false,
   canUseAttachment = false,
   onApplyOcrToRow,
+  incomingOcrTransfers = [],
+  onApplyIncomingOcrTransfer,
+  onDismissIncomingOcrTransfer,
   onChangeCallTime,
   onUseCurrentCallTime,
   onComputeCallEstimate,
@@ -111,6 +117,43 @@ export function DestinationList({
 
       <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
         <div className="flex flex-col gap-2">
+          {incomingOcrTransfers.length > 0 ? (
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold text-emerald-900">받은 주소 {incomingOcrTransfers.length}건</div>
+                  <p className="mt-0.5 text-[11px] leading-5 text-emerald-800">
+                    구역 추출기나 다른 기기에서 보낸 주소입니다. 한 번 눌러서 바로 도착지로 추가할 수 있습니다.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-2 space-y-2">
+                {incomingOcrTransfers.slice(0, 3).map((transfer) => (
+                  <div key={transfer.id} className="rounded-lg border border-emerald-200 bg-white p-2">
+                    <div className="text-xs text-slate-700">{transfer.extracted_text}</div>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        className="h-9 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-medium text-white"
+                        onClick={() => onApplyIncomingOcrTransfer?.(transfer.id)}
+                      >
+                        도착지로 추가
+                      </button>
+                      <button
+                        type="button"
+                        className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                        onClick={() => onDismissIncomingOcrTransfer?.(transfer.id)}
+                      >
+                        닫기
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
             전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개(최대 {routeMaxStops}개)
             {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 길찾기 사용` : ""}

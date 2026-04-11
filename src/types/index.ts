@@ -284,3 +284,20 @@ export type CallTimeEntry = {
   id: string;
   time: string;
 };
+
+export type OcrTransferStatus = "pending" | "consumed" | "dismissed";
+
+export type OcrTransferSource = "extractor" | "admin-panel" | "destination-row";
+
+export type OcrTransferRow = {
+  id: string;
+  owner_phone: string;
+  sender_phone: string | null;
+  extracted_text: string;
+  raw_text: string | null;
+  source: OcrTransferSource;
+  status: OcrTransferStatus;
+  created_at: string;
+  updated_at: string;
+  consumed_at: string | null;
+};

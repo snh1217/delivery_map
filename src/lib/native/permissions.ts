@@ -106,3 +106,39 @@ export async function requestCoreAppPermissions() {
 
   return result;
 }
+
+export async function getCoreAppPermissionStates() {
+  const result = {
+    location: "unknown" as PermissionRequestResult["state"],
+    camera: "unknown" as PermissionRequestResult["state"],
+    microphone: "unknown" as PermissionRequestResult["state"],
+  };
+
+  if (!isNativeApp()) {
+    return result;
+  }
+
+  try {
+    const { Geolocation } = await import("@capacitor/geolocation");
+    const geo = await Geolocation.checkPermissions();
+    result.location = normalizePermissionState(geo.location ?? geo.coarseLocation ?? "unknown");
+  } catch {
+    // ignore
+  }
+
+  try {
+    const { Camera } = await import("@capacitor/camera");
+    const camera = await Camera.checkPermissions();
+    result.camera = normalizePermissionState(camera.camera ?? camera.photos ?? "unknown");
+  } catch {
+    // ignore
+  }
+
+  try {
+    result.microphone = await getMicrophonePermissionState();
+  } catch {
+    // ignore
+  }
+
+  return result;
+}
