@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
+import { ExtractorBridge, type ExtractorBridgeStatus } from "@/lib/native/extractorBridge";
+import { isNativeApp } from "@/lib/native/runtime";
 import { shareText } from "@/lib/native/share";
 import type { SessionUser } from "@/types";
 
@@ -30,13 +32,15 @@ export function ExtractorApp({ user }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [sending, setSending] = useState(false);
+  const [nativeStatus, setNativeStatus] = useState<ExtractorBridgeStatus | null>(null);
+  const [nativeBusy, setNativeBusy] = useState(false);
 
   const previewLabel = useMemo(() => {
     if (!file) return "스크린샷 선택 또는 촬영";
     return `${file.name} (${Math.round(file.size / 1024)}KB)`;
   }, [file]);
 
-  const onPickFile = (picked: File | null) => {
+  const onPickFile = useCallback((picked: File | null) => {
     setFile(picked);
     setError(null);
     setToast(null);
@@ -49,7 +53,48 @@ export function ExtractorApp({ user }: Props) {
     setDragStart(null);
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
     setImagePreviewUrl(picked ? URL.createObjectURL(picked) : null);
+  }, [imagePreviewUrl]);
+
+  const refreshNativeStatus = async () => {
+    if (!isNativeApp()) return;
+    try {
+      const status = await ExtractorBridge.getStatus();
+      setNativeStatus(status);
+    } catch {
+      setNativeStatus(null);
+    }
   };
+
+  useEffect(() => {
+    void refreshNativeStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    const url = new URL(window.location.href);
+    const fromCapture = url.searchParams.get("captured") === "1";
+    if (!fromCapture) return;
+
+    void (async () => {
+      try {
+        const result = await ExtractorBridge.consumeLastCapture();
+        if (!result.dataUrl) return;
+        const response = await fetch(result.dataUrl);
+        const blob = await response.blob();
+        const capturedFile = new File([blob], `extractor-capture-${Date.now()}.png`, {
+          type: "image/png",
+        });
+        onPickFile(capturedFile);
+        setToast("방금 캡처한 화면을 불러왔습니다. 원하는 구역을 바로 선택하거나 OCR을 시작하세요.");
+      } catch {
+        setError("캡처한 화면을 불러오지 못했습니다. 다시 시도해 주세요.");
+      } finally {
+        url.searchParams.delete("captured");
+        window.history.replaceState({}, "", url.toString());
+        void refreshNativeStatus();
+      }
+    })();
+  }, [onPickFile]);
 
   const toRelativePoint = (clientX: number, clientY: number) => {
     const el = selectionSurfaceRef.current;
@@ -91,6 +136,57 @@ export function ExtractorApp({ user }: Props) {
       return;
     }
     fileInputRef.current?.click();
+  };
+
+  const onEnableOverlay = async () => {
+    setNativeBusy(true);
+    try {
+      await ExtractorBridge.requestOverlayPermission();
+      setToast("다른 앱 위에 표시 권한 화면을 열었습니다. 허용 후 다시 돌아와 주세요.");
+    } catch {
+      setError("오버레이 권한 요청을 열지 못했습니다.");
+    } finally {
+      setNativeBusy(false);
+      setTimeout(() => void refreshNativeStatus(), 1000);
+    }
+  };
+
+  const onStartOverlay = async () => {
+    setNativeBusy(true);
+    try {
+      await ExtractorBridge.startOverlayBubble();
+      setToast("떠있는 버튼을 시작했습니다. 퀵 프로그램 위에서 '추출'을 누르면 캡처 후 이 화면으로 돌아옵니다.");
+    } catch {
+      setError("떠있는 버튼을 시작하지 못했습니다. 먼저 다른 앱 위에 표시 권한을 허용해 주세요.");
+    } finally {
+      setNativeBusy(false);
+      void refreshNativeStatus();
+    }
+  };
+
+  const onStopOverlay = async () => {
+    setNativeBusy(true);
+    try {
+      await ExtractorBridge.stopOverlayBubble();
+      setToast("떠있는 버튼을 중지했습니다.");
+    } catch {
+      setError("떠있는 버튼을 중지하지 못했습니다.");
+    } finally {
+      setNativeBusy(false);
+      void refreshNativeStatus();
+    }
+  };
+
+  const onCaptureCurrentScreen = async () => {
+    setNativeBusy(true);
+    try {
+      await ExtractorBridge.captureCurrentScreen();
+      setToast("현재 화면 캡처 권한을 요청합니다.");
+    } catch {
+      setError("현재 화면 캡처를 시작하지 못했습니다.");
+    } finally {
+      setNativeBusy(false);
+    }
   };
 
   const runOcr = async () => {
@@ -204,6 +300,41 @@ export function ExtractorApp({ user }: Props) {
             <p className="mt-1 text-xs leading-5 text-slate-600">A폰에서 주소를 보내면, B폰 메인 앱 도착지 목록 상단의 받은 주소 카드에서 바로 추가할 수 있습니다.</p>
           </div>
         </div>
+
+        {isNativeApp() ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-amber-900">앱 전용 빠른 추출</div>
+                <p className="mt-1 text-xs leading-5 text-amber-800">
+                  퀵 프로그램 위에서 떠있는 버튼으로 현재 화면을 캡처하고, 이 화면으로 돌아와 원하는 구역만 OCR할 수 있습니다.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className={`rounded-full px-3 py-1 ${nativeStatus?.overlayPermission ? "bg-emerald-100 text-emerald-700" : "bg-white text-amber-900"}`}>
+                  오버레이 {nativeStatus?.overlayPermission ? "허용" : "미허용"}
+                </span>
+                <span className={`rounded-full px-3 py-1 ${nativeStatus?.overlayRunning ? "bg-cyan-100 text-cyan-800" : "bg-white text-slate-700"}`}>
+                  떠있는 버튼 {nativeStatus?.overlayRunning ? "실행 중" : "중지"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <button type="button" className="h-11 rounded-xl border border-amber-300 bg-white text-sm font-medium text-amber-900 disabled:opacity-50" onClick={() => void onEnableOverlay()} disabled={nativeBusy}>
+                권한 허용
+              </button>
+              <button type="button" className="h-11 rounded-xl bg-amber-600 text-sm font-medium text-white disabled:opacity-50" onClick={() => void onStartOverlay()} disabled={nativeBusy || !nativeStatus?.overlayPermission}>
+                떠있는 버튼 시작
+              </button>
+              <button type="button" className="h-11 rounded-xl border border-slate-300 bg-white text-sm font-medium text-slate-700 disabled:opacity-50" onClick={() => void onStopOverlay()} disabled={nativeBusy || !nativeStatus?.overlayRunning}>
+                떠있는 버튼 중지
+              </button>
+              <button type="button" className="h-11 rounded-xl border border-cyan-300 bg-cyan-50 text-sm font-medium text-cyan-900 disabled:opacity-50" onClick={() => void onCaptureCurrentScreen()} disabled={nativeBusy}>
+                지금 화면 캡처
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -287,24 +418,13 @@ export function ExtractorApp({ user }: Props) {
               </label>
               {manualCropEnabled ? (
                 <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
-                    onClick={() => setManualCropRect(null)}
-                  >
+                  <button type="button" className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs" onClick={() => setManualCropRect(null)}>
                     선택 초기화
                   </button>
-                  <div className="flex items-center text-[11px] text-slate-500">
-                    선택 영역이 있으면 하단 42% 대신 직접 선택한 박스로 OCR합니다.
-                  </div>
+                  <div className="flex items-center text-[11px] text-slate-500">선택 영역이 있으면 하단 42% 대신 직접 선택한 박스로 OCR합니다.</div>
                 </div>
               ) : null}
-              <button
-                type="button"
-                className="mt-3 h-11 w-full rounded-xl bg-slate-900 text-sm font-medium text-white disabled:opacity-50"
-                onClick={() => void runOcr()}
-                disabled={!file || running}
-              >
+              <button type="button" className="mt-3 h-11 w-full rounded-xl bg-slate-900 text-sm font-medium text-white disabled:opacity-50" onClick={() => void runOcr()} disabled={!file || running}>
                 {running ? `인식 중... ${ocrProgress}%` : "OCR 시작"}
               </button>
               <p className="mt-2 text-[11px] text-slate-500">로그인 계정: {user?.phone ?? "-"}</p>
