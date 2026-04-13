@@ -15,6 +15,8 @@ public class ExtractorStateStore {
     private static final String PREFS = "extractor_bridge";
     private static final String KEY_OVERLAY_RUNNING = "overlay_running";
     private static final String KEY_LAST_CAPTURE = "last_capture_path";
+    private static final String KEY_OVERLAY_X = "overlay_x";
+    private static final String KEY_OVERLAY_Y = "overlay_y";
 
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -26,6 +28,18 @@ public class ExtractorStateStore {
 
     public static boolean isOverlayRunning(Context context) {
         return prefs(context).getBoolean(KEY_OVERLAY_RUNNING, false);
+    }
+
+    public static void saveOverlayPosition(Context context, int x, int y) {
+        prefs(context).edit().putInt(KEY_OVERLAY_X, x).putInt(KEY_OVERLAY_Y, y).apply();
+    }
+
+    public static int getOverlayX(Context context, int fallback) {
+        return prefs(context).getInt(KEY_OVERLAY_X, fallback);
+    }
+
+    public static int getOverlayY(Context context, int fallback) {
+        return prefs(context).getInt(KEY_OVERLAY_Y, fallback);
     }
 
     public static File getCaptureFile(Context context) {

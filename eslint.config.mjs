@@ -13,6 +13,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "android/**/build/**",
+    "android-extractor/**/build/**",
     "next-env.d.ts",
   ]),
 ]);

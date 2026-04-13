@@ -31,6 +31,7 @@ public class OverlayBubbleService extends Service {
     private WindowManager windowManager;
     private View bubbleView;
     private WindowManager.LayoutParams bubbleParams;
+    private static final long LONG_PRESS_STOP_MS = 700L;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -125,8 +126,8 @@ public class OverlayBubbleService extends Service {
             PixelFormat.TRANSLUCENT
         );
         bubbleParams.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
-        bubbleParams.x = 24;
-        bubbleParams.y = 0;
+        bubbleParams.x = ExtractorStateStore.getOverlayX(this, 24);
+        bubbleParams.y = ExtractorStateStore.getOverlayY(this, 0);
 
         final int[] initialX = new int[1];
         final int[] initialY = new int[1];
@@ -154,7 +155,10 @@ public class OverlayBubbleService extends Service {
                     long elapsed = System.currentTimeMillis() - downTime[0];
                     float dx = Math.abs(event.getRawX() - touchX[0]);
                     float dy = Math.abs(event.getRawY() - touchY[0]);
-                    if (elapsed < 220 && dx < 12 && dy < 12) {
+                    ExtractorStateStore.saveOverlayPosition(OverlayBubbleService.this, bubbleParams.x, bubbleParams.y);
+                    if (elapsed >= LONG_PRESS_STOP_MS && dx < 12 && dy < 12) {
+                        stopSelf();
+                    } else if (elapsed < 220 && dx < 12 && dy < 12) {
                         launchCapture();
                     }
                     return true;

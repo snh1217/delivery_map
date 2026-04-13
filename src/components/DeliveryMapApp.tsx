@@ -326,6 +326,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const recommendationModeRef = useRef(recommendationMode);
   const routeUiSnapshotVersionRef = useRef(0);
   const geoWatchIdRef = useRef<NativeLocationWatchHandle | null>(null);
+  const incomingTransferCountRef = useRef<number | null>(null);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
@@ -344,6 +345,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
   const [incomingOcrTransfers, setIncomingOcrTransfers] = useState<OcrTransferRow[]>([]);
+  const [incomingTransferToast, setIncomingTransferToast] = useState<string | null>(null);
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
@@ -739,6 +741,38 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   useEffect(() => {
     void loadIncomingOcrTransfers();
   }, [loadIncomingOcrTransfers]);
+
+  useEffect(() => {
+    if (!sessionUser?.isAllowed) {
+      incomingTransferCountRef.current = null;
+      setIncomingTransferToast(null);
+      return;
+    }
+
+    const previousCount = incomingTransferCountRef.current;
+    incomingTransferCountRef.current = incomingOcrTransfers.length;
+
+    if (previousCount === null) {
+      return;
+    }
+
+    if (incomingOcrTransfers.length > previousCount) {
+      const addedCount = incomingOcrTransfers.length - previousCount;
+      setIncomingTransferToast(
+        addedCount === 1 ? "받은 주소 1건이 도착했습니다." : `받은 주소 ${addedCount}건이 새로 도착했습니다.`,
+      );
+    }
+
+    if (incomingOcrTransfers.length === 0 && previousCount > 0) {
+      setIncomingTransferToast(null);
+    }
+  }, [incomingOcrTransfers, sessionUser?.isAllowed]);
+
+  useEffect(() => {
+    if (!incomingTransferToast) return;
+    const timeout = window.setTimeout(() => setIncomingTransferToast(null), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [incomingTransferToast]);
 
   useEffect(() => {
     if (!sessionUser?.isAllowed) return;
@@ -2346,6 +2380,21 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           </button>
         </div>
       </div>
+
+      {incomingTransferToast ? (
+        <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+98px)] z-30 flex justify-center px-3 lg:bottom-6">
+          <div className="flex w-full max-w-md items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 shadow-lg">
+            <div className="text-sm font-medium text-emerald-900">{incomingTransferToast}</div>
+            <button
+              type="button"
+              className="shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800"
+              onClick={() => setIncomingTransferToast(null)}
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {sessionUser?.isAllowed ? <EarningsStatsFab onClick={() => setEarningsStatsModalOpen(true)} /> : null}
       {sessionUser?.isAllowed ? <EarningsFab onClick={() => setEarningsModalOpen(true)} /> : null}
