@@ -286,6 +286,10 @@ function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number
   };
 }
 
+function isReusableEmptyRow(row: DestinationRowState) {
+  return !row.input.trim() && !row.coord && row.geocodeItems.length === 0;
+}
+
 type Props = {
   sessionUser: SessionUser | null;
 };
@@ -351,9 +355,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [autoApplyIncomingTransfers, setAutoApplyIncomingTransfers] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
-      return window.localStorage.getItem(OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY) === "1";
+      const saved = window.localStorage.getItem(OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY);
+      if (saved === "1") return true;
+      if (saved === "0") return false;
+      return true;
     } catch {
-      return false;
+      return true;
     }
   });
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
@@ -935,7 +942,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   };
 
-  const applyAddressToRowAndSearch = (id: string, address: string) => {
+  const applyAddressToRowAndSearch = useCallback((id: string, address: string) => {
     const normalized = address.trim();
     if (!normalized) return;
     setRows((prev) =>
@@ -959,13 +966,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     window.setTimeout(() => {
       void onSearch(id);
     }, 0);
-  };
+  }, [onSearch]);
 
   const addDestinationFromAddress = useCallback((address: string) => {
     const normalized = address.trim();
     if (!normalized) {
       throw new Error("추출된 주소가 비어 있습니다.");
     }
+
+    const reusableRow = rowsRef.current.find(isReusableEmptyRow);
+    if (reusableRow) {
+      setPendingFocusRowId(reusableRow.id);
+      applyAddressToRowAndSearch(reusableRow.id, normalized);
+      setLastAutoRemovedMessage("비어 있던 도착지에 OCR 주소를 채우고 자동 검색을 시작했습니다.");
+      return;
+    }
+
     if (rowsRef.current.length >= MAX_DESTINATIONS) {
       throw new Error(`도착지는 최대 ${MAX_DESTINATIONS}개까지 추가할 수 있습니다.`);
     }
@@ -978,7 +994,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       void onSearch(newRow.id);
     }, 0);
     setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
-  }, [onSearch]);
+  }, [applyAddressToRowAndSearch, onSearch]);
 
   const updateIncomingOcrTransferStatus = useCallback(
     async (id: string, action: "consume" | "dismiss") => {
@@ -1042,8 +1058,18 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   const onAddRow = () => {
+    const reusableRow = rowsRef.current.find(isReusableEmptyRow);
+    if (reusableRow) {
+      setPendingFocusRowId(reusableRow.id);
+      return;
+    }
+
+    if (rowsRef.current.length >= MAX_DESTINATIONS) {
+      return;
+    }
+
     const newRow = createRow();
-    setRows((prev) => (prev.length >= MAX_DESTINATIONS ? prev : [...prev, newRow]));
+    setRows((prev) => [...prev, newRow]);
     setPendingFocusRowId(newRow.id);
   };
 

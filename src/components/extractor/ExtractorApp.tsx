@@ -16,6 +16,7 @@ type Props = {
 export function ExtractorApp({ user }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionSurfaceRef = useRef<HTMLDivElement>(null);
+  const lastAutoSentAddressRef = useRef<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState(42);
@@ -52,6 +53,7 @@ export function ExtractorApp({ user }: Props) {
     setPreprocessedPreviewUrl(null);
     setOcrRawText("");
     setOcrAddressDraft("");
+    lastAutoSentAddressRef.current = null;
     setManualCropRect(null);
     setDragStart(null);
     if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
@@ -212,6 +214,40 @@ export function ExtractorApp({ user }: Props) {
     }
   };
 
+  const sendToMainApp = useCallback(
+    async (text: string, rawText: string, options?: { silent?: boolean; skipDuplicateCheck?: boolean }) => {
+      const normalized = text.trim();
+      if (!normalized) {
+        throw new Error("전송할 주소가 없습니다.");
+      }
+      if (!options?.skipDuplicateCheck && lastAutoSentAddressRef.current === normalized) {
+        return false;
+      }
+
+      setSending(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/ocr-transfers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ extractedText: normalized, rawText, source: "extractor" }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(payload.message ?? "전송 실패");
+        }
+        lastAutoSentAddressRef.current = normalized;
+        if (!options?.silent) {
+          setToast("B폰 메인 앱으로 주소를 보냈습니다. 메인 앱의 받은 주소 카드에서 바로 추가할 수 있습니다.");
+        }
+        return true;
+      } finally {
+        setSending(false);
+      }
+    },
+    [],
+  );
+
   const runOcr = async () => {
     if (!file) return;
     setRunning(true);
@@ -241,6 +277,14 @@ export function ExtractorApp({ user }: Props) {
       setOcrAddressDraft(result.address ?? "");
       if (!result.address) {
         setError("주소를 정확히 찾지 못했습니다. 결과를 직접 편집한 뒤 사용하세요.");
+      } else if (user?.isAllowed) {
+        try {
+          await sendToMainApp(result.address, result.sanitizedText, { silent: true });
+          setToast("주소를 추출했고, 같은 계정의 B폰 메인 앱으로 자동 전송했습니다.");
+        } catch (autoSendError) {
+          setToast("주소는 추출했습니다. 자동 전송은 실패해서 복사/공유 또는 수동 전송이 필요합니다.");
+          setError(autoSendError instanceof Error ? autoSendError.message : "자동 전송 실패");
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "OCR 처리 실패");
@@ -268,23 +312,10 @@ export function ExtractorApp({ user }: Props) {
       setError("전송할 주소가 없습니다.");
       return;
     }
-    setSending(true);
-    setError(null);
     try {
-      const response = await fetch("/api/ocr-transfers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ extractedText: text, rawText: ocrRawText, source: "extractor" }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(payload.message ?? "전송 실패");
-      }
-      setToast("B폰 메인 앱으로 주소를 보냈습니다. 메인 앱의 받은 주소 카드에서 바로 추가할 수 있습니다.");
+      await sendToMainApp(text, ocrRawText, { skipDuplicateCheck: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "전송 실패");
-    } finally {
-      setSending(false);
     }
   };
 
@@ -538,6 +569,9 @@ export function ExtractorApp({ user }: Props) {
                   {sending ? "전송 중..." : "B폰으로 보내기"}
                 </button>
               </div>
+              <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                로그인된 계정이면 OCR 성공 시 같은 계정의 B폰 메인 앱으로 자동 전송됩니다. 필요하면 복사/공유 또는 수동 전송도 계속 사용할 수 있습니다.
+              </p>
             </div>
 
             <details className="rounded-2xl border border-slate-200 p-3">
