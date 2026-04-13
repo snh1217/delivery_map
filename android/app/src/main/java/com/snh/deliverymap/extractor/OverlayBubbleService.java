@@ -45,9 +45,15 @@ public class OverlayBubbleService extends Service {
             return START_NOT_STICKY;
         }
 
-        startForeground(NOTIFICATION_ID, buildNotification());
-        showBubble();
-        ExtractorStateStore.setOverlayRunning(this, true);
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification());
+            showBubble();
+            ExtractorStateStore.setOverlayRunning(this, true);
+        } catch (Exception error) {
+            ExtractorStateStore.setOverlayRunning(this, false);
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         return START_STICKY;
     }
 
@@ -78,11 +84,11 @@ public class OverlayBubbleService extends Service {
         );
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Region Extractor Running")
-            .setContentText("Use the floating bubble to capture the current screen for OCR.")
+            .setContentTitle("구역 추출기 실행 중")
+            .setContentText("떠있는 버튼으로 현재 화면을 캡처해 OCR을 시작할 수 있습니다.")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
-            .addAction(0, "Stop", stopPendingIntent)
+            .addAction(0, "중지", stopPendingIntent)
             .build();
     }
 
@@ -92,10 +98,10 @@ public class OverlayBubbleService extends Service {
         }
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
-            "Region Extractor",
+            "구역 추출기",
             NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Floating capture bubble for quick OCR extraction.");
+        channel.setDescription("OCR용 떠있는 버튼을 유지하는 알림입니다.");
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.createNotificationChannel(channel);
@@ -177,7 +183,12 @@ public class OverlayBubbleService extends Service {
 
         bubbleView = bubble;
         if (windowManager != null) {
-            windowManager.addView(bubbleView, bubbleParams);
+            try {
+                windowManager.addView(bubbleView, bubbleParams);
+            } catch (Exception error) {
+                bubbleView = null;
+                stopSelf();
+            }
         }
     }
 
