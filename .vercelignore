@@ -3,3 +3,6 @@ resources/**
 .next-buildcheck/**
 android/release-signing.env.local
 android/local.properties
+
+android-extractor/**
+android-extractor/local.properties

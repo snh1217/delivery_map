@@ -553,6 +553,12 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 - 기본 OCR은 클라이언트에서 실행되며, 이미지는 서버에 저장하지 않습니다.
 - 별도 Android 포장을 위한 설정 파일은 `capacitor.extractor.config.ts`에 준비되어 있습니다.
 - 안내 페이지: `/install/extractor-android`
+- 별도 Android 프로젝트 폴더: `android-extractor`
+- 빌드 스크립트:
+  - `npm run cap:sync:extractor`
+  - `npm run android:extractor:apk:debug`
+  - `npm run android:extractor:apk:release:signed`
+  - `npm run android:extractor:aab:release:signed`
 
 ## 네이티브 앱 안정화 메모
 - 설치형 앱에서는 앱 권한 상태(위치/카메라/마이크)를 로그인 정보 영역에서 다시 요청할 수 있습니다.

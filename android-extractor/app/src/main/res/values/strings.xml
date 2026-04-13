@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">구역 추출기</string>
+    <string name="title_activity_main">구역 추출기</string>
+    <string name="package_name">com.snh.deliveryextractor</string>
+    <string name="custom_url_scheme">com.snh.deliveryextractor</string>
+</resources>

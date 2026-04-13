@@ -741,6 +741,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [loadIncomingOcrTransfers]);
 
   useEffect(() => {
+    if (!sessionUser?.isAllowed) return;
+    const interval = window.setInterval(() => {
+      void loadIncomingOcrTransfers();
+    }, 15000);
+    return () => window.clearInterval(interval);
+  }, [loadIncomingOcrTransfers, sessionUser?.isAllowed]);
+
+  useEffect(() => {
     if (!sessionUser?.isAdmin) return;
     const pending = consumePendingOcrDestination();
     if (!pending?.address) return;
