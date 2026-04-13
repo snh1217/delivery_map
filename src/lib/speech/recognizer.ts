@@ -41,6 +41,7 @@ export type SpeechRecognizerOptions = {
   lang?: string;
   silenceTimeoutMs?: number;
   minRecordingMs?: number;
+  initialSilenceTimeoutMs?: number;
   onListeningChange?: (listening: boolean) => void;
   onResult?: (payload: SpeechResultPayload) => void;
   onError?: (code: string) => void;
@@ -66,7 +67,7 @@ function getCtor(): SpeechRecognitionCtor | null {
 
 function joinParts(...values: string[]) {
   return values
-    .map((v) => v.trim())
+    .map((value) => value.trim())
     .filter(Boolean)
     .join(" ")
     .replace(/\s+/g, " ")
@@ -76,21 +77,32 @@ function joinParts(...values: string[]) {
 export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
   let recognition: SpeechRecognitionLike | null = null;
   let listening = false;
+  let finalized = false;
   let finalText = "";
   let interimText = "";
   let bestConfidence: number | undefined;
   let silenceTimer: number | null = null;
+  let nativeEndWatchdogTimer: number | null = null;
   let startedAt = 0;
   let lastResultAt = 0;
   let hasReceivedResult = false;
+  let pendingEndErrorCode: string | null = null;
 
   const silenceTimeoutMs = options.silenceTimeoutMs ?? 900;
   const minRecordingMs = options.minRecordingMs ?? 800;
+  const initialSilenceTimeoutMs = options.initialSilenceTimeoutMs ?? 2600;
 
   const clearTimer = () => {
     if (silenceTimer !== null) {
       window.clearTimeout(silenceTimer);
       silenceTimer = null;
+    }
+  };
+
+  const clearNativeWatchdog = () => {
+    if (nativeEndWatchdogTimer !== null) {
+      window.clearTimeout(nativeEndWatchdogTimer);
+      nativeEndWatchdogTimer = null;
     }
   };
 
@@ -101,14 +113,39 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     confidence: bestConfidence,
   });
 
+  const finalizeSession = () => {
+    if (finalized) return;
+    finalized = true;
+    listening = false;
+    clearTimer();
+    clearNativeWatchdog();
+    options.onListeningChange?.(false);
+    if (pendingEndErrorCode) {
+      options.onError?.(pendingEndErrorCode);
+      pendingEndErrorCode = null;
+    }
+    options.onEnd?.(payload());
+  };
+
   const stopInternal = () => {
     if (isNativeApp()) {
       void (async () => {
         try {
           const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
           await SpeechRecognition.stop();
+          clearNativeWatchdog();
+          nativeEndWatchdogTimer = window.setTimeout(async () => {
+            try {
+              const { listening: stillListening } = await SpeechRecognition.isListening();
+              if (!stillListening) {
+                finalizeSession();
+              }
+            } catch {
+              finalizeSession();
+            }
+          }, 1200);
         } catch {
-          // ignore stop race
+          finalizeSession();
         }
       })();
       return;
@@ -124,32 +161,46 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
 
   const scheduleSilenceStop = () => {
     if (!listening) return;
-    if (!hasReceivedResult) return;
     clearTimer();
     const now = Date.now();
     const elapsed = now - startedAt;
-    const waitMs = Math.max(silenceTimeoutMs, minRecordingMs - elapsed);
+    const targetWait = hasReceivedResult ? silenceTimeoutMs : initialSilenceTimeoutMs;
+    const waitMs = Math.max(targetWait, minRecordingMs - elapsed);
+
     silenceTimer = window.setTimeout(() => {
-      const sinceLast = Date.now() - lastResultAt;
       if (!listening) return;
-      if (sinceLast >= silenceTimeoutMs && Date.now() - startedAt >= minRecordingMs) {
+      const nowAtTimeout = Date.now();
+      const sinceLast = nowAtTimeout - lastResultAt;
+      const runtime = nowAtTimeout - startedAt;
+      const shouldStop = hasReceivedResult
+        ? sinceLast >= silenceTimeoutMs && runtime >= minRecordingMs
+        : runtime >= initialSilenceTimeoutMs;
+
+      if (shouldStop) {
+        if (!hasReceivedResult) {
+          pendingEndErrorCode = "no-speech";
+        }
         stopInternal();
         return;
       }
+
       scheduleSilenceStop();
     }, Math.max(100, waitMs));
   };
 
   const start = async () => {
-    if (isNativeApp()) {
-      clearTimer();
-      finalText = "";
-      interimText = "";
-      bestConfidence = undefined;
-      hasReceivedResult = false;
-      startedAt = Date.now();
-      lastResultAt = startedAt;
+    clearTimer();
+    clearNativeWatchdog();
+    finalized = false;
+    finalText = "";
+    interimText = "";
+    bestConfidence = undefined;
+    hasReceivedResult = false;
+    startedAt = Date.now();
+    lastResultAt = startedAt;
+    pendingEndErrorCode = null;
 
+    if (isNativeApp()) {
       const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
       const availability = await SpeechRecognition.available();
       if (!availability.available) {
@@ -173,16 +224,17 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
       await SpeechRecognition.addListener("listeningState", ({ status }) => {
         const nextListening = status === "started";
         listening = nextListening;
-        options.onListeningChange?.(nextListening);
-        if (!nextListening) {
-          clearTimer();
-          options.onEnd?.(payload());
-          void SpeechRecognition.removeAllListeners().catch(() => {});
+        if (nextListening) {
+          options.onListeningChange?.(true);
+          return;
         }
+        finalizeSession();
+        void SpeechRecognition.removeAllListeners().catch(() => {});
       });
 
       listening = true;
       options.onListeningChange?.(true);
+      scheduleSilenceStop();
 
       try {
         await SpeechRecognition.start({
@@ -190,7 +242,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
           maxResults: 1,
           partialResults: true,
           popup: false,
-          prompt: "주소를 말해 주세요",
+          prompt: "주소를 말씀해 주세요",
         });
       } catch (error) {
         listening = false;
@@ -208,14 +260,6 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
       throw new Error("unsupported");
     }
 
-    clearTimer();
-    finalText = "";
-    interimText = "";
-    bestConfidence = undefined;
-    hasReceivedResult = false;
-    startedAt = Date.now();
-    lastResultAt = startedAt;
-
     recognition = new Ctor();
     recognition.lang = options.lang ?? "ko-KR";
     recognition.interimResults = true;
@@ -226,8 +270,8 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
       let interimAcc = "";
       let confidenceCandidate: number | undefined;
 
-      for (let i = 0; i < event.results.length; i += 1) {
-        const result = event.results[i];
+      for (let index = 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
         const alt = result?.[0];
         const transcript = alt?.transcript ?? "";
         if (typeof alt?.confidence === "number") {
@@ -256,15 +300,13 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     };
 
     recognition.onend = () => {
-      clearTimer();
-      listening = false;
-      options.onListeningChange?.(false);
-      options.onEnd?.(payload());
+      finalizeSession();
       recognition = null;
     };
 
     listening = true;
     options.onListeningChange?.(true);
+    scheduleSilenceStop();
     recognition.start();
   };
 
@@ -273,6 +315,8 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
     stop: stopInternal,
     abort: () => {
       clearTimer();
+      clearNativeWatchdog();
+      finalized = true;
       if (isNativeApp()) {
         void (async () => {
           try {
@@ -285,6 +329,7 @@ export function createSpeechRecognizer(options: SpeechRecognizerOptions = {}) {
         })();
         return;
       }
+
       if (!recognition) return;
       try {
         recognition.abort();

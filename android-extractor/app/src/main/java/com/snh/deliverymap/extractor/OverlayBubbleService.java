@@ -113,7 +113,11 @@ public class OverlayBubbleService extends Service {
         bubble.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         bubble.setGravity(Gravity.CENTER);
         bubble.setBackgroundResource(android.R.drawable.btn_default_small);
-        int size = (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 64, getResources().getDisplayMetrics());
+        int size = (int) TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            ExtractorStateStore.getOverlaySizeDp(this),
+            getResources().getDisplayMetrics()
+        );
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE;
@@ -128,6 +132,7 @@ public class OverlayBubbleService extends Service {
         bubbleParams.gravity = Gravity.END | Gravity.CENTER_VERTICAL;
         bubbleParams.x = ExtractorStateStore.getOverlayX(this, 24);
         bubbleParams.y = ExtractorStateStore.getOverlayY(this, 0);
+        bubble.setAlpha(ExtractorStateStore.getOverlayOpacity(this));
 
         final int[] initialX = new int[1];
         final int[] initialY = new int[1];
@@ -145,6 +150,9 @@ public class OverlayBubbleService extends Service {
                     downTime[0] = System.currentTimeMillis();
                     return true;
                 case MotionEvent.ACTION_MOVE:
+                    if (ExtractorStateStore.isOverlayLocked(OverlayBubbleService.this)) {
+                        return true;
+                    }
                     bubbleParams.x = initialX[0] - (int) (event.getRawX() - touchX[0]);
                     bubbleParams.y = initialY[0] + (int) (event.getRawY() - touchY[0]);
                     if (windowManager != null) {

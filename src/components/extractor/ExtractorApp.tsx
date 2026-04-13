@@ -34,6 +34,9 @@ export function ExtractorApp({ user }: Props) {
   const [sending, setSending] = useState(false);
   const [nativeStatus, setNativeStatus] = useState<ExtractorBridgeStatus | null>(null);
   const [nativeBusy, setNativeBusy] = useState(false);
+  const [overlaySizeDp, setOverlaySizeDp] = useState(64);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.94);
+  const [overlayLocked, setOverlayLocked] = useState(false);
 
   const previewLabel = useMemo(() => {
     if (!file) return "스크린샷 선택 또는 촬영";
@@ -60,6 +63,9 @@ export function ExtractorApp({ user }: Props) {
     try {
       const status = await ExtractorBridge.getStatus();
       setNativeStatus(status);
+      setOverlaySizeDp(status.overlaySizeDp);
+      setOverlayOpacity(status.overlayOpacity);
+      setOverlayLocked(status.overlayLocked);
     } catch {
       setNativeStatus(null);
     }
@@ -184,6 +190,23 @@ export function ExtractorApp({ user }: Props) {
       setToast("현재 화면 캡처 권한을 요청합니다.");
     } catch {
       setError("현재 화면 캡처를 시작하지 못했습니다.");
+    } finally {
+      setNativeBusy(false);
+    }
+  };
+
+  const onSaveOverlaySettings = async () => {
+    setNativeBusy(true);
+    try {
+      const status = await ExtractorBridge.updateOverlayConfig({
+        sizeDp: overlaySizeDp,
+        opacity: overlayOpacity,
+        locked: overlayLocked,
+      });
+      setNativeStatus(status);
+      setToast("오버레이 버튼 설정을 저장했습니다.");
+    } catch {
+      setError("오버레이 버튼 설정을 저장하지 못했습니다.");
     } finally {
       setNativeBusy(false);
     }
@@ -332,6 +355,57 @@ export function ExtractorApp({ user }: Props) {
               <button type="button" className="h-11 rounded-xl border border-cyan-300 bg-cyan-50 text-sm font-medium text-cyan-900 disabled:opacity-50" onClick={() => void onCaptureCurrentScreen()} disabled={nativeBusy}>
                 지금 화면 캡처
               </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-white p-3">
+              <div className="text-xs font-semibold text-slate-800">오버레이 버튼 설정</div>
+              <div className="mt-3 grid gap-3">
+                <label className="block text-xs text-slate-700">
+                  버튼 크기 ({overlaySizeDp}dp)
+                  <input
+                    type="range"
+                    min={44}
+                    max={96}
+                    step={4}
+                    value={overlaySizeDp}
+                    onChange={(e) => setOverlaySizeDp(Number(e.target.value))}
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <label className="block text-xs text-slate-700">
+                  투명도 ({Math.round(overlayOpacity * 100)}%)
+                  <input
+                    type="range"
+                    min={45}
+                    max={100}
+                    step={5}
+                    value={Math.round(overlayOpacity * 100)}
+                    onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
+                    className="mt-1 w-full"
+                  />
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={overlayLocked}
+                    onChange={(e) => setOverlayLocked(e.target.checked)}
+                  />
+                  위치 잠금 (드래그 방지)
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 disabled:opacity-50"
+                    onClick={() => void onSaveOverlaySettings()}
+                    disabled={nativeBusy}
+                  >
+                    설정 저장
+                  </button>
+                  <div className="flex items-center text-[11px] text-slate-500">
+                    길게 누르면 버튼이 바로 꺼지고, 드래그한 위치는 자동으로 기억합니다.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

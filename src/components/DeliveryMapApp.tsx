@@ -66,6 +66,7 @@ const MAX_DESTINATIONS = 20;
 const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
+const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
     .map((value) => normalizePhoneNumber(value))
@@ -327,6 +328,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const routeUiSnapshotVersionRef = useRef(0);
   const geoWatchIdRef = useRef<NativeLocationWatchHandle | null>(null);
   const incomingTransferCountRef = useRef<number | null>(null);
+  const autoApplyingIncomingTransferRef = useRef(false);
   const [dailyRouteRuns, setDailyRouteRuns] = useState<RouteRunRow[]>([]);
   const [dailyRouteDateKst, setDailyRouteDateKst] = useState<string>("");
   const [dailyRouteLoadError, setDailyRouteLoadError] = useState<string | null>(null);
@@ -346,6 +348,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
   const [incomingOcrTransfers, setIncomingOcrTransfers] = useState<OcrTransferRow[]>([]);
   const [incomingTransferToast, setIncomingTransferToast] = useState<string | null>(null);
+  const [autoApplyIncomingTransfers, setAutoApplyIncomingTransfers] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
@@ -531,6 +541,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       // ignore storage failures (private mode / quota)
     }
   }, [settings]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY, autoApplyIncomingTransfers ? "1" : "0");
+    } catch {
+      // ignore storage failures
+    }
+  }, [autoApplyIncomingTransfers]);
 
   useEffect(() => {
     try {
@@ -996,6 +1014,20 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     },
     [updateIncomingOcrTransferStatus],
   );
+
+  useEffect(() => {
+    if (!sessionUser?.isAllowed || !autoApplyIncomingTransfers || incomingOcrTransfers.length === 0) {
+      return;
+    }
+    if (autoApplyingIncomingTransferRef.current) {
+      return;
+    }
+
+    autoApplyingIncomingTransferRef.current = true;
+    void onApplyIncomingOcrTransfer(incomingOcrTransfers[0].id).finally(() => {
+      autoApplyingIncomingTransferRef.current = false;
+    });
+  }, [autoApplyIncomingTransfers, incomingOcrTransfers, onApplyIncomingOcrTransfer, sessionUser?.isAllowed]);
 
   const onNavigateKakao = (id: string) => {
     const row = rows.find((item) => item.id === id);
@@ -2051,6 +2083,30 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
         <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr] lg:gap-4">
           <div className="space-y-3">
+            {sessionUser?.isAllowed ? (
+              <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 적용</h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      켜 두면 A폰에서 보낸 첫 번째 주소를 도착지로 자동 추가합니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                      autoApplyIncomingTransfers
+                        ? "border border-emerald-300 bg-emerald-50 text-emerald-800"
+                        : "border border-slate-300 bg-white text-slate-700"
+                    }`}
+                    onClick={() => setAutoApplyIncomingTransfers((prev) => !prev)}
+                  >
+                    자동 적용 {autoApplyIncomingTransfers ? "ON" : "OFF"}
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
             <DestinationList
               rows={rows}
               origin={origin}

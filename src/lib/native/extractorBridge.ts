@@ -4,6 +4,15 @@ export type ExtractorBridgeStatus = {
   overlayPermission: boolean;
   overlayRunning: boolean;
   hasPendingCapture: boolean;
+  overlaySizeDp: number;
+  overlayOpacity: number;
+  overlayLocked: boolean;
+};
+
+export type ExtractorOverlayConfig = {
+  sizeDp: number;
+  opacity: number;
+  locked: boolean;
 };
 
 export type ExtractorBridgePlugin = {
@@ -13,6 +22,7 @@ export type ExtractorBridgePlugin = {
   stopOverlayBubble(): Promise<void>;
   captureCurrentScreen(): Promise<void>;
   consumeLastCapture(): Promise<{ dataUrl: string | null }>;
+  updateOverlayConfig(config: ExtractorOverlayConfig): Promise<ExtractorBridgeStatus>;
 };
 
 export const ExtractorBridge = registerPlugin<ExtractorBridgePlugin>("ExtractorBridge");

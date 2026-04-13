@@ -17,6 +17,11 @@ public class ExtractorStateStore {
     private static final String KEY_LAST_CAPTURE = "last_capture_path";
     private static final String KEY_OVERLAY_X = "overlay_x";
     private static final String KEY_OVERLAY_Y = "overlay_y";
+    private static final String KEY_OVERLAY_SIZE_DP = "overlay_size_dp";
+    private static final String KEY_OVERLAY_OPACITY = "overlay_opacity";
+    private static final String KEY_OVERLAY_LOCKED = "overlay_locked";
+    private static final int DEFAULT_OVERLAY_SIZE_DP = 64;
+    private static final float DEFAULT_OVERLAY_OPACITY = 0.94f;
 
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -40,6 +45,30 @@ public class ExtractorStateStore {
 
     public static int getOverlayY(Context context, int fallback) {
         return prefs(context).getInt(KEY_OVERLAY_Y, fallback);
+    }
+
+    public static void saveOverlaySizeDp(Context context, int sizeDp) {
+        prefs(context).edit().putInt(KEY_OVERLAY_SIZE_DP, sizeDp).apply();
+    }
+
+    public static int getOverlaySizeDp(Context context) {
+        return prefs(context).getInt(KEY_OVERLAY_SIZE_DP, DEFAULT_OVERLAY_SIZE_DP);
+    }
+
+    public static void saveOverlayOpacity(Context context, float opacity) {
+        prefs(context).edit().putFloat(KEY_OVERLAY_OPACITY, opacity).apply();
+    }
+
+    public static float getOverlayOpacity(Context context) {
+        return prefs(context).getFloat(KEY_OVERLAY_OPACITY, DEFAULT_OVERLAY_OPACITY);
+    }
+
+    public static void setOverlayLocked(Context context, boolean locked) {
+        prefs(context).edit().putBoolean(KEY_OVERLAY_LOCKED, locked).apply();
+    }
+
+    public static boolean isOverlayLocked(Context context) {
+        return prefs(context).getBoolean(KEY_OVERLAY_LOCKED, false);
     }
 
     public static File getCaptureFile(Context context) {

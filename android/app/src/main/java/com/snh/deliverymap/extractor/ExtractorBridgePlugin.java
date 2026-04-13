@@ -13,14 +13,20 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "ExtractorBridge")
 public class ExtractorBridgePlugin extends Plugin {
-
-    @PluginMethod
-    public void getStatus(PluginCall call) {
+    private JSObject buildStatus() {
         JSObject result = new JSObject();
         result.put("overlayPermission", Settings.canDrawOverlays(getContext()));
         result.put("overlayRunning", ExtractorStateStore.isOverlayRunning(getContext()));
         result.put("hasPendingCapture", ExtractorStateStore.hasPendingCapture(getContext()));
-        call.resolve(result);
+        result.put("overlaySizeDp", ExtractorStateStore.getOverlaySizeDp(getContext()));
+        result.put("overlayOpacity", ExtractorStateStore.getOverlayOpacity(getContext()));
+        result.put("overlayLocked", ExtractorStateStore.isOverlayLocked(getContext()));
+        return result;
+    }
+
+    @PluginMethod
+    public void getStatus(PluginCall call) {
+        call.resolve(buildStatus());
     }
 
     @PluginMethod
@@ -76,5 +82,18 @@ public class ExtractorBridgePlugin extends Plugin {
         JSObject result = new JSObject();
         result.put("dataUrl", dataUrl);
         call.resolve(result);
+    }
+
+    @PluginMethod
+    public void updateOverlayConfig(PluginCall call) {
+        int sizeDp = Math.max(44, Math.min(96, call.getInt("sizeDp", ExtractorStateStore.getOverlaySizeDp(getContext()))));
+        double opacityRaw = call.getDouble("opacity", (double) ExtractorStateStore.getOverlayOpacity(getContext()));
+        float opacity = (float) Math.max(0.45d, Math.min(1.0d, opacityRaw));
+        boolean locked = call.getBoolean("locked", ExtractorStateStore.isOverlayLocked(getContext()));
+
+        ExtractorStateStore.saveOverlaySizeDp(getContext(), sizeDp);
+        ExtractorStateStore.saveOverlayOpacity(getContext(), opacity);
+        ExtractorStateStore.setOverlayLocked(getContext(), locked);
+        call.resolve(buildStatus());
     }
 }
