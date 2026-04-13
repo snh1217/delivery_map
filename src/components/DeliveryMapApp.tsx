@@ -1867,10 +1867,16 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             {showApkInstallShortcut ? (
               <div className="flex flex-wrap items-center gap-2">
                 <a
-                  href="/extractor"
+                  href="/install/extractor-android"
                   className="inline-flex h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  구역 추출기
+                  구역 추출기 설치
+                </a>
+                <a
+                  href="/extractor"
+                  className="inline-flex h-9 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
+                >
+                  구역 추출기 웹
                 </a>
                 <a
                   href="/install/android"
