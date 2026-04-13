@@ -1,4 +1,4 @@
-const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
+﻿const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
 const playUrl = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
 
 export const metadata = {
@@ -12,8 +12,7 @@ export default function AndroidInstallPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Android Install</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">퀵배달 메이커 APK 설치</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          안드로이드에서는 스토어 등록 없이 APK 링크로 직접 설치할 수 있습니다. 설치 전에{" "}
-          <span className="font-medium text-slate-900">알 수 없는 앱 설치 허용</span>이 필요할 수 있습니다.
+          안드로이드에서는 스토어 등록 없이 APK 링크로 직접 설치할 수 있습니다. 설치 전에 <span className="font-medium text-slate-900">알 수 없는 앱 설치 허용</span>이 필요할 수 있습니다.
         </p>
       </section>
 
@@ -21,8 +20,8 @@ export default function AndroidInstallPage() {
         <h2 className="text-lg font-semibold text-slate-950">설치 순서</h2>
         <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
           <li>1. 아래 다운로드 버튼으로 APK를 내려받습니다.</li>
-          <li>2. 설치 차단 안내가 나오면 이 브라우저의 설치 허용 권한을 켭니다.</li>
-          <li>3. 설치 후 첫 실행 시 위치/카메라/알림 권한을 확인합니다.</li>
+          <li>2. 설치 차단 안내가 뜨면 브라우저 또는 파일 앱의 설치 허용 권한을 켭니다.</li>
+          <li>3. 앱을 실행한 뒤 위치, 카메라, 마이크 권한을 확인합니다.</li>
         </ol>
       </section>
 
@@ -67,16 +66,16 @@ export default function AndroidInstallPage() {
         <h2 className="text-lg font-semibold text-slate-950">권장 배포 방식</h2>
         <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
           <li>- 테스트/내부 배포: APK 링크 직접 배포</li>
-          <li>- 정식 배포: Google Play Console 내부 테스트 → 정식 출시</li>
+          <li>- 정식 배포: Google Play Console 내부 테스트 후 정식 출시</li>
           <li>- iPhone: APK 설치 불가, 홈 화면 추가(PWA) 방식 권장</li>
         </ul>
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-950">관리자용 연결 정보</h2>
+        <h2 className="text-lg font-semibold text-slate-950">관리자 연결 정보</h2>
         <ul className="mt-4 space-y-2 text-sm leading-6 text-slate-700">
           <li>- APK 공개 링크는 GitHub Release asset로 연결하는 방식이 가장 간단합니다.</li>
-          <li>- Play Store 등록이 끝나면 `NEXT_PUBLIC_ANDROID_PLAY_URL` 값만 추가하면 이 페이지 버튼이 자동으로 열립니다.</li>
+          <li>- Play Store 링크가 생기면 `NEXT_PUBLIC_ANDROID_PLAY_URL` 값만 추가하면 버튼이 자동으로 노출됩니다.</li>
           <li>- 현재 설치 페이지 주소: `/install/android`</li>
         </ul>
       </section>

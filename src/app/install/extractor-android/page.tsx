@@ -1,4 +1,4 @@
-const extractorApkUrl =
+﻿const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
   "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.13/guyeok-extractor-v2026.04.13.apk";
 
@@ -18,7 +18,7 @@ export default function ExtractorAndroidInstallPage() {
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">구역 추출기 APK 설치</h1>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           A폰에서는 <span className="font-medium text-slate-900">구역 추출기</span>로 퀵 프로그램 화면을 캡처하고,
-          원하는 구역만 선택해서 OCR 추출할 수 있습니다.
+          원하는 구역만 선택해서 OCR로 주소를 추출할 수 있습니다.
         </p>
       </section>
 
@@ -26,8 +26,8 @@ export default function ExtractorAndroidInstallPage() {
         <h2 className="text-lg font-semibold text-slate-950">설치 순서</h2>
         <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
           <li>1. 아래 APK 다운로드 버튼으로 설치 파일을 내려받습니다.</li>
-          <li>2. Android에서 “알 수 없는 앱 설치 허용”을 켭니다.</li>
-          <li>3. 앱 설치 후 권한 허용 → 떠있는 버튼 시작 → 퀵 프로그램 화면에서 OCR 버튼을 눌러 사용합니다.</li>
+          <li>2. Android에서 알 수 없는 앱 설치 허용을 켭니다.</li>
+          <li>3. 앱을 실행한 뒤 권한 허용 및 떠있는 버튼 설정을 마치면 바로 사용할 수 있습니다.</li>
         </ol>
       </section>
 

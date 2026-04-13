@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+﻿import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import { NativeAppBootstrap } from "@/components/app/NativeAppBootstrap";
 import { NativeAppUpdatePrompt } from "@/components/app/NativeAppUpdatePrompt";
@@ -12,7 +12,7 @@ const notoSansKr = Noto_Sans_KR({
 
 export const metadata: Metadata = {
   title: "퀵배달 메이커",
-  description: "퀵/배달 경유지 구설정, 팬 권역, 길찾기를 모바일에서 빠르게 처리하는 앱",
+  description: "퀵·배달 경유지 구설정, 팬 권역, 길찾기를 모바일에서 빠르게 처리하는 앱",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
