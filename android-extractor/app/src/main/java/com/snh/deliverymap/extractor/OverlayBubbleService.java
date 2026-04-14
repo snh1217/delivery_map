@@ -125,7 +125,6 @@ public class OverlayBubbleService extends Service {
         if (bubbleView != null) {
             return;
         }
-
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
         TextView bubble = new TextView(this);
         bubble.setText("OCR");
@@ -139,7 +138,6 @@ public class OverlayBubbleService extends Service {
             ExtractorStateStore.getOverlaySizeDp(this),
             getResources().getDisplayMetrics()
         );
-
         int overlayType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             : WindowManager.LayoutParams.TYPE_PHONE;

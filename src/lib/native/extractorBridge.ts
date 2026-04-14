@@ -7,6 +7,8 @@ export type ExtractorBridgeStatus = {
   overlaySizeDp: number;
   overlayOpacity: number;
   overlayLocked: boolean;
+  sdkInt: number;
+  notificationsEnabled: boolean;
 };
 
 export type ExtractorOverlayConfig = {
@@ -23,6 +25,7 @@ export type ExtractorBridgePlugin = {
   captureCurrentScreen(): Promise<void>;
   consumeLastCapture(): Promise<{ dataUrl: string | null }>;
   updateOverlayConfig(config: ExtractorOverlayConfig): Promise<ExtractorBridgeStatus>;
+  openAppNotificationSettings(): Promise<void>;
 };
 
 export const ExtractorBridge = registerPlugin<ExtractorBridgePlugin>("ExtractorBridge");

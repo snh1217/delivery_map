@@ -38,29 +38,40 @@ export function ExtractorApp({ user }: Props) {
   const [overlaySizeDp, setOverlaySizeDp] = useState(64);
   const [overlayOpacity, setOverlayOpacity] = useState(0.94);
   const [overlayLocked, setOverlayLocked] = useState(false);
+  const [diagnosticCode, setDiagnosticCode] = useState<string | null>(null);
+  const [diagnosticHint, setDiagnosticHint] = useState<string | null>(null);
 
   const previewLabel = useMemo(() => {
     if (!file) return "스크린샷 선택 또는 촬영";
     return `${file.name} (${Math.round(file.size / 1024)}KB)`;
   }, [file]);
 
-  const onPickFile = useCallback((picked: File | null) => {
-    setFile(picked);
-    setError(null);
-    setToast(null);
-    setOcrProgress(0);
-    setOcrStatusText("");
-    setPreprocessedPreviewUrl(null);
-    setOcrRawText("");
-    setOcrAddressDraft("");
-    lastAutoSentAddressRef.current = null;
-    setManualCropRect(null);
-    setDragStart(null);
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
-    setImagePreviewUrl(picked ? URL.createObjectURL(picked) : null);
-  }, [imagePreviewUrl]);
+  const setDiagnostic = useCallback((code: string | null, hint?: string | null) => {
+    setDiagnosticCode(code);
+    setDiagnosticHint(hint ?? null);
+  }, []);
 
-  const refreshNativeStatus = async () => {
+  const onPickFile = useCallback(
+    (picked: File | null) => {
+      setFile(picked);
+      setError(null);
+      setToast(null);
+      setDiagnostic(null);
+      setOcrProgress(0);
+      setOcrStatusText("");
+      setPreprocessedPreviewUrl(null);
+      setOcrRawText("");
+      setOcrAddressDraft("");
+      lastAutoSentAddressRef.current = null;
+      setManualCropRect(null);
+      setDragStart(null);
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(picked ? URL.createObjectURL(picked) : null);
+    },
+    [imagePreviewUrl, setDiagnostic],
+  );
+
+  const refreshNativeStatus = useCallback(async () => {
     if (!isNativeApp()) return;
     try {
       const status = await ExtractorBridge.getStatus();
@@ -71,11 +82,11 @@ export function ExtractorApp({ user }: Props) {
     } catch {
       setNativeStatus(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void refreshNativeStatus();
-  }, []);
+  }, [refreshNativeStatus]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -86,7 +97,10 @@ export function ExtractorApp({ user }: Props) {
     void (async () => {
       try {
         const result = await ExtractorBridge.consumeLastCapture();
-        if (!result.dataUrl) return;
+        if (!result.dataUrl) {
+          setDiagnostic("CAPTURE_RESULT_EMPTY", "화면 캡처는 끝났지만 이미지가 비어 있습니다. 다시 한 번 캡처해 주세요.");
+          return;
+        }
         const response = await fetch(result.dataUrl);
         const blob = await response.blob();
         const capturedFile = new File([blob], `extractor-capture-${Date.now()}.png`, {
@@ -94,15 +108,17 @@ export function ExtractorApp({ user }: Props) {
         });
         onPickFile(capturedFile);
         setToast("방금 캡처한 화면을 불러왔습니다. 원하는 구역을 바로 선택하거나 OCR을 시작하세요.");
+        setDiagnostic(null);
       } catch {
         setError("캡처한 화면을 불러오지 못했습니다. 다시 시도해 주세요.");
+        setDiagnostic("CAPTURE_CONSUME_FAILED", "캡처 후 추출기 화면으로 돌아왔지만 이미지를 읽지 못했습니다. 다시 시도해 주세요.");
       } finally {
         url.searchParams.delete("captured");
         window.history.replaceState({}, "", url.toString());
         void refreshNativeStatus();
       }
     })();
-  }, [onPickFile]);
+  }, [onPickFile, refreshNativeStatus, setDiagnostic]);
 
   const toRelativePoint = (clientX: number, clientY: number) => {
     const el = selectionSurfaceRef.current;
@@ -150,9 +166,14 @@ export function ExtractorApp({ user }: Props) {
     setNativeBusy(true);
     try {
       await ExtractorBridge.requestOverlayPermission();
+      setDiagnostic(
+        "OVERLAY_PERMISSION_PENDING",
+        "Android 설정 화면에서 '다른 앱 위에 표시'를 허용한 뒤 다시 돌아와 주세요.",
+      );
       setToast("다른 앱 위에 표시 권한 화면을 열었습니다. 허용 후 다시 돌아와 주세요.");
     } catch {
       setError("오버레이 권한 요청을 열지 못했습니다.");
+      setDiagnostic("OVERLAY_PERMISSION_OPEN_FAILED", "오버레이 권한 화면을 열지 못했습니다. Android 설정에서 직접 허용해 주세요.");
     } finally {
       setNativeBusy(false);
       setTimeout(() => void refreshNativeStatus(), 1000);
@@ -164,7 +185,13 @@ export function ExtractorApp({ user }: Props) {
     try {
       await ExtractorBridge.startOverlayBubble();
       setToast("떠있는 버튼을 시작했습니다. 퀵 프로그램 위에서 '추출'을 누르면 캡처 후 이 화면으로 돌아옵니다.");
+      setDiagnostic(null);
     } catch {
+      if (!nativeStatus?.overlayPermission) {
+        setDiagnostic("OVERLAY_PERMISSION_REQUIRED", "오버레이 권한이 없어서 시작할 수 없습니다. 먼저 권한 허용을 눌러 주세요.");
+      } else {
+        setDiagnostic("OVERLAY_START_FAILED", "기기에서 떠있는 버튼 서비스를 시작하지 못했습니다. 알림 권한과 오버레이 권한을 다시 확인해 주세요.");
+      }
       setError("떠있는 버튼을 시작하지 못했습니다. 먼저 다른 앱 위에 표시 권한을 허용해 주세요.");
     } finally {
       setNativeBusy(false);
@@ -177,8 +204,10 @@ export function ExtractorApp({ user }: Props) {
     try {
       await ExtractorBridge.stopOverlayBubble();
       setToast("떠있는 버튼을 중지했습니다.");
+      setDiagnostic(null);
     } catch {
       setError("떠있는 버튼을 중지하지 못했습니다.");
+      setDiagnostic("OVERLAY_STOP_FAILED", "떠있는 버튼 중지 요청이 실패했습니다. 앱을 다시 열어 상태를 확인해 주세요.");
     } finally {
       setNativeBusy(false);
       void refreshNativeStatus();
@@ -190,8 +219,13 @@ export function ExtractorApp({ user }: Props) {
     try {
       await ExtractorBridge.captureCurrentScreen();
       setToast("현재 화면 캡처 권한을 요청합니다.");
+      setDiagnostic(
+        "CAPTURE_PERMISSION_PENDING",
+        "Android의 화면 캡처 권한 창이 열리면 허용해 주세요. 허용 후 자동으로 추출기로 돌아옵니다.",
+      );
     } catch {
       setError("현재 화면 캡처를 시작하지 못했습니다.");
+      setDiagnostic("CAPTURE_REQUEST_FAILED", "현재 화면 캡처를 시작하지 못했습니다. 떠있는 버튼 또는 직접 캡처 버튼으로 다시 시도해 주세요.");
     } finally {
       setNativeBusy(false);
     }
@@ -209,6 +243,7 @@ export function ExtractorApp({ user }: Props) {
       setToast("오버레이 버튼 설정을 저장했습니다.");
     } catch {
       setError("오버레이 버튼 설정을 저장하지 못했습니다.");
+      setDiagnostic("OVERLAY_CONFIG_SAVE_FAILED", "오버레이 버튼 설정 저장에 실패했습니다. 다시 시도해 주세요.");
     } finally {
       setNativeBusy(false);
     }
@@ -253,6 +288,7 @@ export function ExtractorApp({ user }: Props) {
     setRunning(true);
     setError(null);
     setToast(null);
+    setDiagnostic(null);
     setOcrProgress(1);
     setOcrStatusText("인식 준비 중...");
     try {
@@ -277,6 +313,7 @@ export function ExtractorApp({ user }: Props) {
       setOcrAddressDraft(result.address ?? "");
       if (!result.address) {
         setError("주소를 정확히 찾지 못했습니다. 결과를 직접 편집한 뒤 사용하세요.");
+        setDiagnostic("OCR_ADDRESS_NOT_FOUND", "OCR 원문은 읽었지만 주소 후보를 하나로 확정하지 못했습니다. 직접 편집 후 보내기를 사용해 주세요.");
       } else if (user?.isAllowed) {
         try {
           await sendToMainApp(result.address, result.sanitizedText, { silent: true });
@@ -284,10 +321,12 @@ export function ExtractorApp({ user }: Props) {
         } catch (autoSendError) {
           setToast("주소는 추출했습니다. 자동 전송은 실패해서 복사/공유 또는 수동 전송이 필요합니다.");
           setError(autoSendError instanceof Error ? autoSendError.message : "자동 전송 실패");
+          setDiagnostic("TRANSFER_AUTO_FAILED", "자동 전송에 실패했습니다. 복사/공유 또는 수동 전송을 사용해 주세요.");
         }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "OCR 처리 실패");
+      setDiagnostic("OCR_RUN_FAILED", "OCR 처리 중 오류가 발생했습니다. 같은 화면으로 다시 시도하거나 직접 선택 영역을 좁혀 보세요.");
     } finally {
       setRunning(false);
     }
@@ -314,8 +353,10 @@ export function ExtractorApp({ user }: Props) {
     }
     try {
       await sendToMainApp(text, ocrRawText, { skipDuplicateCheck: true });
+      setDiagnostic(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "전송 실패");
+      setDiagnostic("TRANSFER_MANUAL_FAILED", "수동 전송에 실패했습니다. 네트워크 상태를 확인하거나 잠시 후 다시 시도해 주세요.");
     }
   };
 
@@ -373,7 +414,7 @@ export function ExtractorApp({ user }: Props) {
                 </span>
               </div>
             </div>
-             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <button type="button" className="h-11 rounded-xl border border-amber-300 bg-white text-sm font-medium text-amber-900 disabled:opacity-50" onClick={() => void onEnableOverlay()} disabled={nativeBusy}>
                 권한 허용
               </button>
@@ -402,43 +443,18 @@ export function ExtractorApp({ user }: Props) {
               <div className="mt-3 grid gap-3">
                 <label className="block text-xs text-slate-700">
                   버튼 크기 ({overlaySizeDp}dp)
-                  <input
-                    type="range"
-                    min={44}
-                    max={96}
-                    step={4}
-                    value={overlaySizeDp}
-                    onChange={(e) => setOverlaySizeDp(Number(e.target.value))}
-                    className="mt-1 w-full"
-                  />
+                  <input type="range" min={44} max={96} step={4} value={overlaySizeDp} onChange={(e) => setOverlaySizeDp(Number(e.target.value))} className="mt-1 w-full" />
                 </label>
                 <label className="block text-xs text-slate-700">
                   투명도 ({Math.round(overlayOpacity * 100)}%)
-                  <input
-                    type="range"
-                    min={45}
-                    max={100}
-                    step={5}
-                    value={Math.round(overlayOpacity * 100)}
-                    onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)}
-                    className="mt-1 w-full"
-                  />
+                  <input type="range" min={45} max={100} step={5} value={Math.round(overlayOpacity * 100)} onChange={(e) => setOverlayOpacity(Number(e.target.value) / 100)} className="mt-1 w-full" />
                 </label>
                 <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={overlayLocked}
-                    onChange={(e) => setOverlayLocked(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={overlayLocked} onChange={(e) => setOverlayLocked(e.target.checked)} />
                   위치 잠금 (드래그 방지)
                 </label>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 disabled:opacity-50"
-                    onClick={() => void onSaveOverlaySettings()}
-                    disabled={nativeBusy}
-                  >
+                  <button type="button" className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 disabled:opacity-50" onClick={() => void onSaveOverlaySettings()} disabled={nativeBusy}>
                     설정 저장
                   </button>
                   <div className="flex items-center text-[11px] text-slate-500">
@@ -447,6 +463,37 @@ export function ExtractorApp({ user }: Props) {
                 </div>
               </div>
             </div>
+
+            {nativeStatus ? (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="text-xs font-semibold text-slate-800">기기 진단</div>
+                <div className="mt-2 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">Android 버전: API {nativeStatus.sdkInt}</div>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">알림 권한: {nativeStatus.notificationsEnabled ? "허용" : "확인 필요"}</div>
+                </div>
+                {nativeStatus.sdkInt >= 33 && !nativeStatus.notificationsEnabled ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                    Android 13 이상에서는 알림 권한이 꺼져 있으면 떠있는 버튼 상태를 놓치기 쉽습니다.
+                    <div className="mt-2">
+                      <button type="button" className="rounded-lg border border-amber-300 bg-white px-3 py-2 font-medium" onClick={() => void ExtractorBridge.openAppNotificationSettings()}>
+                        알림 설정 열기
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {nativeStatus.sdkInt >= 34 ? (
+                  <div className="mt-3 rounded-xl border border-cyan-200 bg-cyan-50 p-3 text-xs leading-5 text-cyan-900">
+                    Android 14에서는 화면 캡처 권한 허용 후 앱으로 다시 돌아오는 시간이 조금 더 걸릴 수 있습니다. 권한 허용 후 1초 정도 기다려 주세요.
+                  </div>
+                ) : null}
+                {diagnosticCode ? (
+                  <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs leading-5 text-rose-800">
+                    <div className="font-semibold">진단 코드: {diagnosticCode}</div>
+                    {diagnosticHint ? <div className="mt-1">{diagnosticHint}</div> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>

@@ -5,6 +5,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
 
+import androidx.core.app.NotificationManagerCompat;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -21,6 +23,8 @@ public class ExtractorBridgePlugin extends Plugin {
         result.put("overlaySizeDp", ExtractorStateStore.getOverlaySizeDp(getContext()));
         result.put("overlayOpacity", ExtractorStateStore.getOverlayOpacity(getContext()));
         result.put("overlayLocked", ExtractorStateStore.isOverlayLocked(getContext()));
+        result.put("sdkInt", Build.VERSION.SDK_INT);
+        result.put("notificationsEnabled", NotificationManagerCompat.from(getContext()).areNotificationsEnabled());
         return result;
     }
 
@@ -95,5 +99,20 @@ public class ExtractorBridgePlugin extends Plugin {
         ExtractorStateStore.saveOverlayOpacity(getContext(), opacity);
         ExtractorStateStore.setOverlayLocked(getContext(), locked);
         call.resolve(buildStatus());
+    }
+
+    @PluginMethod
+    public void openAppNotificationSettings(PluginCall call) {
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+        } else {
+            intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.parse("package:" + getContext().getPackageName()));
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
     }
 }

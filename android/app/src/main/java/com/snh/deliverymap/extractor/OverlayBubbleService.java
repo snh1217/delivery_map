@@ -27,11 +27,11 @@ public class OverlayBubbleService extends Service {
     public static final String ACTION_STOP = "com.snh.deliverymap.extractor.STOP";
     private static final String CHANNEL_ID = "extractor_overlay";
     private static final int NOTIFICATION_ID = 41011;
+    private static final long LONG_PRESS_STOP_MS = 700L;
 
     private WindowManager windowManager;
     private View bubbleView;
     private WindowManager.LayoutParams bubbleParams;
-    private static final long LONG_PRESS_STOP_MS = 700L;
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -132,6 +132,7 @@ public class OverlayBubbleService extends Service {
         bubble.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         bubble.setGravity(Gravity.CENTER);
         bubble.setBackgroundResource(android.R.drawable.btn_default_small);
+
         int size = (int) TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP,
             ExtractorStateStore.getOverlaySizeDp(this),
