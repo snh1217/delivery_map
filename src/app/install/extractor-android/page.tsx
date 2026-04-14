@@ -1,10 +1,10 @@
-﻿const extractorApkUrl =
+const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.13/guyeok-extractor-v2026.04.13.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.13/guyeok-extractor-v2026.04.13.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.aab";
 
 export const metadata = {
   title: "구역 추출기 | Android 설치 안내",
@@ -16,6 +16,7 @@ export default function ExtractorAndroidInstallPage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Extractor Android</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">구역 추출기 APK 설치</h1>
+        <p className="mt-2 text-xs font-medium text-slate-500">버전 1.0.2-extractor · 2026-04-14 핫픽스</p>
         <p className="mt-3 text-sm leading-6 text-slate-600">
           A폰에서는 <span className="font-medium text-slate-900">구역 추출기</span>로 퀵 프로그램 화면을 캡처하고,
           원하는 구역만 선택해서 OCR로 주소를 추출할 수 있습니다.
@@ -28,6 +29,7 @@ export default function ExtractorAndroidInstallPage() {
           <li>1. 아래 APK 다운로드 버튼으로 설치 파일을 내려받습니다.</li>
           <li>2. Android에서 알 수 없는 앱 설치 허용을 켭니다.</li>
           <li>3. 앱을 실행한 뒤 권한 허용 및 떠있는 버튼 설정을 마치면 바로 사용할 수 있습니다.</li>
+          <li>4. 이미 설치된 구버전이 있다면 새 APK를 덮어 설치해 업데이트하세요.</li>
         </ol>
       </section>
 

@@ -1,4 +1,5 @@
 import { Capacitor } from "@capacitor/core";
+import { App } from "@capacitor/app";
 
 export function isNativeApp() {
   if (typeof window === "undefined") return false;
@@ -34,4 +35,9 @@ export function getAppEnvironment() {
     type: "web" as const,
     platform: "web" as const,
   };
+}
+
+export async function exitNativeApp() {
+  if (!isNativeApp()) return;
+  await App.exitApp();
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getCoreAppPermissionStates, requestCoreAppPermissions, type PermissionRequestResult } from "@/lib/native/permissions";
-import { isNativeApp } from "@/lib/native/runtime";
+import { exitNativeApp, isNativeApp } from "@/lib/native/runtime";
 
 const LABELS: Record<PermissionRequestResult["state"], string> = {
   granted: "허용",
@@ -47,6 +47,15 @@ export function NativePermissionStatus() {
           disabled={loading}
         >
           {loading ? "확인 중..." : "다시 요청"}
+        </button>
+      </div>
+      <div className="mt-2 flex justify-end">
+        <button
+          type="button"
+          className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[11px] text-rose-700"
+          onClick={() => void exitNativeApp()}
+        >
+          앱 종료
         </button>
       </div>
       <div className="mt-2 grid grid-cols-3 gap-2">

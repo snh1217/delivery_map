@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
 import { ExtractorBridge, type ExtractorBridgeStatus } from "@/lib/native/extractorBridge";
-import { isNativeApp } from "@/lib/native/runtime";
+import { exitNativeApp, isNativeApp } from "@/lib/native/runtime";
 import { shareText } from "@/lib/native/share";
 import type { SessionUser } from "@/types";
 
@@ -373,7 +373,7 @@ export function ExtractorApp({ user }: Props) {
                 </span>
               </div>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <button type="button" className="h-11 rounded-xl border border-amber-300 bg-white text-sm font-medium text-amber-900 disabled:opacity-50" onClick={() => void onEnableOverlay()} disabled={nativeBusy}>
                 권한 허용
               </button>
@@ -385,6 +385,15 @@ export function ExtractorApp({ user }: Props) {
               </button>
               <button type="button" className="h-11 rounded-xl border border-cyan-300 bg-cyan-50 text-sm font-medium text-cyan-900 disabled:opacity-50" onClick={() => void onCaptureCurrentScreen()} disabled={nativeBusy}>
                 지금 화면 캡처
+              </button>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                className="h-10 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-medium text-rose-700"
+                onClick={() => void exitNativeApp()}
+              >
+                앱 종료
               </button>
             </div>
 

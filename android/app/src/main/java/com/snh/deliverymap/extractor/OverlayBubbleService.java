@@ -36,6 +36,7 @@ public class OverlayBubbleService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
+            stopForegroundCompat();
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -51,6 +52,7 @@ public class OverlayBubbleService extends Service {
             ExtractorStateStore.setOverlayRunning(this, true);
         } catch (Exception error) {
             ExtractorStateStore.setOverlayRunning(this, false);
+            stopForegroundCompat();
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -60,11 +62,22 @@ public class OverlayBubbleService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopForegroundCompat();
         if (windowManager != null && bubbleView != null) {
-            windowManager.removeView(bubbleView);
+            try {
+                windowManager.removeView(bubbleView);
+            } catch (Exception ignored) {
+            }
             bubbleView = null;
         }
         ExtractorStateStore.setOverlayRunning(this, false);
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        stopForegroundCompat();
+        stopSelf();
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override
@@ -187,6 +200,7 @@ public class OverlayBubbleService extends Service {
                 windowManager.addView(bubbleView, bubbleParams);
             } catch (Exception error) {
                 bubbleView = null;
+                stopForegroundCompat();
                 stopSelf();
             }
         }
@@ -196,5 +210,16 @@ public class OverlayBubbleService extends Service {
         Intent intent = new Intent(this, ScreenCaptureActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
+    }
+
+    private void stopForegroundCompat() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                stopForeground(true);
+            }
+        } catch (Exception ignored) {
+        }
     }
 }

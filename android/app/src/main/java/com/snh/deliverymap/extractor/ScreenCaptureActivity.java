@@ -27,6 +27,8 @@ import java.nio.ByteBuffer;
 
 public class ScreenCaptureActivity extends Activity {
     private static final int REQUEST_CAPTURE = 44021;
+    private static final int MAX_CAPTURE_ATTEMPTS = 6;
+    private static final long CAPTURE_RETRY_MS = 180L;
 
     private MediaProjectionManager mediaProjectionManager;
 
@@ -35,7 +37,7 @@ public class ScreenCaptureActivity extends Activity {
         super.onCreate(savedInstanceState);
         mediaProjectionManager = (MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         if (mediaProjectionManager == null) {
-            Toast.makeText(this, "Unable to start screen capture.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "화면 캡처를 시작할 수 없습니다.", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -50,7 +52,7 @@ public class ScreenCaptureActivity extends Activity {
             return;
         }
         if (resultCode != RESULT_OK || data == null) {
-            Toast.makeText(this, "Screen capture permission was cancelled.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "화면 캡처 권한이 취소되었습니다.", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -85,41 +87,58 @@ public class ScreenCaptureActivity extends Activity {
         );
 
         Handler handler = new Handler(Looper.getMainLooper());
-        handler.postDelayed(() -> {
-            Image image = null;
-            Bitmap bitmap = null;
-            try {
-                image = reader.acquireLatestImage();
-                if (image == null) {
-                    Toast.makeText(this, "Failed to capture the current screen.", Toast.LENGTH_SHORT).show();
+        handler.postDelayed(() -> captureWithRetry(reader, virtualDisplay, projection, handler, width, height, 0), 350);
+    }
+
+    private void captureWithRetry(
+        ImageReader reader,
+        VirtualDisplay virtualDisplay,
+        MediaProjection projection,
+        Handler handler,
+        int width,
+        int height,
+        int attempt
+    ) {
+        Image image = null;
+        Bitmap bitmap = null;
+        try {
+            image = reader.acquireLatestImage();
+            if (image == null) {
+                if (attempt < MAX_CAPTURE_ATTEMPTS) {
+                    handler.postDelayed(
+                        () -> captureWithRetry(reader, virtualDisplay, projection, handler, width, height, attempt + 1),
+                        CAPTURE_RETRY_MS
+                    );
                     return;
                 }
-                Image.Plane[] planes = image.getPlanes();
-                ByteBuffer buffer = planes[0].getBuffer();
-                int pixelStride = planes[0].getPixelStride();
-                int rowStride = planes[0].getRowStride();
-                int rowPadding = rowStride - pixelStride * width;
-                bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888);
-                bitmap.copyPixelsFromBuffer(buffer);
-                Bitmap cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height);
-                ExtractorStateStore.saveCaptureBitmap(this, cropped);
-                cropped.recycle();
-                openExtractor();
-            } catch (Exception e) {
-                Toast.makeText(this, "Failed to save the captured screen.", Toast.LENGTH_SHORT).show();
-            } finally {
-                if (bitmap != null && !bitmap.isRecycled()) {
-                    bitmap.recycle();
-                }
-                if (image != null) {
-                    image.close();
-                }
-                reader.close();
-                virtualDisplay.release();
-                projection.stop();
-                finish();
+                Toast.makeText(this, "현재 화면을 캡처하지 못했습니다.", Toast.LENGTH_SHORT).show();
+                return;
             }
-        }, 350);
+            Image.Plane[] planes = image.getPlanes();
+            ByteBuffer buffer = planes[0].getBuffer();
+            int pixelStride = planes[0].getPixelStride();
+            int rowStride = planes[0].getRowStride();
+            int rowPadding = rowStride - pixelStride * width;
+            bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888);
+            bitmap.copyPixelsFromBuffer(buffer);
+            Bitmap cropped = Bitmap.createBitmap(bitmap, 0, 0, width, height);
+            ExtractorStateStore.saveCaptureBitmap(this, cropped);
+            cropped.recycle();
+            openExtractor();
+        } catch (Exception e) {
+            Toast.makeText(this, "캡처한 화면을 저장하지 못했습니다.", Toast.LENGTH_SHORT).show();
+        } finally {
+            if (bitmap != null && !bitmap.isRecycled()) {
+                bitmap.recycle();
+            }
+            if (image != null) {
+                image.close();
+            }
+            reader.close();
+            virtualDisplay.release();
+            projection.stop();
+            finish();
+        }
     }
 
     private void openExtractor() {
