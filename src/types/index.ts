@@ -289,13 +289,20 @@ export type OcrTransferStatus = "pending" | "consumed" | "dismissed";
 
 export type OcrTransferSource = "extractor" | "admin-panel" | "destination-row";
 
+export type OcrTransferType = "ocr" | "accessibility" | "clipboard";
+
 export type OcrTransferRow = {
   id: string;
   owner_phone: string;
   sender_phone: string | null;
   extracted_text: string;
   raw_text: string | null;
+  normalized_address: string | null;
   source: OcrTransferSource;
+  transfer_type: OcrTransferType;
+  provider_hint: string | null;
+  source_device: string | null;
+  target_device: string | null;
   status: OcrTransferStatus;
   created_at: string;
   updated_at: string;

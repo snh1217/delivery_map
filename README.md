@@ -548,12 +548,17 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 - A폰에서는 스크린샷을 넣고 주소를 추출한 뒤 다음 두 방식 중 하나로 사용할 수 있습니다.
   - 삼성 클립보드 방식: `복사` 후 같은 삼성 계정/클립보드 동기화로 B폰에서 붙여넣기
   - 전송함 방식: `B폰으로 보내기` 후, B폰 메인 앱 도착지 목록 상단의 `받은 주소` 카드에서 바로 도착지로 추가
+- 접근성 기반 자동 추출 MVP 추가:
+  - extractor Android 앱에서 접근성 서비스를 켜면
+  - 대상 앱의 `길안내 / 길찾기 / 카카오내비 / 카카오맵 / 네이버지도` 클릭 시점을 감지하고
+  - 클릭 시점 주변의 주소 후보를 추출해 extractor 화면으로 자동 전달합니다.
+- extractor 화면에서는 자동 전송이 켜져 있으면 같은 계정의 B폰 메인 앱으로 바로 전송하고, 꺼져 있으면 사용자가 확인 후 직접 전송할 수 있습니다.
 - 설치형 Android 앱에서는 추출기 화면 안에서 `권한 허용 -> 떠있는 버튼 시작`으로 오버레이 버튼을 켤 수 있습니다.
 - 이후 퀵 프로그램 화면 위의 `OCR` 버튼을 누르면 현재 화면을 캡처하고, 추출기 화면으로 돌아와 원하는 구역만 선택해 OCR할 수 있습니다.
 - 기본 OCR은 클라이언트에서 실행되며, 이미지는 서버에 저장하지 않습니다.
 - 별도 Android 포장을 위한 설정 파일은 `capacitor.extractor.config.ts`에 준비되어 있습니다.
 - 안내 페이지: `/install/extractor-android`
-- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.13`
+- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.19`
 - 별도 Android 프로젝트 폴더: `android-extractor`
 - 빌드 스크립트:
   - `npm run cap:sync:extractor`

@@ -39,7 +39,7 @@ type Props = {
   preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
   isAdmin?: boolean;
   canUseAttachment?: boolean;
-  onApplyOcrToRow?: (id: string, address: string) => void;
+  onApplyOcrToRow?: (id: string, address: string) => void | Promise<void>;
   incomingOcrTransfers?: OcrTransferRow[];
   onApplyIncomingOcrTransfer?: (id: string) => void;
   onDismissIncomingOcrTransfer?: (id: string) => void;

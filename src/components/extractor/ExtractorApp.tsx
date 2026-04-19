@@ -4,7 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
-import { ExtractorBridge, type ExtractorBridgeStatus } from "@/lib/native/extractorBridge";
+import {
+  ExtractorBridge,
+  type ExtractorBridgeStatus,
+  type PendingAccessibilityTransfer,
+} from "@/lib/native/extractorBridge";
 import { exitNativeApp, isNativeApp } from "@/lib/native/runtime";
 import { shareText } from "@/lib/native/share";
 import type { SessionUser } from "@/types";
@@ -14,6 +18,7 @@ type Props = {
 };
 
 const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
+const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +47,15 @@ export function ExtractorApp({ user }: Props) {
   const [overlayLocked, setOverlayLocked] = useState(false);
   const [diagnosticCode, setDiagnosticCode] = useState<string | null>(null);
   const [diagnosticHint, setDiagnosticHint] = useState<string | null>(null);
+  const [autoTransferEnabled, setAutoTransferEnabled] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return window.localStorage.getItem(EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const [incomingTransferMeta, setIncomingTransferMeta] = useState<PendingAccessibilityTransfer | null>(null);
 
   const previewLabel = useMemo(() => {
     if (!file) return "스크린샷 선택 또는 촬영";
@@ -64,6 +78,7 @@ export function ExtractorApp({ user }: Props) {
       setPreprocessedPreviewUrl(null);
       setOcrRawText("");
       setOcrAddressDraft("");
+      setIncomingTransferMeta(null);
       lastAutoSentAddressRef.current = null;
       setManualCropRect(null);
       setDragStart(null);
@@ -89,6 +104,14 @@ export function ExtractorApp({ user }: Props) {
   useEffect(() => {
     void refreshNativeStatus();
   }, [refreshNativeStatus]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY, autoTransferEnabled ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [autoTransferEnabled]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -252,7 +275,16 @@ export function ExtractorApp({ user }: Props) {
   };
 
   const sendToMainApp = useCallback(
-    async (text: string, rawText: string, options?: { silent?: boolean; skipDuplicateCheck?: boolean }) => {
+    async (
+      text: string,
+      rawText: string,
+      options?: {
+        silent?: boolean;
+        skipDuplicateCheck?: boolean;
+        transferType?: "ocr" | "accessibility" | "clipboard";
+        providerHint?: string;
+      },
+    ) => {
       const normalized = text.trim();
       if (!normalized) {
         throw new Error("전송할 주소가 없습니다.");
@@ -267,7 +299,15 @@ export function ExtractorApp({ user }: Props) {
         const response = await fetch("/api/ocr-transfers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ extractedText: normalized, rawText, source: "extractor" }),
+          body: JSON.stringify({
+            extractedText: normalized,
+            normalizedAddress: normalized,
+            rawText,
+            source: "extractor",
+            transferType: options?.transferType ?? "ocr",
+            providerHint: options?.providerHint ?? null,
+            sourceDevice: isNativeApp() ? "extractor-app" : "extractor-web",
+          }),
         });
         if (!response.ok) {
           const payload = (await response.json().catch(() => ({}))) as { message?: string };
@@ -284,6 +324,87 @@ export function ExtractorApp({ user }: Props) {
     },
     [],
   );
+
+  const applyIncomingTransfer = useCallback(async (transfer: PendingAccessibilityTransfer) => {
+    const normalized = transfer.address?.trim();
+    if (!normalized) return;
+
+    setFile(null);
+    setImagePreviewUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return null;
+    });
+    setOcrProgress(100);
+    setOcrStatusText("접근성 주소를 불러왔습니다.");
+    setOcrRawText(transfer.rawText ?? normalized);
+    setOcrAddressDraft(normalized);
+    setIncomingTransferMeta(transfer);
+    setPreprocessedPreviewUrl(null);
+    setDiagnostic(null);
+
+    if (user?.isAllowed && autoTransferEnabled) {
+      try {
+        await sendToMainApp(normalized, transfer.rawText ?? normalized, {
+          silent: true,
+          skipDuplicateCheck: true,
+          transferType: "accessibility",
+          providerHint: transfer.providerHint ?? undefined,
+        });
+        setToast("길안내 클릭 시점에 추출한 주소를 B폰 메인 앱으로 자동 전송했습니다.");
+      } catch (error) {
+        setError(error instanceof Error ? error.message : "자동 전송 실패");
+        setDiagnostic(
+          "ACCESSIBILITY_TRANSFER_FAILED",
+          "접근성으로 추출한 주소는 불러왔지만 자동 전송은 실패했습니다. 아래 전송 버튼으로 다시 시도해 주세요.",
+        );
+      }
+    } else {
+      setToast("길안내 클릭 시점에 추출한 주소를 불러왔습니다. 확인 후 B폰으로 보내기를 눌러 주세요.");
+    }
+  }, [autoTransferEnabled, sendToMainApp, setDiagnostic, user?.isAllowed]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const incomingAddress = url.searchParams.get("address");
+    const incomingRawText = url.searchParams.get("rawText");
+    const incomingProviderHint = url.searchParams.get("providerHint");
+    const incomingTransferType = url.searchParams.get("transferType");
+
+    if (incomingAddress) {
+      void applyIncomingTransfer({
+        address: incomingAddress,
+        rawText: incomingRawText,
+        providerHint: incomingProviderHint,
+        transferType: incomingTransferType === "accessibility" ? "accessibility" : "accessibility",
+        sourcePackage: null,
+        detectedAt: Date.now(),
+      });
+      url.searchParams.delete("address");
+      url.searchParams.delete("rawText");
+      url.searchParams.delete("providerHint");
+      url.searchParams.delete("transferType");
+      window.history.replaceState({}, "", url.toString());
+      return;
+    }
+
+    if (!isNativeApp()) return;
+    void (async () => {
+      try {
+        const incoming = await ExtractorBridge.consumePendingAccessibilityTransfer();
+        if (incoming.address) {
+          await applyIncomingTransfer(incoming);
+          if (url.searchParams.get("incoming") === "accessibility") {
+            url.searchParams.delete("incoming");
+            window.history.replaceState({}, "", url.toString());
+          }
+        }
+      } catch {
+        // ignore bridge failures and keep OCR fallback available
+      } finally {
+        void refreshNativeStatus();
+      }
+    })();
+  }, [applyIncomingTransfer, refreshNativeStatus]);
 
   const runOcr = async () => {
     if (!file) return;
@@ -313,10 +434,11 @@ export function ExtractorApp({ user }: Props) {
       setPreprocessedPreviewUrl(result.previewDataUrl);
       setOcrRawText(result.sanitizedText);
       setOcrAddressDraft(result.address ?? "");
+      setIncomingTransferMeta(null);
       if (!result.address) {
         setError("주소를 정확히 찾지 못했습니다. 결과를 직접 편집한 뒤 사용하세요.");
         setDiagnostic("OCR_ADDRESS_NOT_FOUND", "OCR 원문은 읽었지만 주소 후보를 하나로 확정하지 못했습니다. 직접 편집 후 보내기를 사용해 주세요.");
-      } else if (user?.isAllowed) {
+      } else if (user?.isAllowed && autoTransferEnabled) {
         try {
           await sendToMainApp(result.address, result.sanitizedText, { silent: true });
           setToast("주소를 추출했고, 같은 계정의 B폰 메인 앱으로 자동 전송했습니다.");
@@ -354,7 +476,11 @@ export function ExtractorApp({ user }: Props) {
       return;
     }
     try {
-      await sendToMainApp(text, ocrRawText, { skipDuplicateCheck: true });
+      await sendToMainApp(text, ocrRawText, {
+        skipDuplicateCheck: true,
+        transferType: incomingTransferMeta?.transferType ?? "ocr",
+        providerHint: incomingTransferMeta?.providerHint ?? undefined,
+      });
       setDiagnostic(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "전송 실패");
@@ -419,7 +545,37 @@ export function ExtractorApp({ user }: Props) {
                 <span className={`rounded-full px-3 py-1 ${nativeStatus?.overlayRunning ? "bg-cyan-100 text-cyan-800" : "bg-white text-slate-700"}`}>
                   떠있는 버튼 {nativeStatus?.overlayRunning ? "실행 중" : "중지"}
                 </span>
+                <span className={`rounded-full px-3 py-1 ${nativeStatus?.accessibilityEnabled ? "bg-violet-100 text-violet-800" : "bg-white text-slate-700"}`}>
+                  접근성 {nativeStatus?.accessibilityEnabled ? "활성" : "미설정"}
+                </span>
               </div>
+            </div>
+            <div className="mt-3 rounded-xl border border-amber-200 bg-white p-3 text-xs text-slate-700">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="font-semibold text-slate-800">접근성 기반 자동 추출</div>
+                  <p className="mt-1 leading-5 text-slate-600">
+                    대상 앱에서 길안내를 누른 시점의 주소를 자동으로 읽어 extractor로 넘깁니다. 실패하면 기존 OCR 캡처 방식으로 바로 보완할 수 있습니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="h-10 rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-medium text-violet-900"
+                  onClick={() => void ExtractorBridge.openAccessibilitySettings()}
+                >
+                  접근성 설정 열기
+                </button>
+              </div>
+              <label className="mt-3 inline-flex items-center gap-2 text-xs text-slate-700">
+                <input type="checkbox" checked={autoTransferEnabled} onChange={(e) => setAutoTransferEnabled(e.target.checked)} />
+                추출 즉시 B폰 메인 앱으로 자동 전송
+              </label>
+              {incomingTransferMeta?.address ? (
+                <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] leading-5 text-violet-900">
+                  최근 접근성 추출: {incomingTransferMeta.address}
+                  {incomingTransferMeta.providerHint ? ` · ${incomingTransferMeta.providerHint}` : ""}
+                </div>
+              ) : null}
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <button type="button" className="h-11 rounded-xl border border-amber-300 bg-white text-sm font-medium text-amber-900 disabled:opacity-50" onClick={() => void onEnableOverlay()} disabled={nativeBusy}>

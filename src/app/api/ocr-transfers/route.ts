@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { AUTH_PHONE_COOKIE, sessionUserFromCookies } from "@/lib/auth/allowlist";
 import { createOcrTransfer, listOcrTransfers } from "@/lib/ocr/transferStore";
+import type { OcrTransferSource, OcrTransferType } from "@/types";
 
 async function requireAllowedUser() {
   const store = await cookies();
@@ -39,16 +40,26 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     extractedText?: string;
     rawText?: string;
-    source?: "extractor" | "admin-panel" | "destination-row";
+    normalizedAddress?: string;
+    source?: OcrTransferSource;
+    transferType?: OcrTransferType;
+    providerHint?: string;
+    sourceDevice?: string;
+    targetDevice?: string;
   };
 
   try {
     const row = await createOcrTransfer({
       ownerPhone: user.phone,
       senderPhone: user.phone,
-      extractedText: body.extractedText ?? "",
+      extractedText: body.extractedText ?? body.normalizedAddress ?? "",
       rawText: body.rawText ?? null,
+      normalizedAddress: body.normalizedAddress ?? body.extractedText ?? null,
       source: body.source ?? "extractor",
+      transferType: body.transferType ?? "ocr",
+      providerHint: body.providerHint ?? null,
+      sourceDevice: body.sourceDevice ?? null,
+      targetDevice: body.targetDevice ?? null,
     });
     return NextResponse.json({ row });
   } catch (error) {

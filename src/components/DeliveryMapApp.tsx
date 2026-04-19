@@ -67,6 +67,7 @@ const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
+const OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY = "delivery_map_ocr_transfer_auto_navigate_v1";
 const MAIN_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
@@ -365,6 +366,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return true;
     }
   });
+  const [autoNavigateIncomingTransfers, setAutoNavigateIncomingTransfers] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const saved = window.localStorage.getItem(OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY);
+      if (saved === "1") return true;
+      if (saved === "0") return false;
+      return false;
+    } catch {
+      return false;
+    }
+  });
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
@@ -558,6 +570,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       // ignore storage failures
     }
   }, [autoApplyIncomingTransfers]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY, autoNavigateIncomingTransfers ? "1" : "0");
+    } catch {
+      // ignore storage failures
+    }
+  }, [autoNavigateIncomingTransfers]);
 
   useEffect(() => {
     try {
@@ -813,11 +833,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (!sessionUser?.isAdmin) return;
     const pending = consumePendingOcrDestination();
     if (!pending?.address) return;
-    try {
-      addDestinationFromAddress(pending.address);
-    } catch (error) {
+    void addDestinationFromAddress(pending.address).catch((error) => {
       setLastAutoRemovedMessage(error instanceof Error ? error.message : "OCR 도착지 추가 실패");
-    }
+    });
     // one-shot on page load/admin return
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionUser?.isAdmin]);
@@ -831,10 +849,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setActiveRouteBatchIndex(null);
   }, [origin, rows]);
 
-  const onSearch = useCallback(async (id: string) => {
-    const row = rowsRef.current.find((item) => item.id === id);
-    if (!row || !row.input.trim()) {
-      return;
+  const resolveRowAddress = useCallback(async (id: string, input: string) => {
+    const trimmed = input.trim();
+    if (!trimmed) {
+      return null;
     }
 
     setRows((prev) =>
@@ -852,22 +870,21 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     );
 
     try {
-      const items = (await searchNaverGeocode(row.input.trim())).slice(0, 5);
+      const items = (await searchNaverGeocode(trimmed)).slice(0, 5);
       if (items.length === 0) {
         throw new Error("검색 결과가 없습니다.");
       }
 
       const first = items[0];
-
       setRows((prev) =>
         prev.map((item) => {
           if (item.id !== id) {
             return item;
           }
-
           return applyGeocode({ ...item, geocodeItems: items }, first, 0);
         }),
       );
+      return first;
     } catch (error) {
       setRows((prev) =>
         prev.map((item) =>
@@ -886,8 +903,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             : item,
         ),
       );
+      return null;
     }
   }, []);
+
+  const onSearch = useCallback(async (id: string) => {
+    const row = rowsRef.current.find((item) => item.id === id);
+    if (!row || !row.input.trim()) {
+      return;
+    }
+    await resolveRowAddress(id, row.input.trim());
+  }, [resolveRowAddress]);
 
   const onSelectCandidate = (id: string, index: number) => {
     setRows((prev) =>
@@ -906,7 +932,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     );
   };
 
-  const onNavigate = (id: string) => {
+  const onNavigate = useCallback((id: string) => {
     const row = rows.find((item) => item.id === id);
     if (!row?.coord) {
       return;
@@ -942,11 +968,15 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     if (result.usedAppScheme) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
-  };
+  }, [kakaoNaviCapability.supported, origin, rows, settings.navigationApp]);
 
-  const applyAddressToRowAndSearch = useCallback((id: string, address: string) => {
+  const applyAddressToRowAndSearch = useCallback(async (
+    id: string,
+    address: string,
+    options?: { onResolved?: (rowId: string, label: string) => void },
+  ) => {
     const normalized = address.trim();
-    if (!normalized) return;
+    if (!normalized) return null;
     setRows((prev) =>
       prev.map((item) =>
         item.id === id
@@ -965,12 +995,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           : item,
       ),
     );
-    window.setTimeout(() => {
-      void onSearch(id);
-    }, 0);
-  }, [onSearch]);
+    const resolved = await resolveRowAddress(id, normalized);
+    if (resolved) {
+      options?.onResolved?.(id, resolved.title || normalized);
+    }
+    return resolved;
+  }, [resolveRowAddress]);
 
-  const addDestinationFromAddress = useCallback((address: string) => {
+  const addDestinationFromAddress = useCallback(async (
+    address: string,
+    options?: { onResolved?: (rowId: string, label: string) => void },
+  ) => {
     const normalized = address.trim();
     if (!normalized) {
       throw new Error("추출된 주소가 비어 있습니다.");
@@ -979,9 +1014,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     const reusableRow = rowsRef.current.find(isReusableEmptyRow);
     if (reusableRow) {
       setPendingFocusRowId(reusableRow.id);
-      applyAddressToRowAndSearch(reusableRow.id, normalized);
+      await applyAddressToRowAndSearch(reusableRow.id, normalized, options);
       setLastAutoRemovedMessage("비어 있던 도착지에 OCR 주소를 채우고 자동 검색을 시작했습니다.");
-      return;
+      return reusableRow.id;
     }
 
     if (rowsRef.current.length >= MAX_DESTINATIONS) {
@@ -992,11 +1027,15 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     newRow.input = normalized;
     setRows((prev) => [...prev, newRow]);
     setPendingFocusRowId(newRow.id);
-    window.setTimeout(() => {
-      void onSearch(newRow.id);
-    }, 0);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    await resolveRowAddress(newRow.id, normalized).then((resolved) => {
+      if (resolved) {
+        options?.onResolved?.(newRow.id, resolved.title || normalized);
+      }
+    });
     setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
-  }, [applyAddressToRowAndSearch, onSearch]);
+    return newRow.id;
+  }, [applyAddressToRowAndSearch, resolveRowAddress]);
 
   const updateIncomingOcrTransferStatus = useCallback(
     async (id: string, action: "consume" | "dismiss") => {
@@ -1020,10 +1059,17 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         return;
       }
 
-      addDestinationFromAddress(target.extracted_text);
+      await addDestinationFromAddress(target.normalized_address ?? target.extracted_text, {
+        onResolved: (rowId) => {
+          if (!autoNavigateIncomingTransfers) return;
+          window.setTimeout(() => {
+            onNavigate(rowId);
+          }, 250);
+        },
+      });
       await updateIncomingOcrTransferStatus(id, "consume");
     },
-    [addDestinationFromAddress, incomingOcrTransfers, updateIncomingOcrTransferStatus],
+    [addDestinationFromAddress, autoNavigateIncomingTransfers, incomingOcrTransfers, onNavigate, updateIncomingOcrTransferStatus],
   );
 
   const onDismissIncomingOcrTransfer = useCallback(
@@ -2125,24 +2171,50 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           <div className="space-y-3">
             {sessionUser?.isAllowed ? (
               <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 적용</h2>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      켜 두면 A폰에서 보낸 첫 번째 주소를 도착지로 자동 추가합니다.
-                    </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 적용</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          켜 두면 A폰에서 보낸 첫 번째 주소를 빈 도착지 또는 새 도착지 row에 자동 반영합니다.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                          autoApplyIncomingTransfers
+                            ? "border border-emerald-300 bg-emerald-50 text-emerald-800"
+                            : "border border-slate-300 bg-white text-slate-700"
+                        }`}
+                        onClick={() => setAutoApplyIncomingTransfers((prev) => !prev)}
+                      >
+                        자동 적용 {autoApplyIncomingTransfers ? "ON" : "OFF"}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className={`rounded-full px-4 py-2 text-xs font-semibold ${
-                      autoApplyIncomingTransfers
-                        ? "border border-emerald-300 bg-emerald-50 text-emerald-800"
-                        : "border border-slate-300 bg-white text-slate-700"
-                    }`}
-                    onClick={() => setAutoApplyIncomingTransfers((prev) => !prev)}
-                  >
-                    자동 적용 {autoApplyIncomingTransfers ? "ON" : "OFF"}
-                  </button>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 길안내</h2>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          자동 적용된 주소가 지오코딩까지 끝나면 현재 기본 길찾기 앱으로 바로 길안내를 실행합니다.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={`rounded-full px-4 py-2 text-xs font-semibold ${
+                          autoNavigateIncomingTransfers
+                            ? "border border-cyan-300 bg-cyan-50 text-cyan-800"
+                            : "border border-slate-300 bg-white text-slate-700"
+                        }`}
+                        onClick={() => setAutoNavigateIncomingTransfers((prev) => !prev)}
+                      >
+                        자동 길안내 {autoNavigateIncomingTransfers ? "ON" : "OFF"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -2205,7 +2277,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               preferredNavigationApp={settings.navigationApp}
               isAdmin={Boolean(sessionUser?.isAdmin)}
               canUseAttachment={canUseDestinationAttachment}
-              onApplyOcrToRow={applyAddressToRowAndSearch}
+              onApplyOcrToRow={(id, address) => {
+                void applyAddressToRowAndSearch(id, address);
+              }}
               incomingOcrTransfers={incomingOcrTransfers}
               onApplyIncomingOcrTransfer={(id) => void onApplyIncomingOcrTransfer(id)}
               onDismissIncomingOcrTransfer={(id) => void onDismissIncomingOcrTransfer(id)}

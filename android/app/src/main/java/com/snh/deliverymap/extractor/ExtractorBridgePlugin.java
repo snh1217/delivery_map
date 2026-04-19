@@ -20,11 +20,13 @@ public class ExtractorBridgePlugin extends Plugin {
         result.put("overlayPermission", Settings.canDrawOverlays(getContext()));
         result.put("overlayRunning", ExtractorStateStore.isOverlayRunning(getContext()));
         result.put("hasPendingCapture", ExtractorStateStore.hasPendingCapture(getContext()));
+        result.put("hasPendingAccessibilityTransfer", ExtractorStateStore.hasPendingAccessibilityTransfer(getContext()));
         result.put("overlaySizeDp", ExtractorStateStore.getOverlaySizeDp(getContext()));
         result.put("overlayOpacity", ExtractorStateStore.getOverlayOpacity(getContext()));
         result.put("overlayLocked", ExtractorStateStore.isOverlayLocked(getContext()));
         result.put("sdkInt", Build.VERSION.SDK_INT);
         result.put("notificationsEnabled", NotificationManagerCompat.from(getContext()).areNotificationsEnabled());
+        result.put("accessibilityEnabled", false);
         return result;
     }
 
@@ -39,10 +41,7 @@ public class ExtractorBridgePlugin extends Plugin {
             call.resolve();
             return;
         }
-        Intent intent = new Intent(
-            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:" + getContext().getPackageName())
-        );
+        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getContext().getPackageName()));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
         call.resolve();
@@ -89,12 +88,26 @@ public class ExtractorBridgePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void consumePendingAccessibilityTransfer(PluginCall call) {
+        ExtractorStateStore.PendingAccessibilityTransfer transfer = ExtractorStateStore.consumePendingAccessibilityTransfer(getContext());
+        JSObject result = new JSObject();
+        result.put("address", transfer.address);
+        result.put("rawText", transfer.rawText);
+        result.put("providerHint", transfer.providerHint);
+        result.put("transferType", "accessibility");
+        result.put("sourcePackage", transfer.sourcePackage);
+        if (transfer.detectedAt != null) {
+            result.put("detectedAt", transfer.detectedAt);
+        }
+        call.resolve(result);
+    }
+
+    @PluginMethod
     public void updateOverlayConfig(PluginCall call) {
         int sizeDp = Math.max(44, Math.min(96, call.getInt("sizeDp", ExtractorStateStore.getOverlaySizeDp(getContext()))));
         double opacityRaw = call.getDouble("opacity", (double) ExtractorStateStore.getOverlayOpacity(getContext()));
         float opacity = (float) Math.max(0.45d, Math.min(1.0d, opacityRaw));
         boolean locked = call.getBoolean("locked", ExtractorStateStore.isOverlayLocked(getContext()));
-
         ExtractorStateStore.saveOverlaySizeDp(getContext(), sizeDp);
         ExtractorStateStore.saveOverlayOpacity(getContext(), opacity);
         ExtractorStateStore.setOverlayLocked(getContext(), locked);
@@ -105,12 +118,18 @@ public class ExtractorBridgePlugin extends Plugin {
     public void openAppNotificationSettings(PluginCall call) {
         Intent intent;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                .putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
+            intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName());
         } else {
-            intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                .setData(Uri.parse("package:" + getContext().getPackageName()));
+            intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).setData(Uri.parse("package:" + getContext().getPackageName()));
         }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openAccessibilitySettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
         call.resolve();

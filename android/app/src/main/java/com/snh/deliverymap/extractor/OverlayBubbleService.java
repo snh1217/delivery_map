@@ -50,7 +50,7 @@ public class OverlayBubbleService extends Service {
             startForeground(NOTIFICATION_ID, buildNotification());
             showBubble();
             ExtractorStateStore.setOverlayRunning(this, true);
-        } catch (Exception error) {
+        } catch (Exception ignored) {
             ExtractorStateStore.setOverlayRunning(this, false);
             stopForegroundCompat();
             stopSelf();
@@ -199,7 +199,7 @@ public class OverlayBubbleService extends Service {
         if (windowManager != null) {
             try {
                 windowManager.addView(bubbleView, bubbleParams);
-            } catch (Exception error) {
+            } catch (Exception ignored) {
                 bubbleView = null;
                 stopForegroundCompat();
                 stopSelf();

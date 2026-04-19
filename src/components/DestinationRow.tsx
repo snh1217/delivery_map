@@ -38,7 +38,7 @@ type Props = {
   preferredNavigationApp: "naver" | "kakao" | "kakaonavi";
   isAdmin?: boolean;
   canUseAttachment?: boolean;
-  onApplyOcrToRow?: (id: string, address: string) => void;
+  onApplyOcrToRow?: (id: string, address: string) => void | Promise<void>;
   onChangeCallTime: (id: string, value: string) => void;
   onUseCurrentCallTime: (id: string) => void;
   onComputeCallEstimate: (id: string) => void;

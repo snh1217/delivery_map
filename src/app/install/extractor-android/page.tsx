@@ -1,13 +1,18 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.19/guyeok-extractor-v2026.04.19.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.19/guyeok-extractor-v2026.04.19.aab";
+
 const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
-const updatedAt = "2026-04-14";
-const changeLog = ["한글 표시 복구", "오버레이 종료 안정화", "화면 캡처 재시도 및 진단 안내 보강"];
+const updatedAt = "2026-04-19";
+const changeLog = [
+  "접근성 기반 주소 자동 추출 MVP 추가",
+  "길안내 클릭 시 extractor 자동 전달 흐름 연결",
+  "오버레이/캡처 안정화 및 최신 Android 빌드 정리",
+];
 
 export const metadata = {
   title: "구역 추출기 | Android 설치 안내",
@@ -21,17 +26,19 @@ export default function ExtractorAndroidInstallPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Extractor Android</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">구역 추출기 APK 설치</h1>
-            <p className="mt-2 text-xs font-medium text-slate-500">버전 {latestVersion} · {updatedAt} 핫픽스</p>
+            <p className="mt-2 text-xs font-medium text-slate-500">
+              버전 {latestVersion} · 업데이트 {updatedAt}
+            </p>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-              A폰에서는 <span className="font-medium text-slate-900">구역 추출기</span>로 퀵 프로그램 화면을 캡처하고,
-              원하는 구역만 선택해서 OCR로 주소를 추출할 수 있습니다.
+              A폰에서 인성/퀵 프로그램 화면의 주소를 자동 또는 수동으로 추출해 B폰 메인 앱으로 보내는 보조 앱입니다.
+              오버레이 버튼, 화면 캡처 OCR, 접근성 기반 자동 추출을 함께 지원합니다.
             </p>
           </div>
           <div className="rounded-2xl border border-cyan-200 bg-white/80 px-4 py-3 text-xs leading-5 text-slate-600 shadow-sm">
-            <div className="font-semibold text-slate-900">핵심 개선 포함</div>
-            <div className="mt-1">한글 표시 복구</div>
-            <div>오버레이 종료 안정화</div>
-            <div>화면 캡처 재시도 보강</div>
+            <div className="font-semibold text-slate-900">이번 빌드 핵심</div>
+            <div className="mt-1">접근성 기반 자동 추출 MVP</div>
+            <div>오버레이 캡처 흐름 안정화</div>
+            <div>B폰 자동 전송 흐름 연결</div>
           </div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
@@ -56,9 +63,9 @@ export default function ExtractorAndroidInstallPage() {
           <h2 className="text-lg font-semibold text-slate-950">설치 순서</h2>
           <ol className="mt-4 space-y-3 text-sm leading-6 text-slate-700">
             <li>1. 아래 APK 다운로드 버튼으로 설치 파일을 내려받습니다.</li>
-            <li>2. Android에서 알 수 없는 앱 설치 허용을 켭니다.</li>
-            <li>3. 앱을 실행한 뒤 권한 허용 및 떠있는 버튼 설정을 마치면 바로 사용할 수 있습니다.</li>
-            <li>4. 이미 설치된 구버전이 있다면 새 APK를 덮어 설치해 업데이트하세요.</li>
+            <li>2. Android에서 “출처를 알 수 없는 앱 설치 허용”을 켭니다.</li>
+            <li>3. 앱 실행 후 오버레이 권한, 접근성 권한, 화면 캡처 권한을 순서대로 허용합니다.</li>
+            <li>4. 이전 extractor 앱이 있더라도 새 APK를 덮어 설치하면 업데이트됩니다.</li>
           </ol>
         </div>
 
@@ -79,7 +86,7 @@ export default function ExtractorAndroidInstallPage() {
             </a>
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-500">
-            B폰에서는 메인 앱의 <span className="font-medium text-slate-700">받은 주소</span> 카드에서 바로 도착지로 추가할 수 있습니다.
+            B폰에서는 메인 앱 상단의 받은 주소 카드에서 extractor가 보낸 주소를 바로 도착지로 추가할 수 있습니다.
           </p>
         </div>
       </section>
@@ -87,23 +94,23 @@ export default function ExtractorAndroidInstallPage() {
       <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 1</div>
-          <div className="mt-2 text-base font-semibold text-slate-900">떠있는 OCR 버튼 사용</div>
+          <div className="mt-2 text-base font-semibold text-slate-900">오버레이 또는 접근성 준비</div>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            퀵 프로그램 위에서 떠있는 버튼으로 현재 화면을 캡처합니다.
+            떠있는 OCR 버튼을 띄우거나, 접근성 기반 자동 추출을 켜서 길안내 클릭 시점의 주소를 잡습니다.
           </p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 2</div>
-          <div className="mt-2 text-base font-semibold text-slate-900">원하는 구역만 선택 OCR</div>
+          <div className="mt-2 text-base font-semibold text-slate-900">주소 추출</div>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            하단 위치 박스나 원하는 구역을 손가락으로 지정해서 주소만 추출합니다.
+            OCR 또는 접근성 기반으로 주소 후보를 뽑고, 필요하면 원하는 구역만 선택해 정제합니다.
           </p>
         </div>
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</div>
-          <div className="mt-2 text-base font-semibold text-slate-900">B폰으로 바로 보내기</div>
+          <div className="mt-2 text-base font-semibold text-slate-900">B폰으로 전송</div>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            같은 계정이면 B폰 메인 앱 받은 주소 카드로 자동 전송되어 바로 도착지에 넣을 수 있습니다.
+            같은 계정이면 Supabase 전송함을 통해 B폰 메인 앱이 주소를 수신하고, 자동 적용/자동 길안내까지 이어질 수 있습니다.
           </p>
         </div>
       </section>

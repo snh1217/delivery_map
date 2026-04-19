@@ -20,6 +20,13 @@ public class ExtractorStateStore {
     private static final String KEY_OVERLAY_SIZE_DP = "overlay_size_dp";
     private static final String KEY_OVERLAY_OPACITY = "overlay_opacity";
     private static final String KEY_OVERLAY_LOCKED = "overlay_locked";
+    private static final String KEY_PENDING_ACCESSIBILITY_ADDRESS = "pending_accessibility_address";
+    private static final String KEY_PENDING_ACCESSIBILITY_RAW_TEXT = "pending_accessibility_raw_text";
+    private static final String KEY_PENDING_ACCESSIBILITY_PROVIDER = "pending_accessibility_provider";
+    private static final String KEY_PENDING_ACCESSIBILITY_SOURCE_PACKAGE = "pending_accessibility_source_package";
+    private static final String KEY_PENDING_ACCESSIBILITY_DETECTED_AT = "pending_accessibility_detected_at";
+    private static final String KEY_LAST_ACCESSIBILITY_ADDRESS = "last_accessibility_address";
+    private static final String KEY_LAST_ACCESSIBILITY_DISPATCH_AT = "last_accessibility_dispatch_at";
     private static final int DEFAULT_OVERLAY_SIZE_DP = 64;
     private static final float DEFAULT_OVERLAY_OPACITY = 0.94f;
 
@@ -112,5 +119,78 @@ public class ExtractorStateStore {
         file.delete();
         prefs(context).edit().remove(KEY_LAST_CAPTURE).apply();
         return "data:image/png;base64," + base64;
+    }
+
+    public static void savePendingAccessibilityTransfer(
+        Context context,
+        String address,
+        String rawText,
+        String providerHint,
+        String sourcePackage,
+        long detectedAt
+    ) {
+        prefs(context)
+            .edit()
+            .putString(KEY_PENDING_ACCESSIBILITY_ADDRESS, address)
+            .putString(KEY_PENDING_ACCESSIBILITY_RAW_TEXT, rawText)
+            .putString(KEY_PENDING_ACCESSIBILITY_PROVIDER, providerHint)
+            .putString(KEY_PENDING_ACCESSIBILITY_SOURCE_PACKAGE, sourcePackage)
+            .putLong(KEY_PENDING_ACCESSIBILITY_DETECTED_AT, detectedAt)
+            .putString(KEY_LAST_ACCESSIBILITY_ADDRESS, address)
+            .putLong(KEY_LAST_ACCESSIBILITY_DISPATCH_AT, detectedAt)
+            .apply();
+    }
+
+    public static boolean hasPendingAccessibilityTransfer(Context context) {
+        String address = prefs(context).getString(KEY_PENDING_ACCESSIBILITY_ADDRESS, null);
+        return address != null && !address.trim().isEmpty();
+    }
+
+    public static PendingAccessibilityTransfer consumePendingAccessibilityTransfer(Context context) {
+        SharedPreferences preferences = prefs(context);
+        PendingAccessibilityTransfer transfer = new PendingAccessibilityTransfer(
+            preferences.getString(KEY_PENDING_ACCESSIBILITY_ADDRESS, null),
+            preferences.getString(KEY_PENDING_ACCESSIBILITY_RAW_TEXT, null),
+            preferences.getString(KEY_PENDING_ACCESSIBILITY_PROVIDER, null),
+            preferences.getString(KEY_PENDING_ACCESSIBILITY_SOURCE_PACKAGE, null),
+            preferences.contains(KEY_PENDING_ACCESSIBILITY_DETECTED_AT)
+                ? preferences.getLong(KEY_PENDING_ACCESSIBILITY_DETECTED_AT, 0L)
+                : null
+        );
+
+        preferences.edit()
+            .remove(KEY_PENDING_ACCESSIBILITY_ADDRESS)
+            .remove(KEY_PENDING_ACCESSIBILITY_RAW_TEXT)
+            .remove(KEY_PENDING_ACCESSIBILITY_PROVIDER)
+            .remove(KEY_PENDING_ACCESSIBILITY_SOURCE_PACKAGE)
+            .remove(KEY_PENDING_ACCESSIBILITY_DETECTED_AT)
+            .apply();
+        return transfer;
+    }
+
+    public static boolean shouldSuppressAccessibilityDispatch(Context context, String address, long detectedAt, long windowMs) {
+        SharedPreferences preferences = prefs(context);
+        String lastAddress = preferences.getString(KEY_LAST_ACCESSIBILITY_ADDRESS, null);
+        long lastAt = preferences.getLong(KEY_LAST_ACCESSIBILITY_DISPATCH_AT, 0L);
+        if (lastAddress == null || address == null) {
+            return false;
+        }
+        return lastAddress.equals(address) && detectedAt - lastAt < windowMs;
+    }
+
+    public static class PendingAccessibilityTransfer {
+        public final String address;
+        public final String rawText;
+        public final String providerHint;
+        public final String sourcePackage;
+        public final Long detectedAt;
+
+        PendingAccessibilityTransfer(String address, String rawText, String providerHint, String sourcePackage, Long detectedAt) {
+            this.address = address;
+            this.rawText = rawText;
+            this.providerHint = providerHint;
+            this.sourcePackage = sourcePackage;
+            this.detectedAt = detectedAt;
+        }
     }
 }
