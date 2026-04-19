@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -7,9 +7,11 @@ import { isNativeApp } from "@/lib/native/runtime";
 const MAIN_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const MAIN_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "/install/android";
 const MAIN_PLAY_URL = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
+const MAIN_UPDATED_AT = "2026-04-14";
 const EXTRACTOR_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
 const EXTRACTOR_APK_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() || "/install/extractor-android";
 const EXTRACTOR_PLAY_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_PLAY_URL?.trim() || "";
+const EXTRACTOR_UPDATED_AT = "2026-04-14";
 
 function compareVersions(a: string, b: string) {
   const aParts = a.split(".").map((part) => Number(part.replace(/[^0-9]/g, "")) || 0);
@@ -43,6 +45,10 @@ export function NativeAppUpdatePrompt() {
   const body = isExtractorPath
     ? "구역 추출기 최신 버전을 덮어 설치하면 한글 표시와 오버레이 동작이 더 안정적으로 동작합니다."
     : "최신 버전을 덮어 설치하면 기능 수정과 안정화가 함께 반영됩니다.";
+  const updatedAt = isExtractorPath ? EXTRACTOR_UPDATED_AT : MAIN_UPDATED_AT;
+  const highlights = isExtractorPath
+    ? ["한글 표시 복구", "오버레이 시작 안정화", "화면 캡처 재시도 보강"]
+    : ["앱 권한 요청 보강", "길찾기 복귀 화면 안정화", "모바일 입력 흐름 최적화"];
 
   useEffect(() => {
     if (!isNativeApp() || !latestVersion) return;
@@ -81,17 +87,37 @@ export function NativeAppUpdatePrompt() {
   }
 
   return (
-    <div className="fixed inset-x-0 bottom-[max(5.75rem,calc(env(safe-area-inset-bottom)+5rem))] z-[80] px-3 sm:bottom-6 sm:right-6 sm:left-auto sm:max-w-sm">
-      <div className="rounded-2xl border border-emerald-200 bg-white p-4 shadow-xl">
-        <div className="text-sm font-semibold text-slate-900">{title}</div>
-        <p className="mt-1 text-xs leading-5 text-slate-600">
-          현재 버전 {currentVersion || "-"} / 최신 버전 {latestVersion}
+    <div className="fixed inset-x-0 bottom-[max(5.75rem,calc(env(safe-area-inset-bottom)+5rem))] z-[80] px-3 sm:bottom-6 sm:right-6 sm:left-auto sm:max-w-md">
+      <div className="overflow-hidden rounded-3xl border border-emerald-300 bg-[linear-gradient(135deg,#ecfdf5_0%,#ffffff_45%,#f0fdf4_100%)] p-4 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="inline-flex rounded-full border border-emerald-200 bg-white/90 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">
+              Update Available
+            </div>
+            <div className="mt-3 text-base font-semibold text-slate-950">{title}</div>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-white/80 px-3 py-2 text-right text-[11px] text-slate-600">
+            <div>최신 버전</div>
+            <div className="mt-1 text-sm font-semibold text-slate-950">{latestVersion}</div>
+          </div>
+        </div>
+        <p className="mt-3 text-xs leading-5 text-slate-600">
+          현재 설치 버전 <span className="font-semibold text-slate-900">{currentVersion || "-"}</span> · 업데이트 날짜{" "}
+          <span className="font-semibold text-slate-900">{updatedAt}</span>
         </p>
-        <p className="mt-2 text-xs leading-5 text-slate-600">{body}</p>
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <p className="mt-2 text-sm leading-6 text-slate-700">{body}</p>
+        <div className="mt-3 rounded-2xl border border-emerald-100 bg-white/80 p-3">
+          <div className="text-xs font-semibold text-slate-900">이번 업데이트 핵심</div>
+          <ul className="mt-2 space-y-1.5 text-xs leading-5 text-slate-600">
+            {highlights.map((item) => (
+              <li key={item}>• {item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
-            className="h-10 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700"
+            className="h-11 rounded-2xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700"
             onClick={() => {
               window.localStorage.setItem(dismissedKey, latestVersion);
               setOpen(false);
@@ -101,9 +127,9 @@ export function NativeAppUpdatePrompt() {
           </button>
           <a
             href={downloadUrl}
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-emerald-600 px-3 text-sm font-semibold text-white"
+            className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm"
           >
-            업데이트
+            지금 업데이트
           </a>
         </div>
       </div>

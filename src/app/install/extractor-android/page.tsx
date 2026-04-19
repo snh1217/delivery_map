@@ -1,10 +1,13 @@
-﻿const extractorApkUrl =
+const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
   "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
   "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.14/guyeok-extractor-v2026.04.14.aab";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
+const updatedAt = "2026-04-14";
+const changeLog = ["한글 표시 복구", "오버레이 종료 안정화", "화면 캡처 재시도 및 진단 안내 보강"];
 
 export const metadata = {
   title: "구역 추출기 | Android 설치 안내",
@@ -18,7 +21,7 @@ export default function ExtractorAndroidInstallPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Extractor Android</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">구역 추출기 APK 설치</h1>
-            <p className="mt-2 text-xs font-medium text-slate-500">버전 1.0.2-extractor · 2026-04-14 핫픽스</p>
+            <p className="mt-2 text-xs font-medium text-slate-500">버전 {latestVersion} · {updatedAt} 핫픽스</p>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
               A폰에서는 <span className="font-medium text-slate-900">구역 추출기</span>로 퀵 프로그램 화면을 캡처하고,
               원하는 구역만 선택해서 OCR로 주소를 추출할 수 있습니다.
@@ -29,6 +32,21 @@ export default function ExtractorAndroidInstallPage() {
             <div className="mt-1">한글 표시 복구</div>
             <div>오버레이 종료 안정화</div>
             <div>화면 캡처 재시도 보강</div>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Latest Version</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{latestVersion}</div>
+            <div className="mt-1 text-xs text-slate-600">업데이트 날짜 {updatedAt}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white/90 p-4">
+            <div className="text-xs font-semibold text-slate-900">변경사항</div>
+            <ul className="mt-2 space-y-1.5 text-sm leading-6 text-slate-700">
+              {changeLog.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
@@ -51,7 +69,7 @@ export default function ExtractorAndroidInstallPage() {
               href={extractorApkUrl}
               className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-800"
             >
-              구역 추출기 APK 다운로드
+              구역 추출기 APK 다운로드 ({latestVersion})
             </a>
             <a
               href={extractorAabUrl}

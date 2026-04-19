@@ -67,6 +67,8 @@ const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
+const MAIN_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
     .map((value) => normalizePhoneNumber(value))
@@ -1888,6 +1890,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               <h1 className="text-xl font-bold tracking-tight text-slate-800">퀵배달 메이커</h1>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
                 Quick + Delivery
+              </span>
+              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+                최신 v{MAIN_APP_LATEST_VERSION}
+              </span>
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                추출기 v{EXTRACTOR_APP_LATEST_VERSION}
               </span>
             </div>
             {showApkInstallShortcut ? (

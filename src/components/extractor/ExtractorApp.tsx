@@ -13,6 +13,8 @@ type Props = {
   user: SessionUser | null;
 };
 
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
+
 export function ExtractorApp({ user }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectionSurfaceRef = useRef<HTMLDivElement>(null);
@@ -366,7 +368,12 @@ export function ExtractorApp({ user }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">Extractor</p>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">구역 추출기</h1>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-950">구역 추출기</h1>
+              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
+                최신 v{EXTRACTOR_APP_LATEST_VERSION}
+              </span>
+            </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               스크린샷에서 주소만 뽑아 A폰에서 복사하거나, 같은 계정의 B폰 퀵배달 메이커로 바로 보낼 수 있습니다.
             </p>

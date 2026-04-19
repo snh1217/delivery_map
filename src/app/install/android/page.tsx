@@ -1,5 +1,8 @@
-﻿const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
+const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
 const playUrl = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
+const latestVersion = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
+const updatedAt = "2026-04-14";
+const changeLog = ["앱 권한 요청 흐름 보강", "길찾기 복귀 시 화면 복원 안정화", "음성 입력 및 모바일 UI 최적화"];
 
 export const metadata = {
   title: "안드로이드 설치 안내 | 퀵배달 메이커",
@@ -14,6 +17,21 @@ export default function AndroidInstallPage() {
         <p className="mt-3 text-sm leading-6 text-slate-600">
           안드로이드에서는 스토어 등록 없이 APK 링크로 직접 설치할 수 있습니다. 설치 전에 <span className="font-medium text-slate-900">알 수 없는 앱 설치 허용</span>이 필요할 수 있습니다.
         </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-700">Latest Version</div>
+            <div className="mt-2 text-2xl font-semibold text-slate-950">{latestVersion}</div>
+            <div className="mt-1 text-xs text-slate-600">업데이트 날짜 {updatedAt}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="text-xs font-semibold text-slate-900">변경사항</div>
+            <ul className="mt-2 space-y-1.5 text-sm leading-6 text-slate-700">
+              {changeLog.map((item) => (
+                <li key={item}>• {item}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-slate-50 p-6 shadow-sm">
@@ -22,6 +40,7 @@ export default function AndroidInstallPage() {
           <li>1. 아래 다운로드 버튼으로 APK를 내려받습니다.</li>
           <li>2. 설치 차단 안내가 뜨면 브라우저 또는 파일 앱의 설치 허용 권한을 켭니다.</li>
           <li>3. 앱을 실행한 뒤 위치, 카메라, 마이크 권한을 확인합니다.</li>
+          <li>4. 이미 설치된 구버전이 있다면 새 APK를 덮어 설치해 업데이트하세요.</li>
         </ol>
       </section>
 
@@ -48,7 +67,7 @@ export default function AndroidInstallPage() {
                 href={apkUrl}
                 className="inline-flex w-full items-center justify-center rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-cyan-800"
               >
-                APK 다운로드
+                APK 다운로드 ({latestVersion})
               </a>
             ) : null}
             <p className="text-xs leading-5 text-slate-500">
