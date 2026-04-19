@@ -18,9 +18,9 @@ import java.util.regex.Pattern;
 public final class AccessibilityAddressExtractor {
     private static final Pattern PHONE_PATTERN = Pattern.compile("01[0-9]-?\\d{3,4}-?\\d{4}");
     private static final Pattern ADDRESS_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)");
-    private static final Pattern ROAD_PATTERN = Pattern.compile("(구|동|로|길|대로|번길|읍|면|리)");
+    private static final Pattern ROAD_PATTERN = Pattern.compile("(구|로|길|대로|번길|읍|면|리)");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d");
-    private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|오피스텔)");
+    private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|스퀘어)");
     private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|경로|복사|공유|확인|취소|닫기|전화|메모)$");
     private static final Set<String> CONTEXT_KEYWORDS = new HashSet<>(Arrays.asList(
         "출발지", "도착지", "상차지", "하차지", "주소", "길안내", "길 안내", "지도", "내비", "네이버", "카카오"
@@ -66,6 +66,12 @@ public final class AccessibilityAddressExtractor {
             return null;
         }
         return new ExtractionResult(best.normalizedText, best.rawText, best.score);
+    }
+
+    public static String buildContextText(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource, int maxNodes) {
+        String sourceText = getNodeText(clickedSource);
+        String rootText = collectDescendantText(root, maxNodes);
+        return normalizeAddress(sourceText + " " + rootText);
     }
 
     private static void collectCandidates(AccessibilityNodeInfo start, boolean clickedContext, List<Candidate> out, Set<String> seen) {
@@ -195,7 +201,7 @@ public final class AccessibilityAddressExtractor {
         String text = raw.replace('\n', ' ').replace('\r', ' ');
         text = PHONE_PATTERN.matcher(text).replaceAll(" ");
         text = text.replaceAll("[\\[\\]{}<>|]", " ");
-        text = text.replaceAll("[:：]", " ");
+        text = text.replaceAll("[:;]", " ");
         text = text.replaceAll("(출발지|도착지|상차지|하차지|주소|길안내|길 안내|지도|내비)", " ");
         text = text.replaceAll("서울시", "서울");
         text = text.replaceAll("경기도", "경기");

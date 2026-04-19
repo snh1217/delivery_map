@@ -1,7 +1,9 @@
 package com.snh.deliverymap.extractor.accessibility;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.net.Uri;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
@@ -10,23 +12,11 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import com.snh.deliverymap.MainActivity;
 import com.snh.deliverymap.extractor.ExtractorStateStore;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.Locale;
-import java.util.Set;
-
 public class QuickAddressAccessibilityService extends AccessibilityService {
     private static final String TAG = "QuickAccessibility";
-    private static final Set<String> TARGET_PACKAGES = new HashSet<>(Arrays.asList(
-        "com.inseong.iscf",
-        "com.inseong.quick",
-        "com.inseong.mlogis"
-    ));
-    private static final Set<String> NAV_TRIGGER_KEYWORDS = new HashSet<>(Arrays.asList(
-        "길안내", "길 안내", "길찾기", "경로", "지도", "내비", "카카오내비", "카카오맵", "네이버지도"
-    ));
     private static final long FOLLOW_UP_WINDOW_MS = 1800L;
     private static final long DUPLICATE_WINDOW_MS = 4000L;
+    private static final int FOLLOW_UP_MIN_SCORE = 6;
 
     private long lastTriggerAt = 0L;
     private String lastTriggerPackage = null;
@@ -38,12 +28,13 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         }
 
         String packageName = String.valueOf(event.getPackageName());
-        if (packageName.equals(getPackageName()) || !isWatchedPackage(packageName)) {
+        QuickTargetAppRule rule = QuickTargetAppRule.resolve(packageName);
+        if (packageName.equals(getPackageName()) || rule == null) {
             return;
         }
 
         int eventType = event.getEventType();
-        boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, event.getSource());
+        boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, event.getSource(), rule);
         boolean followUpTrigger = lastTriggerPackage != null
             && lastTriggerPackage.equals(packageName)
             && (System.currentTimeMillis() - lastTriggerAt) < FOLLOW_UP_WINDOW_MS
@@ -56,7 +47,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         if (directTrigger) {
             lastTriggerAt = System.currentTimeMillis();
             lastTriggerPackage = packageName;
-            Log.d(TAG, "Navigation click detected in package=" + packageName);
+            Log.d(TAG, "Navigation click detected in package=" + packageName + " rule=" + rule.id);
         }
 
         AccessibilityNodeInfo root = getRootInActiveWindow();
@@ -70,6 +61,17 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             AccessibilityAddressExtractor.ExtractionResult result = AccessibilityAddressExtractor.extractBestAddressFromAccessibilityTree(root, source);
             if (result == null || TextUtils.isEmpty(result.normalizedAddress)) {
                 Log.d(TAG, "No address candidate found for package=" + packageName);
+                return;
+            }
+
+            if (followUpTrigger && result.score < FOLLOW_UP_MIN_SCORE) {
+                Log.d(TAG, "Follow-up candidate score too low for package=" + packageName + " score=" + result.score);
+                return;
+            }
+
+            String nearbyContext = AccessibilityAddressExtractor.buildContextText(root, source, 18);
+            if (followUpTrigger && !rule.containsAddressContext(nearbyContext) && result.score < FOLLOW_UP_MIN_SCORE + 1) {
+                Log.d(TAG, "Follow-up candidate missing address context for package=" + packageName);
                 return;
             }
 
@@ -88,8 +90,8 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 packageName,
                 detectedAt
             );
-            Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint);
-            openExtractorApp();
+            Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint + " / rule=" + rule.id);
+            openExtractorAppOrWebFallback(result.normalizedAddress, result.rawText, providerHint);
         } finally {
             if (source != null) {
                 source.recycle();
@@ -103,15 +105,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         Log.d(TAG, "Accessibility service interrupted");
     }
 
-    private boolean isWatchedPackage(String packageName) {
-        if (TARGET_PACKAGES.contains(packageName)) {
-            return true;
-        }
-        String lower = packageName.toLowerCase(Locale.ROOT);
-        return lower.contains("inseong") || lower.contains("quick");
-    }
-
-    private boolean containsNavigationKeyword(AccessibilityEvent event, AccessibilityNodeInfo source) {
+    private boolean containsNavigationKeyword(AccessibilityEvent event, AccessibilityNodeInfo source, QuickTargetAppRule rule) {
         StringBuilder builder = new StringBuilder();
         if (event.getText() != null) {
             for (CharSequence value : event.getText()) {
@@ -130,20 +124,29 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 builder.append(description).append(' ');
             }
         }
-        String haystack = builder.toString();
-        for (String keyword : NAV_TRIGGER_KEYWORDS) {
-            if (haystack.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
+        return rule.containsTrigger(builder.toString());
     }
 
-    private void openExtractorApp() {
+    private void openExtractorAppOrWebFallback(String address, String rawText, String providerHint) {
         Intent intent = new Intent(this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         intent.putExtra("openExtractor", true);
         intent.putExtra("openExtractorReason", "accessibility");
-        startActivity(intent);
+        try {
+            startActivity(intent);
+        } catch (ActivityNotFoundException error) {
+            Log.w(TAG, "Extractor app launch failed. Falling back to web extractor.", error);
+            Uri fallbackUri = Uri.parse("https://deliverymap.vercel.app/extractor")
+                .buildUpon()
+                .appendQueryParameter("incoming", "accessibility")
+                .appendQueryParameter("transferType", "accessibility")
+                .appendQueryParameter("address", address)
+                .appendQueryParameter("rawText", rawText)
+                .appendQueryParameter("providerHint", providerHint)
+                .build();
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, fallbackUri);
+            browserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(browserIntent);
+        }
     }
 }

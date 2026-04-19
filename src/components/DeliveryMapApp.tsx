@@ -67,7 +67,6 @@ const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
-const OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY = "delivery_map_ocr_transfer_auto_navigate_v1";
 const MAIN_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
@@ -366,17 +365,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       return true;
     }
   });
-  const [autoNavigateIncomingTransfers, setAutoNavigateIncomingTransfers] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const saved = window.localStorage.getItem(OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY);
-      if (saved === "1") return true;
-      if (saved === "0") return false;
-      return false;
-    } catch {
-      return false;
-    }
-  });
   const [pendingFocusRowId, setPendingFocusRowId] = useState<string | null>(null);
   const [kakaoNaviCapability, setKakaoNaviCapability] = useState<KakaoNaviCapability>({
     supported: false,
@@ -570,14 +558,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       // ignore storage failures
     }
   }, [autoApplyIncomingTransfers]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(OCR_TRANSFER_AUTO_NAVIGATE_STORAGE_KEY, autoNavigateIncomingTransfers ? "1" : "0");
-    } catch {
-      // ignore storage failures
-    }
-  }, [autoNavigateIncomingTransfers]);
 
   useEffect(() => {
     try {
@@ -1059,17 +1039,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         return;
       }
 
-      await addDestinationFromAddress(target.normalized_address ?? target.extracted_text, {
-        onResolved: (rowId) => {
-          if (!autoNavigateIncomingTransfers) return;
-          window.setTimeout(() => {
-            onNavigate(rowId);
-          }, 250);
-        },
-      });
+      await addDestinationFromAddress(target.normalized_address ?? target.extracted_text);
       await updateIncomingOcrTransferStatus(id, "consume");
     },
-    [addDestinationFromAddress, autoNavigateIncomingTransfers, incomingOcrTransfers, onNavigate, updateIncomingOcrTransferStatus],
+    [addDestinationFromAddress, incomingOcrTransfers, updateIncomingOcrTransferStatus],
   );
 
   const onDismissIncomingOcrTransfer = useCallback(
@@ -2195,25 +2168,12 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 길안내</h2>
+                        <h2 className="text-sm font-semibold text-slate-800">받은 주소 처리 방식</h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          자동 적용된 주소가 지오코딩까지 끝나면 현재 기본 길찾기 앱으로 바로 길안내를 실행합니다.
+                          받은 주소는 자동으로 도착지에만 반영합니다. 이후 전체 길찾기나 개별 길찾기는 사용자가 직접 선택하도록 유지해 원하지 않는 자동 실행을 막습니다.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        className={`rounded-full px-4 py-2 text-xs font-semibold ${
-                          autoNavigateIncomingTransfers
-                            ? "border border-cyan-300 bg-cyan-50 text-cyan-800"
-                            : "border border-slate-300 bg-white text-slate-700"
-                        }`}
-                        onClick={() => setAutoNavigateIncomingTransfers((prev) => !prev)}
-                      >
-                        자동 길안내 {autoNavigateIncomingTransfers ? "ON" : "OFF"}
-                      </button>
-                    </div>
                   </div>
                 </div>
               </section>

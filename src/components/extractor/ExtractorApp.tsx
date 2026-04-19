@@ -554,10 +554,13 @@ export function ExtractorApp({ user }: Props) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="font-semibold text-slate-800">접근성 기반 자동 추출</div>
-                  <p className="mt-1 leading-5 text-slate-600">
-                    대상 앱에서 길안내를 누른 시점의 주소를 자동으로 읽어 extractor로 넘깁니다. 실패하면 기존 OCR 캡처 방식으로 바로 보완할 수 있습니다.
-                  </p>
-                </div>
+              <p className="mt-1 leading-5 text-slate-600">
+                대상 앱에서 길안내를 누른 시점의 주소를 자동으로 읽어 extractor로 넘깁니다. 실패하면 기존 OCR 캡처 방식으로 바로 보완할 수 있습니다.
+              </p>
+              <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                extractor 앱 복귀가 막히면 웹 추출기 화면으로 fallback 연결을 시도합니다. 전송함 구조는 동일하게 유지됩니다.
+              </p>
+            </div>
                 <button
                   type="button"
                   className="h-10 rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-medium text-violet-900"
