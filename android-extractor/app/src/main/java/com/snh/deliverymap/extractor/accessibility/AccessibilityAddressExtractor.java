@@ -22,6 +22,8 @@ public final class AccessibilityAddressExtractor {
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d");
     private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|오피스텔)");
     private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|네비|경로|복사|공유|확인|취소|닫기|전화|검색)$");
+    private static final Pattern NOT_ADDRESS_TEXT_PATTERN = Pattern.compile("(알림|버튼|누르면|권한|허용|설정|업데이트|로그인|회원|설치|실행|오류|안내|도움말)");
+    private static final Pattern ADDRESS_HINT_PATTERN = Pattern.compile("(구|동|읍|면|리|로|길|대로|번길|번지)");
     private static final Pattern ADDRESS_START_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^,]{4,}");
     private static final Pattern DESTINATION_LABEL_PATTERN = Pattern.compile("(도착지|도착|목적지|하차지)");
     private static final Set<String> CONTEXT_KEYWORDS = new HashSet<>(Arrays.asList(
@@ -65,6 +67,51 @@ public final class AccessibilityAddressExtractor {
         }
 
         if (best == null || best.score < 4) {
+            return null;
+        }
+        if (!isLikelyAddress(best.normalizedText)) {
+            return null;
+        }
+        return new ExtractionResult(best.normalizedText, best.rawText, best.score);
+    }
+
+    public static ExtractionResult extractBestDestinationAddressFromAccessibilityTree(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource) {
+        if (root == null) {
+            return null;
+        }
+
+        List<Candidate> candidates = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        collectCandidates(root, false, candidates, seen);
+
+        if (clickedSource != null) {
+            AccessibilityNodeInfo contextRoot = clickedSource;
+            int depth = 0;
+            while (contextRoot != null && depth < 4) {
+                collectCandidates(contextRoot, true, candidates, seen);
+                AccessibilityNodeInfo parent = contextRoot.getParent();
+                if (contextRoot != clickedSource) {
+                    contextRoot.recycle();
+                }
+                contextRoot = parent;
+                depth += 1;
+            }
+            if (contextRoot != null) {
+                contextRoot.recycle();
+            }
+        }
+
+        Candidate best = null;
+        for (Candidate candidate : candidates) {
+            if (!containsDestinationLabel(candidate.rawText) || !isLikelyAddress(candidate.normalizedText)) {
+                continue;
+            }
+            if (best == null || candidate.score > best.score) {
+                best = candidate;
+            }
+        }
+
+        if (best == null || best.score < 6) {
             return null;
         }
         return new ExtractionResult(best.normalizedText, best.rawText, best.score);
@@ -170,8 +217,14 @@ public final class AccessibilityAddressExtractor {
         if (ONLY_NOISE_PATTERN.matcher(normalized).matches()) {
             return -6;
         }
+        if (!isLikelyAddress(normalized)) {
+            return -10;
+        }
 
         String rawText = raw == null ? "" : raw;
+        if (NOT_ADDRESS_TEXT_PATTERN.matcher(rawText).find()) {
+            return -10;
+        }
         int score = 0;
         if (SIDO_PATTERN.matcher(normalized).find()) score += 3;
         if (normalized.contains("구")) score += 2;
@@ -188,6 +241,31 @@ public final class AccessibilityAddressExtractor {
         if (rawText.contains("내 위치") || rawText.contains("현재 위치") || rawText.contains("현위치") || rawText.contains("내위치")) score -= 8;
         if (normalized.contains("내 위치") || normalized.contains("현재 위치") || normalized.contains("현위치") || normalized.contains("내위치")) score -= 8;
         return score;
+    }
+
+    public static boolean isLikelyAddress(String text) {
+        if (TextUtils.isEmpty(text)) {
+            return false;
+        }
+        String normalized = text.trim();
+        if (normalized.length() < 7 || normalized.length() > 120) {
+            return false;
+        }
+        String phoneStripped = PHONE_PATTERN.matcher(normalized).replaceAll("").trim();
+        if (phoneStripped.length() < 7) {
+            return false;
+        }
+        if (!NUMBER_PATTERN.matcher(normalized).find()) {
+            return false;
+        }
+        if (NOT_ADDRESS_TEXT_PATTERN.matcher(normalized).find()) {
+            return false;
+        }
+        return SIDO_PATTERN.matcher(normalized).find() || ADDRESS_HINT_PATTERN.matcher(normalized).find();
+    }
+
+    private static boolean containsDestinationLabel(String text) {
+        return !TextUtils.isEmpty(text) && DESTINATION_LABEL_PATTERN.matcher(text).find();
     }
 
     private static int countKeywords(String text) {

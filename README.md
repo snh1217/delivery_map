@@ -560,7 +560,7 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 - 기본 OCR은 클라이언트에서 실행되며, 이미지는 서버에 저장하지 않습니다.
 - 별도 Android 포장을 위한 설정 파일은 `capacitor.extractor.config.ts`에 준비되어 있습니다.
 - 안내 페이지: `/install/extractor-android`
-- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.20.3`
+- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.20.4`
 - 별도 Android 프로젝트 폴더: `android-extractor`
 - 웹(`/extractor`)은 다른 앱의 길안내 버튼 클릭을 감지할 수 없으므로, 길안내 클릭 자동 추출은 Android 구역 추출기 앱의 권한 설정 도우미로 오버레이/접근성/알림 권한을 사용자가 직접 허용한 경우에만 동작합니다.
 - Play Protect 또는 Android 13+에서 접근성이 막히면 구역 추출기 앱 정보 화면의 `제한된 설정 허용`을 먼저 켠 뒤 접근성 권한을 다시 허용합니다. 기존 OCR 캡처 방식은 fallback으로 유지됩니다.

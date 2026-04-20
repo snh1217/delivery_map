@@ -72,6 +72,22 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             lastTriggerPackage = packageName;
             Log.d(TAG, "Navigation click detected in package=" + packageName + " rule=" + rule.id);
             if (!rule.isNavigationProvider()) {
+                if (root == null) {
+                    root = getRootInActiveWindow();
+                }
+                AccessibilityAddressExtractor.ExtractionResult destinationResult =
+                    AccessibilityAddressExtractor.extractBestDestinationAddressFromAccessibilityTree(root, source);
+                if (destinationResult != null && !TextUtils.isEmpty(destinationResult.normalizedAddress)) {
+                    Log.d(TAG, "Destination address captured before provider launch: " + destinationResult.normalizedAddress);
+                    dispatchAddress(root, source, destinationResult, rule, packageName, false);
+                    if (source != null) {
+                        source.recycle();
+                    }
+                    if (root != null) {
+                        root.recycle();
+                    }
+                    return;
+                }
                 Log.d(TAG, "Waiting for navigation provider screen before extraction. source=" + packageName);
                 if (source != null) {
                     source.recycle();
@@ -100,6 +116,10 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 Log.d(TAG, "No address candidate found for package=" + packageName);
                 return;
             }
+            if (!AccessibilityAddressExtractor.isLikelyAddress(result.normalizedAddress)) {
+                Log.d(TAG, "Candidate rejected as non-address: " + result.normalizedAddress);
+                return;
+            }
 
             if (followUpTrigger && result.score < FOLLOW_UP_MIN_SCORE) {
                 Log.d(TAG, "Follow-up candidate score too low for package=" + packageName + " score=" + result.score);
@@ -112,27 +132,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 return;
             }
 
-            long detectedAt = System.currentTimeMillis();
-            if (ExtractorStateStore.shouldSuppressAccessibilityDispatch(this, result.normalizedAddress, detectedAt, DUPLICATE_WINDOW_MS)) {
-                Log.d(TAG, "Duplicate accessibility address suppressed: " + result.normalizedAddress);
-                return;
-            }
-            lastTriggerAt = 0L;
-
-            String providerHint = AccessibilityAddressExtractor.detectProviderHint(root, source);
-            String sourcePackage = followUpTrigger && lastTriggerPackage != null && !lastTriggerPackage.equals(packageName)
-                ? lastTriggerPackage
-                : packageName;
-            ExtractorStateStore.savePendingAccessibilityTransfer(
-                this,
-                result.normalizedAddress,
-                result.rawText,
-                providerHint,
-                sourcePackage,
-                detectedAt
-            );
-            Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint + " / rule=" + rule.id + " / source=" + sourcePackage);
-            openExtractorAppOrWebFallback(result.normalizedAddress, result.rawText, providerHint);
+            dispatchAddress(root, source, result, rule, packageName, followUpTrigger);
         } finally {
             if (source != null) {
                 source.recycle();
@@ -144,6 +144,37 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
     @Override
     public void onInterrupt() {
         Log.d(TAG, "Accessibility service interrupted");
+    }
+
+    private void dispatchAddress(
+        AccessibilityNodeInfo root,
+        AccessibilityNodeInfo source,
+        AccessibilityAddressExtractor.ExtractionResult result,
+        QuickTargetAppRule rule,
+        String packageName,
+        boolean followUpTrigger
+    ) {
+        long detectedAt = System.currentTimeMillis();
+        if (ExtractorStateStore.shouldSuppressAccessibilityDispatch(this, result.normalizedAddress, detectedAt, DUPLICATE_WINDOW_MS)) {
+            Log.d(TAG, "Duplicate accessibility address suppressed: " + result.normalizedAddress);
+            return;
+        }
+        lastTriggerAt = 0L;
+
+        String providerHint = AccessibilityAddressExtractor.detectProviderHint(root, source);
+        String sourcePackage = followUpTrigger && lastTriggerPackage != null && !lastTriggerPackage.equals(packageName)
+            ? lastTriggerPackage
+            : packageName;
+        ExtractorStateStore.savePendingAccessibilityTransfer(
+            this,
+            result.normalizedAddress,
+            result.rawText,
+            providerHint,
+            sourcePackage,
+            detectedAt
+        );
+        Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint + " / rule=" + rule.id + " / source=" + sourcePackage);
+        openExtractorAppOrWebFallback(result.normalizedAddress, result.rawText, providerHint);
     }
 
     private boolean containsNavigationKeyword(AccessibilityEvent event, AccessibilityNodeInfo source, QuickTargetAppRule rule) {

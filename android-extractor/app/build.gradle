@@ -30,8 +30,8 @@ android {
         applicationId "com.snh.deliveryextractor"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "1.0.6-extractor"
+        versionCode 8
+        versionName "1.0.7-extractor"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
