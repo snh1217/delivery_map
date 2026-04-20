@@ -17,7 +17,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.3-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.4-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
@@ -247,6 +247,40 @@ export function ExtractorApp({ user }: Props) {
     } finally {
       setNativeBusy(false);
       setTimeout(() => void refreshNativeStatus(), 1000);
+    }
+  };
+
+  const onAddLastObservedTargetPackage = async () => {
+    const packageName = nativeStatus?.lastObservedAccessibilityPackage?.trim();
+    if (!packageName) {
+      setDiagnostic("TARGET_APP_NOT_OBSERVED", "인성/퀵 프로그램을 한 번 열었다가 구역 추출기로 돌아오면 최근 감지 앱을 등록할 수 있습니다.");
+      return;
+    }
+    setNativeBusy(true);
+    try {
+      const status = await ExtractorBridge.addAccessibilityTargetPackage({ packageName });
+      setNativeStatus(status);
+      setToast(`대상 앱으로 등록했습니다: ${packageName}`);
+      setDiagnostic(null);
+    } catch {
+      setError("대상 앱을 등록하지 못했습니다.");
+      setDiagnostic("TARGET_APP_ADD_FAILED", "최근 감지 앱 패키지를 저장하지 못했습니다. 앱을 다시 열고 시도해 주세요.");
+    } finally {
+      setNativeBusy(false);
+    }
+  };
+
+  const onRemoveTargetPackage = async (packageName: string) => {
+    setNativeBusy(true);
+    try {
+      const status = await ExtractorBridge.removeAccessibilityTargetPackage({ packageName });
+      setNativeStatus(status);
+      setToast(`대상 앱에서 해제했습니다: ${packageName}`);
+    } catch {
+      setError("대상 앱을 해제하지 못했습니다.");
+      setDiagnostic("TARGET_APP_REMOVE_FAILED", "대상 앱 목록 저장에 실패했습니다. 다시 시도해 주세요.");
+    } finally {
+      setNativeBusy(false);
     }
   };
 
@@ -660,6 +694,45 @@ export function ExtractorApp({ user }: Props) {
                 <input type="checkbox" checked={autoTransferEnabled} onChange={(e) => setAutoTransferEnabled(e.target.checked)} />
                 추출 즉시 B폰 메인 앱으로 자동 전송
               </label>
+              <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-slate-900">대상 앱 설정</div>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      인성 프로그램 패키지명이 기본값과 다르면 최근 감지 앱을 대상 앱으로 등록해 주세요.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-[11px] font-medium text-slate-800 disabled:opacity-50"
+                    onClick={() => void onAddLastObservedTargetPackage()}
+                    disabled={nativeBusy || !nativeStatus?.lastObservedAccessibilityPackage}
+                  >
+                    최근 앱 대상 등록
+                  </button>
+                </div>
+                <div className="mt-2 rounded-lg border border-white bg-white px-3 py-2 text-[11px] text-slate-600">
+                  최근 감지 앱: <span className="font-mono text-slate-900">{nativeStatus?.lastObservedAccessibilityPackage || "-"}</span>
+                </div>
+                {(nativeStatus?.customAccessibilityTargetPackages?.length ?? 0) > 0 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {nativeStatus?.customAccessibilityTargetPackages?.map((packageName) => (
+                      <button
+                        key={packageName}
+                        type="button"
+                        className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] text-violet-900 disabled:opacity-50"
+                        onClick={() => void onRemoveTargetPackage(packageName)}
+                        disabled={nativeBusy}
+                        title="누르면 대상 앱에서 해제됩니다"
+                      >
+                        {packageName} ×
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-[11px] text-slate-500">사용자 등록 대상 앱 없음. 기본 인성/카카오맵/네이버지도 규칙은 자동 적용됩니다.</p>
+                )}
+              </div>
               {incomingTransferMeta?.address ? (
                 <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-[11px] leading-5 text-violet-900">
                   최근 접근성 추출: {incomingTransferMeta.address}

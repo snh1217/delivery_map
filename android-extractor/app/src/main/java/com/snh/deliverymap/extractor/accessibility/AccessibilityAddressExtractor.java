@@ -17,13 +17,14 @@ import java.util.regex.Pattern;
 
 public final class AccessibilityAddressExtractor {
     private static final Pattern PHONE_PATTERN = Pattern.compile("01[0-9]-?\\d{3,4}-?\\d{4}");
-    private static final Pattern ADDRESS_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)");
-    private static final Pattern ROAD_PATTERN = Pattern.compile("(구|로|길|대로|번길|읍|면|리)");
+    private static final Pattern SIDO_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)");
+    private static final Pattern ROAD_PATTERN = Pattern.compile("(구|동|읍|면|리|로|길|대로|번길)");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d");
-    private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|스퀘어)");
-    private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|경로|복사|공유|확인|취소|닫기|전화|메모)$");
+    private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|오피스텔)");
+    private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|네비|경로|복사|공유|확인|취소|닫기|전화|검색)$");
+    private static final Pattern ADDRESS_START_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^,]{4,}");
     private static final Set<String> CONTEXT_KEYWORDS = new HashSet<>(Arrays.asList(
-        "출발지", "도착지", "상차지", "하차지", "주소", "길안내", "길 안내", "지도", "내비", "네이버", "카카오"
+        "출발지", "도착지", "상차지", "하차지", "주소", "길안내", "길 안내", "지도", "내비", "네비", "카카오", "네이버", "목적지", "위치"
     ));
 
     private AccessibilityAddressExtractor() {
@@ -41,7 +42,7 @@ public final class AccessibilityAddressExtractor {
         if (clickedSource != null) {
             AccessibilityNodeInfo contextRoot = clickedSource;
             int depth = 0;
-            while (contextRoot != null && depth < 3) {
+            while (contextRoot != null && depth < 4) {
                 collectCandidates(contextRoot, true, candidates, seen);
                 AccessibilityNodeInfo parent = contextRoot.getParent();
                 if (contextRoot != clickedSource) {
@@ -78,13 +79,13 @@ public final class AccessibilityAddressExtractor {
         Deque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
         queue.add(start);
         int guard = 0;
-        while (!queue.isEmpty() && guard < 250) {
+        while (!queue.isEmpty() && guard < 320) {
             guard += 1;
             AccessibilityNodeInfo node = queue.removeFirst();
             String nodeText = getNodeText(node);
             addCandidate(nodeText, clickedContext, out, seen);
 
-            String merged = collectDescendantText(node, 12);
+            String merged = collectDescendantText(node, 16);
             addCandidate(merged, clickedContext, out, seen);
 
             for (int i = 0; i < node.getChildCount(); i += 1) {
@@ -119,7 +120,8 @@ public final class AccessibilityAddressExtractor {
         if (normalized.length() < 6) {
             return -4;
         }
-        if (PHONE_PATTERN.matcher(normalized).find()) {
+        String phoneStripped = PHONE_PATTERN.matcher(normalized).replaceAll("").trim();
+        if (phoneStripped.length() < 6) {
             return -6;
         }
         if (ONLY_NOISE_PATTERN.matcher(normalized).matches()) {
@@ -127,15 +129,16 @@ public final class AccessibilityAddressExtractor {
         }
 
         int score = 0;
-        if (ADDRESS_PATTERN.matcher(normalized).find()) score += 3;
+        if (SIDO_PATTERN.matcher(normalized).find()) score += 3;
         if (normalized.contains("구")) score += 2;
         if (ROAD_PATTERN.matcher(normalized).find()) score += 2;
         if (NUMBER_PATTERN.matcher(normalized).find()) score += 1;
         if (BUILDING_PATTERN.matcher(normalized).find()) score += 1;
         if (clickedContext) score += 3;
         if (normalized.length() >= 10) score += 1;
-        if (normalized.length() > 80) score -= 2;
+        if (normalized.length() > 90) score -= 2;
         if (countKeywords(normalized) >= 2) score += 2;
+        if (normalized.contains("출발") || normalized.contains("도착") || normalized.contains("길안내")) score -= 1;
         return score;
     }
 
@@ -202,13 +205,13 @@ public final class AccessibilityAddressExtractor {
         text = PHONE_PATTERN.matcher(text).replaceAll(" ");
         text = text.replaceAll("[\\[\\]{}<>|]", " ");
         text = text.replaceAll("[:;]", " ");
-        text = text.replaceAll("(출발지|도착지|상차지|하차지|주소|길안내|길 안내|지도|내비)", " ");
+        text = text.replaceAll("(출발지|도착지|상차지|하차지|주소|길안내|길 안내|지도|내비|네비|카카오맵|카카오내비|네이버지도)", " ");
         text = text.replaceAll("서울시", "서울");
         text = text.replaceAll("경기도", "경기");
         text = text.replaceAll("인천시", "인천");
         text = text.replaceAll("\\s+", " ").trim();
 
-        Matcher matcher = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^,]{4,}").matcher(text);
+        Matcher matcher = ADDRESS_START_PATTERN.matcher(text);
         if (matcher.find()) {
             return matcher.group(0).replaceAll("\\s+", " ").trim();
         }
@@ -216,14 +219,14 @@ public final class AccessibilityAddressExtractor {
     }
 
     public static String detectProviderHint(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource) {
-        String context = normalizeAddress(getNodeText(clickedSource) + " " + collectDescendantText(root, 16)).toLowerCase(Locale.ROOT);
-        if (context.contains("카카오내비") || context.contains("카카오 내비")) {
+        String context = normalizeAddress(getNodeText(clickedSource) + " " + collectDescendantText(root, 18)).toLowerCase(Locale.ROOT);
+        if (context.contains("카카오내비") || context.contains("kimgisa")) {
             return "kakaonavi";
         }
-        if (context.contains("카카오")) {
+        if (context.contains("카카오") || context.contains("kakao")) {
             return "kakao";
         }
-        if (context.contains("네이버")) {
+        if (context.contains("네이버") || context.contains("naver")) {
             return "naver";
         }
         return null;

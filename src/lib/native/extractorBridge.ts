@@ -11,6 +11,8 @@ export type ExtractorBridgeStatus = {
   sdkInt: number;
   notificationsEnabled: boolean;
   accessibilityEnabled: boolean;
+  lastObservedAccessibilityPackage?: string | null;
+  customAccessibilityTargetPackages?: string[];
 };
 
 export type ExtractorOverlayConfig = {
@@ -40,6 +42,8 @@ export type ExtractorBridgePlugin = {
   openAppNotificationSettings(): Promise<void>;
   openAccessibilitySettings(): Promise<void>;
   openAppDetailsSettings(): Promise<void>;
+  addAccessibilityTargetPackage(options: { packageName: string }): Promise<ExtractorBridgeStatus>;
+  removeAccessibilityTargetPackage(options: { packageName: string }): Promise<ExtractorBridgeStatus>;
 };
 
 export const ExtractorBridge = registerPlugin<ExtractorBridgePlugin>("ExtractorBridge");

@@ -10,6 +10,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 public class ExtractorStateStore {
     private static final String PREFS = "extractor_bridge";
@@ -27,6 +31,8 @@ public class ExtractorStateStore {
     private static final String KEY_PENDING_ACCESSIBILITY_DETECTED_AT = "pending_accessibility_detected_at";
     private static final String KEY_LAST_ACCESSIBILITY_ADDRESS = "last_accessibility_address";
     private static final String KEY_LAST_ACCESSIBILITY_DISPATCH_AT = "last_accessibility_dispatch_at";
+    private static final String KEY_LAST_OBSERVED_ACCESSIBILITY_PACKAGE = "last_observed_accessibility_package";
+    private static final String KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES = "custom_accessibility_target_packages";
     private static final int DEFAULT_OVERLAY_SIZE_DP = 64;
     private static final float DEFAULT_OVERLAY_OPACITY = 0.94f;
 
@@ -176,6 +182,74 @@ public class ExtractorStateStore {
             return false;
         }
         return lastAddress.equals(address) && detectedAt - lastAt < windowMs;
+    }
+
+    public static void recordLastObservedAccessibilityPackage(Context context, String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return;
+        }
+        prefs(context).edit().putString(KEY_LAST_OBSERVED_ACCESSIBILITY_PACKAGE, packageName.trim()).apply();
+    }
+
+    public static String getLastObservedAccessibilityPackage(Context context) {
+        return prefs(context).getString(KEY_LAST_OBSERVED_ACCESSIBILITY_PACKAGE, null);
+    }
+
+    public static List<String> getCustomAccessibilityTargetPackages(Context context) {
+        String raw = prefs(context).getString(KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES, "");
+        Set<String> unique = parsePackageSet(raw);
+        return new ArrayList<>(unique);
+    }
+
+    public static boolean isAccessibilityTargetPackage(Context context, String packageName) {
+        if (packageName == null) {
+            return false;
+        }
+        return parsePackageSet(prefs(context).getString(KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES, "")).contains(packageName.trim());
+    }
+
+    public static void addAccessibilityTargetPackage(Context context, String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return;
+        }
+        Set<String> packages = parsePackageSet(prefs(context).getString(KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES, ""));
+        packages.add(packageName.trim());
+        savePackageSet(context, packages);
+    }
+
+    public static void removeAccessibilityTargetPackage(Context context, String packageName) {
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return;
+        }
+        Set<String> packages = parsePackageSet(prefs(context).getString(KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES, ""));
+        packages.remove(packageName.trim());
+        savePackageSet(context, packages);
+    }
+
+    private static Set<String> parsePackageSet(String raw) {
+        Set<String> packages = new LinkedHashSet<>();
+        if (raw == null || raw.trim().isEmpty()) {
+            return packages;
+        }
+        String[] parts = raw.split(",");
+        for (String part : parts) {
+            String normalized = part == null ? "" : part.trim();
+            if (!normalized.isEmpty()) {
+                packages.add(normalized);
+            }
+        }
+        return packages;
+    }
+
+    private static void savePackageSet(Context context, Set<String> packages) {
+        StringBuilder builder = new StringBuilder();
+        for (String packageName : packages) {
+            if (builder.length() > 0) {
+                builder.append(",");
+            }
+            builder.append(packageName);
+        }
+        prefs(context).edit().putString(KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES, builder.toString()).apply();
     }
 
     public static class PendingAccessibilityTransfer {

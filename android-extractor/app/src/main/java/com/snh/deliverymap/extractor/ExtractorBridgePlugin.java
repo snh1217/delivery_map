@@ -17,6 +17,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.snh.deliverymap.extractor.accessibility.QuickAddressAccessibilityService;
 
+import org.json.JSONArray;
+
 import java.util.List;
 
 @CapacitorPlugin(name = "ExtractorBridge")
@@ -54,6 +56,8 @@ public class ExtractorBridgePlugin extends Plugin {
         result.put("sdkInt", Build.VERSION.SDK_INT);
         result.put("notificationsEnabled", NotificationManagerCompat.from(getContext()).areNotificationsEnabled());
         result.put("accessibilityEnabled", isAccessibilityEnabled());
+        result.put("lastObservedAccessibilityPackage", ExtractorStateStore.getLastObservedAccessibilityPackage(getContext()));
+        result.put("customAccessibilityTargetPackages", new JSONArray(ExtractorStateStore.getCustomAccessibilityTargetPackages(getContext())));
         return result;
     }
 
@@ -175,5 +179,27 @@ public class ExtractorBridgePlugin extends Plugin {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         getContext().startActivity(intent);
         call.resolve();
+    }
+
+    @PluginMethod
+    public void addAccessibilityTargetPackage(PluginCall call) {
+        String packageName = call.getString("packageName", "");
+        if (TextUtils.isEmpty(packageName)) {
+            call.reject("PACKAGE_REQUIRED");
+            return;
+        }
+        ExtractorStateStore.addAccessibilityTargetPackage(getContext(), packageName);
+        call.resolve(buildStatus());
+    }
+
+    @PluginMethod
+    public void removeAccessibilityTargetPackage(PluginCall call) {
+        String packageName = call.getString("packageName", "");
+        if (TextUtils.isEmpty(packageName)) {
+            call.reject("PACKAGE_REQUIRED");
+            return;
+        }
+        ExtractorStateStore.removeAccessibilityTargetPackage(getContext(), packageName);
+        call.resolve(buildStatus());
     }
 }

@@ -28,19 +28,42 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         }
 
         String packageName = String.valueOf(event.getPackageName());
+        if (packageName.equals(getPackageName())) {
+            return;
+        }
+        ExtractorStateStore.recordLastObservedAccessibilityPackage(this, packageName);
+
         QuickTargetAppRule rule = QuickTargetAppRule.resolve(packageName);
-        if (packageName.equals(getPackageName()) || rule == null) {
+        if (rule == null && ExtractorStateStore.isAccessibilityTargetPackage(this, packageName)) {
+            rule = QuickTargetAppRule.customTarget(packageName);
+        }
+        if (rule == null) {
             return;
         }
 
         int eventType = event.getEventType();
-        boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, event.getSource(), rule);
+        AccessibilityNodeInfo source = event.getSource();
+        AccessibilityNodeInfo root = null;
+        boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, source, rule);
+        if (!directTrigger && eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
+            root = getRootInActiveWindow();
+            if (root != null) {
+                String screenContext = AccessibilityAddressExtractor.buildContextText(root, source, 80);
+                directTrigger = rule.containsTrigger(screenContext) && rule.containsAddressContext(screenContext);
+            }
+        }
         boolean followUpTrigger = lastTriggerPackage != null
-            && lastTriggerPackage.equals(packageName)
             && (System.currentTimeMillis() - lastTriggerAt) < FOLLOW_UP_WINDOW_MS
-            && (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED);
+            && (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED)
+            && (lastTriggerPackage.equals(packageName) || rule.isNavigationProvider());
 
         if (!directTrigger && !followUpTrigger) {
+            if (source != null) {
+                source.recycle();
+            }
+            if (root != null) {
+                root.recycle();
+            }
             return;
         }
 
@@ -50,13 +73,17 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             Log.d(TAG, "Navigation click detected in package=" + packageName + " rule=" + rule.id);
         }
 
-        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            root = getRootInActiveWindow();
+        }
         if (root == null) {
             Log.d(TAG, "Active window root is null for package=" + packageName);
+            if (source != null) {
+                source.recycle();
+            }
             return;
         }
 
-        AccessibilityNodeInfo source = event.getSource();
         try {
             AccessibilityAddressExtractor.ExtractionResult result = AccessibilityAddressExtractor.extractBestAddressFromAccessibilityTree(root, source);
             if (result == null || TextUtils.isEmpty(result.normalizedAddress)) {
