@@ -13,35 +13,35 @@ final class QuickTargetAppRule {
             "inseong-iscf",
             Arrays.asList("com.inseong.iscf"),
             Arrays.asList("inseong", "quick"),
-            Arrays.asList("길안내", "길 안내", "길찾기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
+            Arrays.asList("길안내", "길 안내", "길찾기", "위치보기", "위치 보기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
             Arrays.asList("출발지", "도착지", "상차지", "하차지", "주소", "배달지", "목적지", "위치")
         ),
         new QuickTargetAppRule(
             "inseong-quick",
             Arrays.asList("com.inseong.quick", "com.inseong.mlogis"),
             Arrays.asList("inseong", "mlogis", "quick"),
-            Arrays.asList("길안내", "길 안내", "길찾기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
+            Arrays.asList("길안내", "길 안내", "길찾기", "위치보기", "위치 보기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
             Arrays.asList("출발지", "도착지", "상차지", "하차지", "주소", "배달지", "목적지", "위치")
         ),
         new QuickTargetAppRule(
             "kakao-map",
             Arrays.asList("net.daum.android.map"),
             Arrays.asList("kakao", "daum", "map"),
-            Arrays.asList("길안내", "길 안내", "도착", "출발", "경로", "내비", "네비"),
+            Arrays.asList("길안내", "길 안내", "위치보기", "위치 보기", "도착", "출발", "경로", "내비", "네비"),
             Arrays.asList("출발", "도착", "주소", "위치", "검색")
         ),
         new QuickTargetAppRule(
             "kakao-navi",
             Arrays.asList("com.locnall.KimGiSa", "com.kakao.navi"),
             Arrays.asList("kakao", "navi", "kimgisa"),
-            Arrays.asList("길안내", "안내", "도착", "출발", "경로"),
+            Arrays.asList("길안내", "위치보기", "위치 보기", "안내", "도착", "출발", "경로"),
             Arrays.asList("출발", "도착", "주소", "위치")
         ),
         new QuickTargetAppRule(
             "naver-map",
             Arrays.asList("com.nhn.android.nmap"),
             Arrays.asList("naver", "nmap"),
-            Arrays.asList("길안내", "길 안내", "도착", "출발", "경로", "내비", "네비"),
+            Arrays.asList("길안내", "길 안내", "위치보기", "위치 보기", "도착", "출발", "경로", "내비", "네비"),
             Arrays.asList("출발", "도착", "주소", "위치", "검색")
         )
     ));
@@ -71,7 +71,7 @@ final class QuickTargetAppRule {
             "custom:" + packageName,
             Collections.singletonList(packageName),
             Collections.emptyList(),
-            Arrays.asList("길안내", "길 안내", "길찾기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
+            Arrays.asList("길안내", "길 안내", "길찾기", "위치보기", "위치 보기", "경로", "지도", "내비", "네비", "카카오맵", "카카오내비", "네이버지도"),
             Arrays.asList("출발지", "도착지", "상차지", "하차지", "주소", "배달지", "목적지", "위치")
         );
     }

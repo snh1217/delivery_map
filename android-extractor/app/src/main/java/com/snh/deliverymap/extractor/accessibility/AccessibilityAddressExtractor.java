@@ -21,11 +21,13 @@ public final class AccessibilityAddressExtractor {
     private static final Pattern ROAD_PATTERN = Pattern.compile("(구|동|읍|면|리|로|길|대로|번길)");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\d");
     private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|오피스텔)");
-    private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|네비|경로|복사|공유|확인|취소|닫기|전화|검색)$");
-    private static final Pattern NOT_ADDRESS_TEXT_PATTERN = Pattern.compile("(알림|버튼|누르면|권한|허용|설정|업데이트|로그인|회원|설치|실행|오류|안내|도움말)");
+    private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|위치보기|위치 보기|지도|내비|네비|경로|복사|공유|확인|취소|닫기|전화|검색)$");
+    private static final Pattern NOT_ADDRESS_TEXT_PATTERN = Pattern.compile("(알림|버튼|누르면|권한|허용|설정|업데이트|로그인|회원|설치|실행|오류|안내|도움말|전체동의|서비스)");
     private static final Pattern ADDRESS_HINT_PATTERN = Pattern.compile("(구|동|읍|면|리|로|길|대로|번길|번지)");
     private static final Pattern ADDRESS_START_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^,]{4,}");
-    private static final Pattern DESTINATION_LABEL_PATTERN = Pattern.compile("(도착지|도착|목적지|하차지)");
+    private static final Pattern DESTINATION_LABEL_PATTERN = Pattern.compile("(도착지|도착|목적지|하차지|배달지|배송지)");
+    private static final Pattern ORIGIN_LABEL_PATTERN = Pattern.compile("(출발지|출발|상차지|픽업지|내 위치|내위치|현재 위치|현위치)");
+    private static final Pattern NAVIGATION_TRIGGER_PATTERN = Pattern.compile("(길안내|길 안내|길찾기|위치보기|위치 보기|지도|내비|네비|경로)");
     private static final Set<String> CONTEXT_KEYWORDS = new HashSet<>(Arrays.asList(
         "출발지", "도착지", "상차지", "하차지", "주소", "길안내", "길 안내", "지도", "내비", "네비", "카카오", "네이버", "목적지", "위치"
     ));
@@ -100,6 +102,7 @@ public final class AccessibilityAddressExtractor {
                 contextRoot.recycle();
             }
         }
+        collectOrderedDestinationCandidates(root, clickedSource, candidates, seen);
 
         Candidate best = null;
         for (Candidate candidate : candidates) {
@@ -115,6 +118,19 @@ public final class AccessibilityAddressExtractor {
             return null;
         }
         return new ExtractionResult(best.normalizedText, best.rawText, best.score);
+    }
+
+    public static ExtractionResult extractBestSourceAppDestinationAddressFromAccessibilityTree(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource) {
+        ExtractionResult labeledResult = extractBestDestinationAddressFromAccessibilityTree(root, clickedSource);
+        if (labeledResult != null) {
+            return labeledResult;
+        }
+
+        IndexedCandidate fallback = extractLastLikelyOrderedAddress(root, clickedSource);
+        if (fallback == null || fallback.score < 5) {
+            return null;
+        }
+        return new ExtractionResult(fallback.normalizedText, "도착지 단일 추정 " + fallback.rawText, fallback.score);
     }
 
     public static String buildContextText(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource, int maxNodes) {
@@ -204,6 +220,216 @@ public final class AccessibilityAddressExtractor {
         }
         addCandidate("도착지 " + tail, true, out, seen);
         addAddressSegmentCandidates("도착지 " + tail, true, out, seen);
+    }
+
+    private static void collectOrderedDestinationCandidates(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource, List<Candidate> out, Set<String> seen) {
+        List<TextNode> nodes = collectTextNodes(root, 260);
+        if (nodes.isEmpty()) {
+            return;
+        }
+
+        int clickedIndex = findClickedIndex(nodes, getNodeText(clickedSource));
+        List<IndexedCandidate> fallbackCandidates = new ArrayList<>();
+        boolean addedContextCandidate = false;
+
+        for (int start = 0; start < nodes.size(); start += 1) {
+            for (int end = start; end < Math.min(nodes.size(), start + 3); end += 1) {
+                String rawCandidate = joinNodeText(nodes, start, end);
+                if (TextUtils.isEmpty(rawCandidate) || NAVIGATION_TRIGGER_PATTERN.matcher(rawCandidate).matches()) {
+                    continue;
+                }
+
+                String normalized = normalizeAddress(rawCandidate);
+                if (!isLikelyAddress(normalized)) {
+                    continue;
+                }
+
+                String context = joinNodeText(nodes, Math.max(0, start - 4), Math.min(nodes.size() - 1, end + 4));
+                int contextScore = scoreDestinationContext(nodes, start, end, clickedIndex, context);
+                int baseScore = scoreCandidate(normalized, rawCandidate, isNearClicked(start, end, clickedIndex));
+                IndexedCandidate indexed = new IndexedCandidate(rawCandidate, normalized, start, end, baseScore + contextScore);
+                fallbackCandidates.add(indexed);
+
+                if (contextScore < 5) {
+                    continue;
+                }
+
+                addedContextCandidate = true;
+                addCandidateWithNormalized(
+                    "도착지 주변 " + context + " / 후보 " + rawCandidate,
+                    normalized,
+                    indexed.score,
+                    out,
+                    seen
+                );
+            }
+        }
+
+        if (!addedContextCandidate && fallbackCandidates.size() >= 2) {
+            IndexedCandidate best = null;
+            for (IndexedCandidate candidate : fallbackCandidates) {
+                if (ORIGIN_LABEL_PATTERN.matcher(candidate.rawText).find()) {
+                    continue;
+                }
+                int score = candidate.score + Math.min(candidate.startIndex, 40) / 4;
+                if (best == null || score > best.score) {
+                    best = new IndexedCandidate(candidate.rawText, candidate.normalizedText, candidate.startIndex, candidate.endIndex, score);
+                }
+            }
+            if (best != null && best.score >= 4) {
+                addCandidateWithNormalized(
+                    "도착지 추정 " + best.rawText,
+                    best.normalizedText,
+                    best.score + 5,
+                    out,
+                    seen
+                );
+            }
+        }
+    }
+
+    private static void addCandidateWithNormalized(String raw, String normalized, int score, List<Candidate> out, Set<String> seen) {
+        if (TextUtils.isEmpty(normalized) || !isLikelyAddress(normalized)) {
+            return;
+        }
+        String key = "dest:" + normalized;
+        if (!seen.add(key)) {
+            return;
+        }
+        out.add(new Candidate(raw, normalized, score));
+    }
+
+    private static IndexedCandidate extractLastLikelyOrderedAddress(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource) {
+        List<TextNode> nodes = collectTextNodes(root, 260);
+        if (nodes.isEmpty()) {
+            return null;
+        }
+
+        int clickedIndex = findClickedIndex(nodes, getNodeText(clickedSource));
+        IndexedCandidate best = null;
+        for (int start = 0; start < nodes.size(); start += 1) {
+            for (int end = start; end < Math.min(nodes.size(), start + 3); end += 1) {
+                String rawCandidate = joinNodeText(nodes, start, end);
+                if (TextUtils.isEmpty(rawCandidate) || ORIGIN_LABEL_PATTERN.matcher(rawCandidate).find()) {
+                    continue;
+                }
+                String context = joinNodeText(nodes, Math.max(0, start - 3), Math.min(nodes.size() - 1, end + 3));
+                if (ORIGIN_LABEL_PATTERN.matcher(context).find() && !DESTINATION_LABEL_PATTERN.matcher(context).find()) {
+                    continue;
+                }
+                String normalized = normalizeAddress(rawCandidate);
+                if (!isLikelyAddress(normalized)) {
+                    continue;
+                }
+                int score = scoreCandidate(normalized, rawCandidate, isNearClicked(start, end, clickedIndex))
+                    + Math.min(start, 50) / 5;
+                if (DESTINATION_LABEL_PATTERN.matcher(context).find()) {
+                    score += 4;
+                }
+                if (best == null || score > best.score) {
+                    best = new IndexedCandidate(rawCandidate, normalized, start, end, score);
+                }
+            }
+        }
+        return best;
+    }
+
+    private static List<TextNode> collectTextNodes(AccessibilityNodeInfo start, int maxNodes) {
+        List<TextNode> nodes = new ArrayList<>();
+        if (start == null) {
+            return nodes;
+        }
+        Deque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
+        queue.add(start);
+        int scanned = 0;
+        while (!queue.isEmpty() && scanned < maxNodes) {
+            AccessibilityNodeInfo node = queue.removeFirst();
+            scanned += 1;
+            String text = getNodeText(node).replace('\n', ' ').replace('\r', ' ').replaceAll("\\s+", " ").trim();
+            if (!TextUtils.isEmpty(text)) {
+                nodes.add(new TextNode(nodes.size(), text));
+            }
+            for (int i = 0; i < node.getChildCount(); i += 1) {
+                AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) {
+                    queue.addLast(child);
+                }
+            }
+            if (node != start) {
+                node.recycle();
+            }
+        }
+        return nodes;
+    }
+
+    private static int findClickedIndex(List<TextNode> nodes, String clickedText) {
+        if (TextUtils.isEmpty(clickedText)) {
+            return -1;
+        }
+        String normalizedClicked = clickedText.replaceAll("\\s+", " ").trim();
+        for (TextNode node : nodes) {
+            if (node.rawText.equals(normalizedClicked) || normalizedClicked.contains(node.rawText) || node.rawText.contains(normalizedClicked)) {
+                return node.index;
+            }
+        }
+        return -1;
+    }
+
+    private static String joinNodeText(List<TextNode> nodes, int start, int end) {
+        if (nodes.isEmpty() || start > end) {
+            return "";
+        }
+        List<String> pieces = new ArrayList<>();
+        for (int i = Math.max(0, start); i <= Math.min(nodes.size() - 1, end); i += 1) {
+            pieces.add(nodes.get(i).rawText);
+        }
+        return TextUtils.join(" ", pieces).replaceAll("\\s+", " ").trim();
+    }
+
+    private static int scoreDestinationContext(List<TextNode> nodes, int start, int end, int clickedIndex, String context) {
+        int score = 0;
+        if (DESTINATION_LABEL_PATTERN.matcher(context).find()) {
+            score += 7;
+        }
+        if (ORIGIN_LABEL_PATTERN.matcher(context).find()) {
+            score -= 3;
+        }
+
+        int nearestDestination = nearestLabelDistance(nodes, start, end, DESTINATION_LABEL_PATTERN);
+        int nearestOrigin = nearestLabelDistance(nodes, start, end, ORIGIN_LABEL_PATTERN);
+        if (nearestDestination >= 0) {
+            score += Math.max(3, 10 - nearestDestination);
+        }
+        if (nearestOrigin >= 0 && (nearestDestination < 0 || nearestOrigin < nearestDestination)) {
+            score -= Math.max(5, 12 - nearestOrigin);
+        }
+        if (clickedIndex >= 0 && start <= clickedIndex + 2 && end >= clickedIndex - 4) {
+            score += 2;
+        }
+        if (NAVIGATION_TRIGGER_PATTERN.matcher(context).find() && nearestDestination >= 0) {
+            score += 2;
+        }
+        return score;
+    }
+
+    private static int nearestLabelDistance(List<TextNode> nodes, int start, int end, Pattern labelPattern) {
+        int nearest = -1;
+        int from = Math.max(0, start - 6);
+        int to = Math.min(nodes.size() - 1, end + 4);
+        for (int i = from; i <= to; i += 1) {
+            if (!labelPattern.matcher(nodes.get(i).rawText).find()) {
+                continue;
+            }
+            int distance = i < start ? start - i : i > end ? i - end : 0;
+            if (nearest < 0 || distance < nearest) {
+                nearest = distance;
+            }
+        }
+        return nearest;
+    }
+
+    private static boolean isNearClicked(int start, int end, int clickedIndex) {
+        return clickedIndex >= 0 && start <= clickedIndex + 3 && end >= clickedIndex - 3;
     }
 
     private static int scoreCandidate(String normalized, String raw, boolean clickedContext) {
@@ -378,6 +604,32 @@ public final class AccessibilityAddressExtractor {
         private Candidate(String rawText, String normalizedText, int score) {
             this.rawText = rawText;
             this.normalizedText = normalizedText;
+            this.score = score;
+        }
+    }
+
+    private static final class TextNode {
+        private final int index;
+        private final String rawText;
+
+        private TextNode(int index, String rawText) {
+            this.index = index;
+            this.rawText = rawText;
+        }
+    }
+
+    private static final class IndexedCandidate {
+        private final String rawText;
+        private final String normalizedText;
+        private final int startIndex;
+        private final int endIndex;
+        private final int score;
+
+        private IndexedCandidate(String rawText, String normalizedText, int startIndex, int endIndex, int score) {
+            this.rawText = rawText;
+            this.normalizedText = normalizedText;
+            this.startIndex = startIndex;
+            this.endIndex = endIndex;
             this.score = score;
         }
     }

@@ -76,7 +76,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                     root = getRootInActiveWindow();
                 }
                 AccessibilityAddressExtractor.ExtractionResult destinationResult =
-                    AccessibilityAddressExtractor.extractBestDestinationAddressFromAccessibilityTree(root, source);
+                    AccessibilityAddressExtractor.extractBestSourceAppDestinationAddressFromAccessibilityTree(root, source);
                 if (destinationResult != null && !TextUtils.isEmpty(destinationResult.normalizedAddress)) {
                     Log.d(TAG, "Destination address captured before provider launch: " + destinationResult.normalizedAddress);
                     dispatchAddress(root, source, destinationResult, rule, packageName, false);
@@ -111,7 +111,10 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         }
 
         try {
-            AccessibilityAddressExtractor.ExtractionResult result = AccessibilityAddressExtractor.extractBestAddressFromAccessibilityTree(root, source);
+            AccessibilityAddressExtractor.ExtractionResult result = AccessibilityAddressExtractor.extractBestDestinationAddressFromAccessibilityTree(root, source);
+            if (result == null && !rule.isNavigationProvider()) {
+                result = AccessibilityAddressExtractor.extractBestAddressFromAccessibilityTree(root, source);
+            }
             if (result == null || TextUtils.isEmpty(result.normalizedAddress)) {
                 Log.d(TAG, "No address candidate found for package=" + packageName);
                 return;

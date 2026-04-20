@@ -1,12 +1,12 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.4/guyeok-extractor-v2026.04.20.4.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.5/guyeok-extractor-v2026.04.20.5.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.4/guyeok-extractor-v2026.04.20.4.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.5/guyeok-extractor-v2026.04.20.5.aab";
 
-const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.7-extractor";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.8-extractor";
 const updatedAt = "2026-04-20";
 const t = {
   meta: "\uad6c\uc5ed \ucd94\ucd9c\uae30 | Android \uc124\uce58 \uc548\ub0b4",
@@ -31,6 +31,9 @@ const t = {
   step3: "B\ud3f0\uc73c\ub85c \uc804\uc1a1",
 };
 const changeLog = [
+  "퀵앱 길안내/위치보기 클릭 시 출발지가 아닌 도착지 라벨 주변 주소를 우선 추출하도록 개선",
+  "카카오맵 화면의 알림/버튼/입력 안내문이 주소로 전송되는 오탐 방지 강화",
+  "주소 전송 후 원래 퀵앱 화면으로 돌아가는 복귀 플래그 보강",
   "\uad8c\ud55c \uc124\uc815 \ub3c4\uc6b0\ubbf8 \ucd94\uac00: \uc624\ubc84\ub808\uc774, \uc811\uadfc\uc131, \uc54c\ub9bc \uad8c\ud55c\uc744 \uc21c\uc11c\ub300\ub85c \uc548\ub0b4",
   "\uc811\uadfc\uc131 \uc790\ub3d9 \ucd94\ucd9c \uc548\uc815\ud654 \ubc0f \uae30\uc874 OCR \ucea1\ucc98 fallback \uc720\uc9c0",
   "B\ud3f0\uc740 \ubc1b\uc740 \uc8fc\uc18c\ub97c \ub3c4\ucc29\uc9c0\uc5d0\ub9cc \ubc18\uc601\ud558\uace0, \uae38\ucc3e\uae30\ub294 \uc0ac\uc6a9\uc790\uac00 \uc9c1\uc811 \uc2e4\ud589",
