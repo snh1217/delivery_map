@@ -33,7 +33,7 @@ public class MainActivity extends BridgeActivity {
         if ("capture".equals(reason)) {
             url += "?captured=1";
         } else if ("accessibility".equals(reason)) {
-            url += "?incoming=accessibility";
+            url += "?incoming=accessibility&ts=" + System.currentTimeMillis();
         }
         final String finalUrl = url;
         bridge.getWebView().post(() -> bridge.getWebView().loadUrl(finalUrl));

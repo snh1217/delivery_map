@@ -23,6 +23,7 @@ public final class AccessibilityAddressExtractor {
     private static final Pattern BUILDING_PATTERN = Pattern.compile("(층|호|빌딩|아파트|상가|센터|타워|오피스텔)");
     private static final Pattern ONLY_NOISE_PATTERN = Pattern.compile("^(길안내|길 안내|지도|내비|네비|경로|복사|공유|확인|취소|닫기|전화|검색)$");
     private static final Pattern ADDRESS_START_PATTERN = Pattern.compile("(서울|경기|인천|부산|대구|광주|대전|울산|세종|강원|충북|충남|전북|전남|경북|경남|제주)[^,]{4,}");
+    private static final Pattern DESTINATION_LABEL_PATTERN = Pattern.compile("(도착지|도착|목적지|하차지)");
     private static final Set<String> CONTEXT_KEYWORDS = new HashSet<>(Arrays.asList(
         "출발지", "도착지", "상차지", "하차지", "주소", "길안내", "길 안내", "지도", "내비", "네비", "카카오", "네이버", "목적지", "위치"
     ));
@@ -85,10 +86,12 @@ public final class AccessibilityAddressExtractor {
             String nodeText = getNodeText(node);
             addCandidate(nodeText, clickedContext, out, seen);
             addAddressSegmentCandidates(nodeText, clickedContext, out, seen);
+            addDestinationLabeledCandidates(nodeText, clickedContext, out, seen);
 
             String merged = collectDescendantText(node, 16);
             addCandidate(merged, clickedContext, out, seen);
             addAddressSegmentCandidates(merged, clickedContext, out, seen);
+            addDestinationLabeledCandidates(merged, clickedContext, out, seen);
 
             for (int i = 0; i < node.getChildCount(); i += 1) {
                 AccessibilityNodeInfo child = node.getChild(i);
@@ -133,6 +136,27 @@ public final class AccessibilityAddressExtractor {
                 addCandidate(segment, clickedContext, out, seen);
             }
         }
+    }
+
+    private static void addDestinationLabeledCandidates(String raw, boolean clickedContext, List<Candidate> out, Set<String> seen) {
+        if (TextUtils.isEmpty(raw)) {
+            return;
+        }
+        String text = raw.replace('\n', ' ').replace('\r', ' ');
+        Matcher matcher = DESTINATION_LABEL_PATTERN.matcher(text);
+        int start = -1;
+        while (matcher.find()) {
+            start = matcher.end();
+        }
+        if (start < 0 || start >= text.length()) {
+            return;
+        }
+        String tail = text.substring(start).replaceAll("\\s+", " ").trim();
+        if (tail.length() < 6) {
+            return;
+        }
+        addCandidate("도착지 " + tail, true, out, seen);
+        addAddressSegmentCandidates("도착지 " + tail, true, out, seen);
     }
 
     private static int scoreCandidate(String normalized, String raw, boolean clickedContext) {

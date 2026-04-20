@@ -14,9 +14,9 @@ import com.snh.deliverymap.extractor.ExtractorStateStore;
 
 public class QuickAddressAccessibilityService extends AccessibilityService {
     private static final String TAG = "QuickAccessibility";
-    private static final long FOLLOW_UP_WINDOW_MS = 1800L;
+    private static final long FOLLOW_UP_WINDOW_MS = 10000L;
     private static final long DUPLICATE_WINDOW_MS = 4000L;
-    private static final int FOLLOW_UP_MIN_SCORE = 6;
+    private static final int FOLLOW_UP_MIN_SCORE = 5;
 
     private long lastTriggerAt = 0L;
     private String lastTriggerPackage = null;
@@ -117,6 +117,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 Log.d(TAG, "Duplicate accessibility address suppressed: " + result.normalizedAddress);
                 return;
             }
+            lastTriggerAt = 0L;
 
             String providerHint = AccessibilityAddressExtractor.detectProviderHint(root, source);
             String sourcePackage = followUpTrigger && lastTriggerPackage != null && !lastTriggerPackage.equals(packageName)

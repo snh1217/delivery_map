@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { pickImageFileFromDevice } from "@/lib/native/camera";
+import { addNativeResumeListener } from "@/lib/native/app";
 import {
   ExtractorBridge,
   type ExtractorBridgeStatus,
@@ -18,7 +19,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.5-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.6-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
@@ -446,7 +447,7 @@ export function ExtractorApp({ user }: Props) {
         if (isNativeApp() && transfer.sourcePackage) {
           window.setTimeout(() => {
             void ExtractorBridge.openSourceApp({ packageName: transfer.sourcePackage ?? "" });
-          }, 500);
+          }, 900);
         }
       } catch (error) {
         setError(error instanceof Error ? error.message : "자동 전송 실패");
@@ -459,6 +460,22 @@ export function ExtractorApp({ user }: Props) {
       setToast("길안내 클릭 시점에 추출한 주소를 불러왔습니다. 확인 후 B폰으로 보내기를 눌러 주세요.");
     }
   }, [autoTransferEnabled, sendToMainApp, setDiagnostic, user?.isAllowed]);
+
+  const consumeNativeAccessibilityTransfer = useCallback(async () => {
+    if (!isNativeApp()) return false;
+    try {
+      const incoming = await ExtractorBridge.consumePendingAccessibilityTransfer();
+      if (incoming.address) {
+        await applyIncomingTransfer(incoming);
+        return true;
+      }
+    } catch {
+      // ignore bridge failures and keep OCR fallback available
+    } finally {
+      void refreshNativeStatus();
+    }
+    return false;
+  }, [applyIncomingTransfer, refreshNativeStatus]);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -486,22 +503,34 @@ export function ExtractorApp({ user }: Props) {
 
     if (!isNativeApp()) return;
     void (async () => {
-      try {
-        const incoming = await ExtractorBridge.consumePendingAccessibilityTransfer();
-        if (incoming.address) {
-          await applyIncomingTransfer(incoming);
-          if (url.searchParams.get("incoming") === "accessibility") {
-            url.searchParams.delete("incoming");
-            window.history.replaceState({}, "", url.toString());
-          }
-        }
-      } catch {
-        // ignore bridge failures and keep OCR fallback available
-      } finally {
-        void refreshNativeStatus();
+      const consumed = await consumeNativeAccessibilityTransfer();
+      if (consumed && url.searchParams.get("incoming") === "accessibility") {
+        url.searchParams.delete("incoming");
+        url.searchParams.delete("ts");
+        window.history.replaceState({}, "", url.toString());
       }
     })();
-  }, [applyIncomingTransfer, refreshNativeStatus]);
+  }, [applyIncomingTransfer, consumeNativeAccessibilityTransfer]);
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let cleanup: (() => void) | undefined;
+    void addNativeResumeListener(() => {
+      void consumeNativeAccessibilityTransfer();
+    }).then((remove) => {
+      cleanup = remove;
+    });
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void consumeNativeAccessibilityTransfer();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cleanup?.();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [consumeNativeAccessibilityTransfer]);
 
   const runOcr = async () => {
     if (!file) return;
