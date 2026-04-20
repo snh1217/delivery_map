@@ -8,10 +8,10 @@ const MAIN_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim
 const MAIN_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "/install/android";
 const MAIN_PLAY_URL = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
 const MAIN_UPDATED_AT = "2026-04-14";
-const EXTRACTOR_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
+const EXTRACTOR_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.3-extractor";
 const EXTRACTOR_APK_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() || "/install/extractor-android";
 const EXTRACTOR_PLAY_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_PLAY_URL?.trim() || "";
-const EXTRACTOR_UPDATED_AT = "2026-04-14";
+const EXTRACTOR_UPDATED_AT = "2026-04-20";
 
 function compareVersions(a: string, b: string) {
   const aParts = a.split(".").map((part) => Number(part.replace(/[^0-9]/g, "")) || 0);
@@ -41,13 +41,13 @@ export function NativeAppUpdatePrompt() {
   const dismissedKey = isExtractorPath
     ? "delivery_map_native_update_dismissed_extractor_v1"
     : "delivery_map_native_update_dismissed_main_v1";
-  const title = isExtractorPath ? "구역 추출기 새 버전이 있습니다" : "새 앱 버전이 있습니다";
+  const title = isExtractorPath ? "구역 추출기 새 버전이 있습니다" : "새 버전이 있습니다";
   const body = isExtractorPath
-    ? "구역 추출기 최신 버전을 덮어 설치하면 한글 표시와 오버레이 동작이 더 안정적으로 동작합니다."
-    : "최신 버전을 덮어 설치하면 기능 수정과 안정화가 함께 반영됩니다.";
+    ? "구역 추출기 최신 버전을 설치하면 권한 설정 도우미와 접근성 주소 추출이 더 안정적으로 동작합니다."
+    : "최신 버전을 설치하면 기능 수정과 안정화가 함께 반영됩니다.";
   const updatedAt = isExtractorPath ? EXTRACTOR_UPDATED_AT : MAIN_UPDATED_AT;
   const highlights = isExtractorPath
-    ? ["한글 표시 복구", "오버레이 시작 안정화", "화면 캡처 재시도 보강"]
+    ? ["권한 설정 도우미 추가", "접근성 주소 추출 안정화", "OCR 캡처 fallback 유지"]
     : ["앱 권한 요청 보강", "길찾기 복귀 화면 안정화", "모바일 입력 흐름 최적화"];
 
   useEffect(() => {
@@ -71,7 +71,7 @@ export function NativeAppUpdatePrompt() {
           setOpen(true);
         }
       } catch {
-        // ignore version lookup failures
+        // Native version lookup can fail on older WebView builds. The prompt is optional.
       }
     };
 
@@ -107,7 +107,7 @@ export function NativeAppUpdatePrompt() {
         </p>
         <p className="mt-2 text-sm leading-6 text-slate-700">{body}</p>
         <div className="mt-3 rounded-2xl border border-emerald-100 bg-white/80 p-3">
-          <div className="text-xs font-semibold text-slate-900">이번 업데이트 핵심</div>
+          <div className="text-xs font-semibold text-slate-900">이번 업데이트 내용</div>
           <ul className="mt-2 space-y-1.5 text-xs leading-5 text-slate-600">
             {highlights.map((item) => (
               <li key={item}>• {item}</li>

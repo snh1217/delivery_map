@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -17,7 +17,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.2-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.3-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
@@ -199,6 +199,51 @@ export function ExtractorApp({ user }: Props) {
     } catch {
       setError("오버레이 권한 요청을 열지 못했습니다.");
       setDiagnostic("OVERLAY_PERMISSION_OPEN_FAILED", "오버레이 권한 화면을 열지 못했습니다. Android 설정에서 직접 허용해 주세요.");
+    } finally {
+      setNativeBusy(false);
+      setTimeout(() => void refreshNativeStatus(), 1000);
+    }
+  };
+
+  const onOpenNextPermissionStep = async () => {
+    if (!isNativeApp()) return;
+    setNativeBusy(true);
+    try {
+      const status = await ExtractorBridge.getStatus();
+      setNativeStatus(status);
+
+      if (!status.overlayPermission) {
+        await ExtractorBridge.requestOverlayPermission();
+        setDiagnostic(
+          "OVERLAY_PERMISSION_PENDING",
+          "먼저 '다른 앱 위에 표시'를 허용해 주세요. 허용 후 앱으로 돌아오면 다음 권한을 이어서 안내합니다.",
+        );
+        setToast("오버레이 권한 화면을 열었습니다.");
+        return;
+      }
+
+      if (!status.accessibilityEnabled) {
+        await ExtractorBridge.openAccessibilitySettings();
+        setDiagnostic(
+          "ACCESSIBILITY_PERMISSION_PENDING",
+          "접근성 목록에서 '구역 추출기'를 켜 주세요. '제한된 설정' 안내가 나오면 앱 정보에서 제한된 설정 허용이 필요할 수 있습니다.",
+        );
+        setToast("접근성 설정을 열었습니다.");
+        return;
+      }
+
+      if (!status.notificationsEnabled && status.sdkInt >= 33) {
+        await ExtractorBridge.openAppNotificationSettings();
+        setDiagnostic("NOTIFICATION_PERMISSION_PENDING", "알림 권한을 허용하면 떠있는 버튼 상태 확인이 더 안정적입니다.");
+        setToast("알림 설정을 열었습니다.");
+        return;
+      }
+
+      setDiagnostic(null);
+      setToast("필수 권한이 준비되어 있습니다. 이제 떠있는 버튼 또는 접근성 자동 추출을 사용할 수 있습니다.");
+    } catch {
+      setError("권한 설정 화면을 열지 못했습니다.");
+      setDiagnostic("PERMISSION_WIZARD_FAILED", "기기 설정에서 구역 추출기 앱 권한을 직접 확인해 주세요.");
     } finally {
       setNativeBusy(false);
       setTimeout(() => void refreshNativeStatus(), 1000);
@@ -550,6 +595,48 @@ export function ExtractorApp({ user }: Props) {
                 </span>
               </div>
             </div>
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-white p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-semibold text-slate-900">권한 설정 도우미</div>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">
+                    Android는 보안상 모든 권한을 한 번에 자동 허용할 수 없습니다. 대신 필요한 권한 화면을 순서대로 열어드립니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="h-10 rounded-lg bg-slate-950 px-3 text-xs font-semibold text-white disabled:opacity-50"
+                  onClick={() => void onOpenNextPermissionStep()}
+                  disabled={nativeBusy}
+                >
+                  다음 권한 열기
+                </button>
+              </div>
+              <div className="mt-3 grid gap-2 text-[11px] text-slate-600 sm:grid-cols-3">
+                <div className={`rounded-lg border px-3 py-2 ${nativeStatus?.overlayPermission ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50"}`}>
+                  1. 오버레이 {nativeStatus?.overlayPermission ? "완료" : "필요"}
+                </div>
+                <div className={`rounded-lg border px-3 py-2 ${nativeStatus?.accessibilityEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50"}`}>
+                  2. 접근성 {nativeStatus?.accessibilityEnabled ? "완료" : "필요"}
+                </div>
+                <div className={`rounded-lg border px-3 py-2 ${nativeStatus?.notificationsEnabled || (nativeStatus?.sdkInt ?? 0) < 33 ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-slate-200 bg-slate-50"}`}>
+                  3. 알림 {(nativeStatus?.notificationsEnabled || (nativeStatus?.sdkInt ?? 0) < 33) ? "완료" : "권장"}
+                </div>
+              </div>
+              <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 p-3 text-[11px] leading-5 text-rose-800">
+                Play Protect 또는 Android 13+에서 접근성이 막히면, 앱 정보 화면의 우측 상단 메뉴에서
+                <b> 제한된 설정 허용</b>을 먼저 켠 뒤 접근성을 다시 허용해야 할 수 있습니다.
+                <div className="mt-2">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-rose-200 bg-white px-3 py-2 font-medium text-rose-800"
+                    onClick={() => void ExtractorBridge.openAppDetailsSettings()}
+                  >
+                    앱 정보 설정 열기
+                  </button>
+                </div>
+              </div>
+            </div>
             <div className="mt-3 rounded-xl border border-amber-200 bg-white p-3 text-xs text-slate-700">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -809,3 +896,4 @@ export function ExtractorApp({ user }: Props) {
     </main>
   );
 }
+

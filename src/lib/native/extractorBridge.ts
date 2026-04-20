@@ -39,6 +39,7 @@ export type ExtractorBridgePlugin = {
   updateOverlayConfig(config: ExtractorOverlayConfig): Promise<ExtractorBridgeStatus>;
   openAppNotificationSettings(): Promise<void>;
   openAccessibilitySettings(): Promise<void>;
+  openAppDetailsSettings(): Promise<void>;
 };
 
 export const ExtractorBridge = registerPlugin<ExtractorBridgePlugin>("ExtractorBridge");

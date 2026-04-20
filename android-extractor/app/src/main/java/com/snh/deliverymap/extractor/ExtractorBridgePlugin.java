@@ -167,4 +167,13 @@ public class ExtractorBridgePlugin extends Plugin {
         getContext().startActivity(intent);
         call.resolve();
     }
+
+    @PluginMethod
+    public void openAppDetailsSettings(PluginCall call) {
+        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+            .setData(Uri.parse("package:" + getContext().getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
 }

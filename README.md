@@ -1,4 +1,4 @@
-﻿# delivery_map
+# delivery_map
 
 퀵서비스 구설정(동 단위) 자동 생성 웹앱입니다.
 
@@ -560,8 +560,10 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 - 기본 OCR은 클라이언트에서 실행되며, 이미지는 서버에 저장하지 않습니다.
 - 별도 Android 포장을 위한 설정 파일은 `capacitor.extractor.config.ts`에 준비되어 있습니다.
 - 안내 페이지: `/install/extractor-android`
-- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.19`
+- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.20`
 - 별도 Android 프로젝트 폴더: `android-extractor`
+- 웹(`/extractor`)은 다른 앱의 길안내 버튼 클릭을 감지할 수 없으므로, 길안내 클릭 자동 추출은 Android 구역 추출기 앱의 권한 설정 도우미로 오버레이/접근성/알림 권한을 사용자가 직접 허용한 경우에만 동작합니다.
+- Play Protect 또는 Android 13+에서 접근성이 막히면 구역 추출기 앱 정보 화면의 `제한된 설정 허용`을 먼저 켠 뒤 접근성 권한을 다시 허용합니다. 기존 OCR 캡처 방식은 fallback으로 유지됩니다.
 - 빌드 스크립트:
   - `npm run cap:sync:extractor`
   - `npm run android:extractor:apk:debug`
@@ -572,3 +574,4 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 ## 네이티브 앱 안정화 메모
 - 설치형 앱에서는 앱 권한 상태(위치/카메라/마이크)를 로그인 정보 영역에서 다시 요청할 수 있습니다.
 - 외부 길찾기 앱에서 복귀할 때는 최신 UI 스냅샷을 세션에 저장/복원하여 이전 상태로 돌아가는 문제를 줄였습니다.
+
