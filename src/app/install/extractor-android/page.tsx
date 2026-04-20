@@ -1,12 +1,12 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.1/guyeok-extractor-v2026.04.20.1.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.2/guyeok-extractor-v2026.04.20.2.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.1/guyeok-extractor-v2026.04.20.1.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.2/guyeok-extractor-v2026.04.20.2.aab";
 
-const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.4-extractor";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.5-extractor";
 const updatedAt = "2026-04-20";
 const t = {
   meta: "\uad6c\uc5ed \ucd94\ucd9c\uae30 | Android \uc124\uce58 \uc548\ub0b4",

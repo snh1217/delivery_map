@@ -30,6 +30,12 @@ export type PendingAccessibilityTransfer = {
   detectedAt: number | null;
 };
 
+export type ExtractorLaunchableApp = {
+  packageName: string;
+  label: string;
+  selected: boolean;
+};
+
 export type ExtractorBridgePlugin = {
   getStatus(): Promise<ExtractorBridgeStatus>;
   requestOverlayPermission(): Promise<void>;
@@ -44,6 +50,8 @@ export type ExtractorBridgePlugin = {
   openAppDetailsSettings(): Promise<void>;
   addAccessibilityTargetPackage(options: { packageName: string }): Promise<ExtractorBridgeStatus>;
   removeAccessibilityTargetPackage(options: { packageName: string }): Promise<ExtractorBridgeStatus>;
+  getLaunchableApps(): Promise<{ apps: ExtractorLaunchableApp[] }>;
+  openSourceApp(options: { packageName: string }): Promise<void>;
 };
 
 export const ExtractorBridge = registerPlugin<ExtractorBridgePlugin>("ExtractorBridge");

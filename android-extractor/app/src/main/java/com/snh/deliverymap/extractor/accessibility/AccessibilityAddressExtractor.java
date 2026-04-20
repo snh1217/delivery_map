@@ -84,9 +84,11 @@ public final class AccessibilityAddressExtractor {
             AccessibilityNodeInfo node = queue.removeFirst();
             String nodeText = getNodeText(node);
             addCandidate(nodeText, clickedContext, out, seen);
+            addAddressSegmentCandidates(nodeText, clickedContext, out, seen);
 
             String merged = collectDescendantText(node, 16);
             addCandidate(merged, clickedContext, out, seen);
+            addAddressSegmentCandidates(merged, clickedContext, out, seen);
 
             for (int i = 0; i < node.getChildCount(); i += 1) {
                 AccessibilityNodeInfo child = node.getChild(i);
@@ -112,11 +114,28 @@ public final class AccessibilityAddressExtractor {
         if (!seen.add((clickedContext ? "ctx:" : "all:") + normalized)) {
             return;
         }
-        int score = scoreCandidate(normalized, clickedContext);
+        int score = scoreCandidate(normalized, raw, clickedContext);
         out.add(new Candidate(raw, normalized, score));
     }
 
-    private static int scoreCandidate(String normalized, boolean clickedContext) {
+    private static void addAddressSegmentCandidates(String raw, boolean clickedContext, List<Candidate> out, Set<String> seen) {
+        if (TextUtils.isEmpty(raw)) {
+            return;
+        }
+        String text = raw.replace('\n', ' ').replace('\r', ' ');
+        text = PHONE_PATTERN.matcher(text).replaceAll(" ");
+        text = text.replaceAll("\\s+", " ").trim();
+        String split = SIDO_PATTERN.matcher(text).replaceAll("\n$1");
+        String[] parts = split.split("\\n");
+        for (String part : parts) {
+            String segment = part.trim();
+            if (segment.length() >= 6) {
+                addCandidate(segment, clickedContext, out, seen);
+            }
+        }
+    }
+
+    private static int scoreCandidate(String normalized, String raw, boolean clickedContext) {
         if (normalized.length() < 6) {
             return -4;
         }
@@ -128,6 +147,7 @@ public final class AccessibilityAddressExtractor {
             return -6;
         }
 
+        String rawText = raw == null ? "" : raw;
         int score = 0;
         if (SIDO_PATTERN.matcher(normalized).find()) score += 3;
         if (normalized.contains("구")) score += 2;
@@ -139,6 +159,10 @@ public final class AccessibilityAddressExtractor {
         if (normalized.length() > 90) score -= 2;
         if (countKeywords(normalized) >= 2) score += 2;
         if (normalized.contains("출발") || normalized.contains("도착") || normalized.contains("길안내")) score -= 1;
+        if (rawText.contains("도착") || rawText.contains("목적지") || rawText.contains("하차지") || rawText.contains("도착지")) score += 7;
+        if (rawText.contains("출발") || rawText.contains("출발지") || rawText.contains("상차지")) score -= 7;
+        if (rawText.contains("내 위치") || rawText.contains("현재 위치") || rawText.contains("현위치") || rawText.contains("내위치")) score -= 8;
+        if (normalized.contains("내 위치") || normalized.contains("현재 위치") || normalized.contains("현위치") || normalized.contains("내위치")) score -= 8;
         return score;
     }
 
@@ -205,7 +229,7 @@ public final class AccessibilityAddressExtractor {
         text = PHONE_PATTERN.matcher(text).replaceAll(" ");
         text = text.replaceAll("[\\[\\]{}<>|]", " ");
         text = text.replaceAll("[:;]", " ");
-        text = text.replaceAll("(출발지|도착지|상차지|하차지|주소|길안내|길 안내|지도|내비|네비|카카오맵|카카오내비|네이버지도)", " ");
+        text = text.replaceAll("(출발지|도착지|상차지|하차지|출발|도착|목적지|내 위치|내위치|현재 위치|현위치|주소|길안내|길 안내|지도|내비|네비|카카오맵|카카오내비|네이버지도|입력)", " ");
         text = text.replaceAll("서울시", "서울");
         text = text.replaceAll("경기도", "경기");
         text = text.replaceAll("인천시", "인천");
@@ -213,9 +237,9 @@ public final class AccessibilityAddressExtractor {
 
         Matcher matcher = ADDRESS_START_PATTERN.matcher(text);
         if (matcher.find()) {
-            return matcher.group(0).replaceAll("\\s+", " ").trim();
+            return matcher.group(0).replaceAll("입력$", "").replaceAll("\\s+", " ").trim();
         }
-        return text;
+        return text.replaceAll("입력$", "").replaceAll("\\s+", " ").trim();
     }
 
     public static String detectProviderHint(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource) {

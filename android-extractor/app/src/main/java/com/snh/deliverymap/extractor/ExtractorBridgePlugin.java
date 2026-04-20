@@ -2,6 +2,8 @@ package com.snh.deliverymap.extractor;
 
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
@@ -19,6 +21,8 @@ import com.snh.deliverymap.extractor.accessibility.QuickAddressAccessibilityServ
 
 import org.json.JSONArray;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @CapacitorPlugin(name = "ExtractorBridge")
@@ -201,5 +205,52 @@ public class ExtractorBridgePlugin extends Plugin {
         }
         ExtractorStateStore.removeAccessibilityTargetPackage(getContext(), packageName);
         call.resolve(buildStatus());
+    }
+
+    @PluginMethod
+    public void getLaunchableApps(PluginCall call) {
+        PackageManager packageManager = getContext().getPackageManager();
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> resolved = packageManager.queryIntentActivities(intent, 0);
+        List<JSObject> apps = new ArrayList<>();
+        List<String> selectedPackages = ExtractorStateStore.getCustomAccessibilityTargetPackages(getContext());
+        for (ResolveInfo info : resolved) {
+            if (info == null || info.activityInfo == null || TextUtils.isEmpty(info.activityInfo.packageName)) {
+                continue;
+            }
+            String packageName = info.activityInfo.packageName;
+            String label = String.valueOf(info.loadLabel(packageManager));
+            JSObject app = new JSObject();
+            app.put("packageName", packageName);
+            app.put("label", TextUtils.isEmpty(label) ? packageName : label);
+            app.put("selected", selectedPackages.contains(packageName));
+            apps.add(app);
+        }
+        apps.sort(Comparator.comparing(app -> app.optString("label", "").toLowerCase()));
+        JSONArray array = new JSONArray();
+        for (JSObject app : apps) {
+            array.put(app);
+        }
+        JSObject result = new JSObject();
+        result.put("apps", array);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openSourceApp(PluginCall call) {
+        String packageName = call.getString("packageName", "");
+        if (TextUtils.isEmpty(packageName)) {
+            call.resolve();
+            return;
+        }
+        Intent intent = getContext().getPackageManager().getLaunchIntentForPackage(packageName);
+        if (intent == null) {
+            call.resolve();
+            return;
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        getContext().startActivity(intent);
+        call.resolve();
     }
 }

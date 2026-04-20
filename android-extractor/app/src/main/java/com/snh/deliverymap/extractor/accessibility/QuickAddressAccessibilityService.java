@@ -71,6 +71,16 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             lastTriggerAt = System.currentTimeMillis();
             lastTriggerPackage = packageName;
             Log.d(TAG, "Navigation click detected in package=" + packageName + " rule=" + rule.id);
+            if (!rule.isNavigationProvider()) {
+                Log.d(TAG, "Waiting for navigation provider screen before extraction. source=" + packageName);
+                if (source != null) {
+                    source.recycle();
+                }
+                if (root != null) {
+                    root.recycle();
+                }
+                return;
+            }
         }
 
         if (root == null) {
@@ -109,15 +119,18 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             }
 
             String providerHint = AccessibilityAddressExtractor.detectProviderHint(root, source);
+            String sourcePackage = followUpTrigger && lastTriggerPackage != null && !lastTriggerPackage.equals(packageName)
+                ? lastTriggerPackage
+                : packageName;
             ExtractorStateStore.savePendingAccessibilityTransfer(
                 this,
                 result.normalizedAddress,
                 result.rawText,
                 providerHint,
-                packageName,
+                sourcePackage,
                 detectedAt
             );
-            Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint + " / rule=" + rule.id);
+            Log.d(TAG, "Accessibility address captured: " + result.normalizedAddress + " / provider=" + providerHint + " / rule=" + rule.id + " / source=" + sourcePackage);
             openExtractorAppOrWebFallback(result.normalizedAddress, result.rawText, providerHint);
         } finally {
             if (source != null) {
