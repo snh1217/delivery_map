@@ -8,6 +8,10 @@ import java.util.List;
 import java.util.Locale;
 
 final class QuickTargetAppRule {
+    private static final List<String> BLOCKED_PACKAGES = Collections.unmodifiableList(Arrays.asList(
+        "com.kakao.talk"
+    ));
+
     static final List<QuickTargetAppRule> RULES = Collections.unmodifiableList(Arrays.asList(
         new QuickTargetAppRule(
             "inseong-iscf",
@@ -26,21 +30,21 @@ final class QuickTargetAppRule {
         new QuickTargetAppRule(
             "kakao-map",
             Arrays.asList("net.daum.android.map"),
-            Arrays.asList("kakao", "daum", "map"),
+            Collections.emptyList(),
             Arrays.asList("길안내", "길 안내", "위치보기", "위치 보기", "도착", "출발", "경로", "내비", "네비"),
             Arrays.asList("출발", "도착", "주소", "위치", "검색")
         ),
         new QuickTargetAppRule(
             "kakao-navi",
             Arrays.asList("com.locnall.KimGiSa", "com.kakao.navi"),
-            Arrays.asList("kakao", "navi", "kimgisa"),
+            Collections.emptyList(),
             Arrays.asList("길안내", "위치보기", "위치 보기", "안내", "도착", "출발", "경로"),
             Arrays.asList("출발", "도착", "주소", "위치")
         ),
         new QuickTargetAppRule(
             "naver-map",
             Arrays.asList("com.nhn.android.nmap"),
-            Arrays.asList("naver", "nmap"),
+            Collections.emptyList(),
             Arrays.asList("길안내", "길 안내", "위치보기", "위치 보기", "도착", "출발", "경로", "내비", "네비"),
             Arrays.asList("출발", "도착", "주소", "위치", "검색")
         )
@@ -118,6 +122,10 @@ final class QuickTargetAppRule {
 
     boolean isNavigationProvider() {
         return id.equals("kakao-map") || id.equals("kakao-navi") || id.equals("naver-map");
+    }
+
+    static boolean isBlockedPackage(String packageName) {
+        return !TextUtils.isEmpty(packageName) && BLOCKED_PACKAGES.contains(packageName);
     }
 
     static QuickTargetAppRule resolve(String packageName) {

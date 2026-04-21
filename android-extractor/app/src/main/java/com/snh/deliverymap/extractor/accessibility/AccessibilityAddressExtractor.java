@@ -139,6 +139,36 @@ public final class AccessibilityAddressExtractor {
         return normalizeAddress(sourceText + " " + rootText);
     }
 
+    public static String buildClickedNeighborhoodText(AccessibilityNodeInfo clickedSource, int parentDepth, int maxNodesPerLevel) {
+        if (clickedSource == null) {
+            return "";
+        }
+        List<String> pieces = new ArrayList<>();
+        AccessibilityNodeInfo current = clickedSource;
+        int depth = 0;
+        while (current != null && depth <= parentDepth) {
+            String directText = getNodeText(current);
+            if (!TextUtils.isEmpty(directText)) {
+                pieces.add(directText);
+            }
+            String descendantText = collectDescendantText(current, maxNodesPerLevel);
+            if (!TextUtils.isEmpty(descendantText)) {
+                pieces.add(descendantText);
+            }
+
+            AccessibilityNodeInfo parent = current.getParent();
+            if (current != clickedSource) {
+                current.recycle();
+            }
+            current = parent;
+            depth += 1;
+        }
+        if (current != null) {
+            current.recycle();
+        }
+        return TextUtils.join(" ", pieces).replaceAll("\\s+", " ").trim();
+    }
+
     private static void collectCandidates(AccessibilityNodeInfo start, boolean clickedContext, List<Candidate> out, Set<String> seen) {
         Deque<AccessibilityNodeInfo> queue = new ArrayDeque<>();
         queue.add(start);

@@ -1,12 +1,12 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.2/guyeok-extractor-v2026.04.21.2.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.3/guyeok-extractor-v2026.04.21.3.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.2/guyeok-extractor-v2026.04.21.2.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.3/guyeok-extractor-v2026.04.21.3.aab";
 
-const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.10-extractor";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.11-extractor";
 const updatedAt = "2026-04-20";
 const t = {
   meta: "\uad6c\uc5ed \ucd94\ucd9c\uae30 | Android \uc124\uce58 \uc548\ub0b4",
@@ -31,6 +31,9 @@ const t = {
   step3: "B\ud3f0\uc73c\ub85c \uc804\uc1a1",
 };
 const changeLog = [
+  "카카오톡 채팅 화면에서 주소가 오인식되지 않도록 카카오톡 패키지 차단",
+  "카카오맵/카카오내비/네이버지도 후속 추적은 정확한 앱 패키지에서만 동작하도록 제한",
+  "화면 전체가 아닌 실제 클릭한 버튼 주변에 길안내/위치보기 문구가 있을 때만 트리거 처리",
   "최근 화면 캐시가 출발지/약한 추정 주소를 저장하지 않도록 캐시 조건 보수화",
   "라벨 없는 순서 추정 후보가 도착지 라벨 후보로 오인되는 문제 수정",
   "길안내 단독 클릭에서도 직전 퀵앱 화면의 도착지 주소 캐시를 이용해 B폰 전송 안정화",

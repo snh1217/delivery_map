@@ -68,7 +68,7 @@ const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
 const MAIN_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.10-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.11-extractor";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
     .map((value) => normalizePhoneNumber(value))

@@ -35,6 +35,9 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         if (packageName.equals(getPackageName())) {
             return;
         }
+        if (QuickTargetAppRule.isBlockedPackage(packageName)) {
+            return;
+        }
         ExtractorStateStore.recordLastObservedAccessibilityPackage(this, packageName);
 
         QuickTargetAppRule rule = QuickTargetAppRule.resolve(packageName);
@@ -48,20 +51,10 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         int eventType = event.getEventType();
         AccessibilityNodeInfo source = event.getSource();
         AccessibilityNodeInfo root = null;
-        if (!rule.isNavigationProvider() && shouldCacheSourceScreen(eventType)) {
-            root = getRootInActiveWindow();
-            cacheSourceDestination(root, source, packageName);
-        }
-
         boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, source, rule);
         if (!directTrigger && eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
-            if (root == null) {
-                root = getRootInActiveWindow();
-            }
-            if (root != null) {
-                String screenContext = AccessibilityAddressExtractor.buildContextText(root, source, 80);
-                directTrigger = rule.containsTrigger(screenContext) && rule.containsAddressContext(screenContext);
-            }
+            String clickedContext = AccessibilityAddressExtractor.buildClickedNeighborhoodText(source, 4, 32);
+            directTrigger = rule.containsTrigger(clickedContext) && rule.containsAddressContext(clickedContext);
         }
         boolean followUpTrigger = lastTriggerPackage != null
             && (System.currentTimeMillis() - lastTriggerAt) < FOLLOW_UP_WINDOW_MS
@@ -95,6 +88,7 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
                 if (root == null) {
                     root = getRootInActiveWindow();
                 }
+                cacheSourceDestination(root, source, packageName);
                 AccessibilityAddressExtractor.ExtractionResult destinationResult =
                     AccessibilityAddressExtractor.extractBestSourceAppDestinationAddressFromAccessibilityTree(root, source);
                 if ((destinationResult == null || TextUtils.isEmpty(destinationResult.normalizedAddress)) && hasRecentSourceDestination()) {
