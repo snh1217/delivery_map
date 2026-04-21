@@ -19,7 +19,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.8-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.9-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
@@ -62,6 +62,7 @@ export function ExtractorApp({ user }: Props) {
   const [targetAppsLoading, setTargetAppsLoading] = useState(false);
   const [targetApps, setTargetApps] = useState<ExtractorLaunchableApp[]>([]);
   const [targetAppSearch, setTargetAppSearch] = useState("");
+  const [lastReturnPackage, setLastReturnPackage] = useState<string | null>(null);
 
   const previewLabel = useMemo(() => {
     if (!file) return "스크린샷 선택 또는 촬영";
@@ -78,6 +79,15 @@ export function ExtractorApp({ user }: Props) {
     setDiagnosticCode(code);
     setDiagnosticHint(hint ?? null);
   }, []);
+
+  const returnToSourceApp = useCallback(async () => {
+    if (!isNativeApp() || !lastReturnPackage) return;
+    try {
+      await ExtractorBridge.openSourceApp({ packageName: lastReturnPackage });
+    } catch {
+      setToast("원래 퀵 화면으로 돌아가지 못했습니다. 최근 앱 화면에서 퀵앱을 선택해 주세요.");
+    }
+  }, [lastReturnPackage]);
 
   const onPickFile = useCallback(
     (picked: File | null) => {
@@ -432,6 +442,9 @@ export function ExtractorApp({ user }: Props) {
     setOcrRawText(transfer.rawText ?? normalized);
     setOcrAddressDraft(normalized);
     setIncomingTransferMeta(transfer);
+    if (transfer.sourcePackage) {
+      setLastReturnPackage(transfer.sourcePackage);
+    }
     setPreprocessedPreviewUrl(null);
     setDiagnostic(null);
 
@@ -616,6 +629,17 @@ export function ExtractorApp({ user }: Props) {
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
+      {isNativeApp() && lastReturnPackage ? (
+        <button
+          type="button"
+          className="fixed right-4 bottom-5 z-50 flex h-14 items-center gap-2 rounded-full border border-cyan-200 bg-slate-950 px-4 text-sm font-semibold text-white shadow-[0_18px_50px_rgba(15,23,42,0.28)] active:scale-[0.98]"
+          onClick={() => void returnToSourceApp()}
+          aria-label="원래 퀵 화면으로 돌아가기"
+        >
+          <span className="grid size-8 place-items-center rounded-full bg-cyan-400 text-base text-slate-950">↩</span>
+          <span>퀵화면</span>
+        </button>
+      ) : null}
       <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

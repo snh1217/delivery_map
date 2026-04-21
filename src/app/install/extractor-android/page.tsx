@@ -1,12 +1,12 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.5/guyeok-extractor-v2026.04.20.5.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.1/guyeok-extractor-v2026.04.21.1.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.20.5/guyeok-extractor-v2026.04.20.5.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.1/guyeok-extractor-v2026.04.21.1.aab";
 
-const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.8-extractor";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.9-extractor";
 const updatedAt = "2026-04-20";
 const t = {
   meta: "\uad6c\uc5ed \ucd94\ucd9c\uae30 | Android \uc124\uce58 \uc548\ub0b4",
@@ -31,6 +31,8 @@ const t = {
   step3: "B\ud3f0\uc73c\ub85c \uc804\uc1a1",
 };
 const changeLog = [
+  "길안내 단독 클릭에서도 직전 퀵앱 화면의 도착지 주소 캐시를 이용해 B폰 전송 안정화",
+  "구역추출기 앱 안에 원래 퀵화면으로 돌아가는 플로팅 버튼 추가",
   "퀵앱 길안내/위치보기 클릭 시 출발지가 아닌 도착지 라벨 주변 주소를 우선 추출하도록 개선",
   "카카오맵 화면의 알림/버튼/입력 안내문이 주소로 전송되는 오탐 방지 강화",
   "주소 전송 후 원래 퀵앱 화면으로 돌아가는 복귀 플래그 보강",
