@@ -1,12 +1,12 @@
 const extractorApkUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.3/guyeok-extractor-v2026.04.21.3.apk";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.4/guyeok-extractor-v2026.04.21.4.apk";
 
 const extractorAabUrl =
   process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_AAB_URL?.trim() ||
-  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.3/guyeok-extractor-v2026.04.21.3.aab";
+  "https://github.com/snh1217/delivery_map/releases/download/extractor-android-v2026.04.21.4/guyeok-extractor-v2026.04.21.4.aab";
 
-const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.11-extractor";
+const latestVersion = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.12-extractor";
 const updatedAt = "2026-04-20";
 const t = {
   meta: "\uad6c\uc5ed \ucd94\ucd9c\uae30 | Android \uc124\uce58 \uc548\ub0b4",
@@ -31,6 +31,8 @@ const t = {
   step3: "B\ud3f0\uc73c\ub85c \uc804\uc1a1",
 };
 const changeLog = [
+  "퀵앱 버튼 텍스트가 접근성에 직접 노출되지 않는 경우를 위해 퀵앱 화면 문맥 fallback 복구",
+  "카카오톡 차단과 정확한 내비 앱 패키지 제한은 유지하면서 길안내/위치보기 동작 복구",
   "카카오톡 채팅 화면에서 주소가 오인식되지 않도록 카카오톡 패키지 차단",
   "카카오맵/카카오내비/네이버지도 후속 추적은 정확한 앱 패키지에서만 동작하도록 제한",
   "화면 전체가 아닌 실제 클릭한 버튼 주변에 길안내/위치보기 문구가 있을 때만 트리거 처리",

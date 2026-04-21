@@ -51,10 +51,26 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
         int eventType = event.getEventType();
         AccessibilityNodeInfo source = event.getSource();
         AccessibilityNodeInfo root = null;
+        if (!rule.isNavigationProvider() && shouldCacheSourceScreen(eventType)) {
+            root = getRootInActiveWindow();
+            cacheSourceDestination(root, source, packageName);
+        }
+
         boolean directTrigger = eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && containsNavigationKeyword(event, source, rule);
         if (!directTrigger && eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) {
             String clickedContext = AccessibilityAddressExtractor.buildClickedNeighborhoodText(source, 4, 32);
             directTrigger = rule.containsTrigger(clickedContext) && rule.containsAddressContext(clickedContext);
+        }
+        if (!directTrigger && eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && !rule.isNavigationProvider()) {
+            if (root == null) {
+                root = getRootInActiveWindow();
+            }
+            if (root != null) {
+                String rawScreenContext = AccessibilityAddressExtractor.buildRawContextText(root, source, 90);
+                directTrigger = rule.containsTrigger(rawScreenContext)
+                    && rule.containsAddressContext(rawScreenContext)
+                    && hasRecentSourceDestination();
+            }
         }
         boolean followUpTrigger = lastTriggerPackage != null
             && (System.currentTimeMillis() - lastTriggerAt) < FOLLOW_UP_WINDOW_MS
@@ -64,6 +80,8 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             && (lastTriggerPackage.equals(packageName) || rule.isNavigationProvider());
         boolean cachedProviderTrigger = !directTrigger
             && !followUpTrigger
+            && lastTriggerPackage != null
+            && (System.currentTimeMillis() - lastTriggerAt) < FOLLOW_UP_WINDOW_MS
             && rule.isNavigationProvider()
             && hasRecentSourceDestination()
             && (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED

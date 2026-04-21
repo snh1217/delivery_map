@@ -139,6 +139,12 @@ public final class AccessibilityAddressExtractor {
         return normalizeAddress(sourceText + " " + rootText);
     }
 
+    public static String buildRawContextText(AccessibilityNodeInfo root, AccessibilityNodeInfo clickedSource, int maxNodes) {
+        String sourceText = getNodeText(clickedSource);
+        String rootText = collectDescendantText(root, maxNodes);
+        return (sourceText + " " + rootText).replaceAll("\\s+", " ").trim();
+    }
+
     public static String buildClickedNeighborhoodText(AccessibilityNodeInfo clickedSource, int parentDepth, int maxNodesPerLevel) {
         if (clickedSource == null) {
             return "";

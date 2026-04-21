@@ -19,7 +19,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.11-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.12-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
