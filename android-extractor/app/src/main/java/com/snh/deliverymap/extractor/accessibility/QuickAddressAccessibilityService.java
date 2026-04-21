@@ -233,8 +233,8 @@ public class QuickAddressAccessibilityService extends AccessibilityService {
             return;
         }
         AccessibilityAddressExtractor.ExtractionResult result =
-            AccessibilityAddressExtractor.extractBestSourceAppDestinationAddressFromAccessibilityTree(root, source);
-        if (result == null || TextUtils.isEmpty(result.normalizedAddress)) {
+            AccessibilityAddressExtractor.extractBestDestinationAddressFromAccessibilityTree(root, source);
+        if (result == null || TextUtils.isEmpty(result.normalizedAddress) || result.score < 8) {
             return;
         }
         lastSourceDestination = result;

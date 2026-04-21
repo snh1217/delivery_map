@@ -553,6 +553,7 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
   - 대상 앱의 `길안내 / 길찾기 / 위치보기 / 카카오내비 / 카카오맵 / 네이버지도` 클릭 시점을 감지하고
   - 출발지보다 `도착지 / 목적지 / 하차지 / 배달지` 라벨 주변의 주소 후보를 우선 추출해 extractor 화면으로 자동 전달합니다.
   - `길안내` 버튼 텍스트가 접근성 이벤트에 직접 노출되지 않는 앱을 대비해, 퀵앱 화면의 최근 도착지 주소를 잠시 캐시하고 내비 앱 전환 시 해당 주소를 사용합니다.
+  - 캐시는 `도착지 / 목적지 / 하차지 / 배달지` 라벨 기반의 높은 점수 후보만 저장해 출발지나 약한 순서 추정 주소가 전송되는 일을 줄입니다.
   - 카카오맵 전환 후 `알림`, `버튼`, `입력` 같은 안내 문구는 주소 후보에서 제외합니다.
 - extractor 앱으로 돌아오지 못하면 `/extractor` 웹 화면으로 fallback 연결을 시도합니다.
 - extractor 화면에서는 자동 전송이 켜져 있으면 같은 계정의 B폰 메인 앱으로 바로 전송하고, 꺼져 있으면 사용자가 확인 후 직접 전송할 수 있습니다.
@@ -563,7 +564,7 @@ NEXT_PUBLIC_ANDROID_PLAY_URL=https://play.google.com/store/apps/details?id=com.s
 - 기본 OCR은 클라이언트에서 실행되며, 이미지는 서버에 저장하지 않습니다.
 - 별도 Android 포장을 위한 설정 파일은 `capacitor.extractor.config.ts`에 준비되어 있습니다.
 - 안내 페이지: `/install/extractor-android`
-- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.21.1`
+- 공개 APK 릴리스: `https://github.com/snh1217/delivery_map/releases/tag/extractor-android-v2026.04.21.2`
 - 별도 Android 프로젝트 폴더: `android-extractor`
 - 웹(`/extractor`)은 다른 앱의 길안내 버튼 클릭을 감지할 수 없으므로, 길안내 클릭 자동 추출은 Android 구역 추출기 앱의 권한 설정 도우미로 오버레이/접근성/알림 권한을 사용자가 직접 허용한 경우에만 동작합니다.
 - Play Protect 또는 Android 13+에서 접근성이 막히면 구역 추출기 앱 정보 화면의 `제한된 설정 허용`을 먼저 켠 뒤 접근성 권한을 다시 허용합니다. 기존 OCR 캡처 방식은 fallback으로 유지됩니다.

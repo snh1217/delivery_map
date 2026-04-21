@@ -278,7 +278,7 @@ public final class AccessibilityAddressExtractor {
             }
             if (best != null && best.score >= 4) {
                 addCandidateWithNormalized(
-                    "도착지 추정 " + best.rawText,
+                    "주소 순서 추정 " + best.rawText,
                     best.normalizedText,
                     best.score + 5,
                     out,
