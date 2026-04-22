@@ -19,7 +19,7 @@ type Props = {
   user: SessionUser | null;
 };
 
-const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.12-extractor";
+const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.13-extractor";
 const EXTRACTOR_AUTO_TRANSFER_STORAGE_KEY = "delivery_map_extractor_auto_transfer_v1";
 
 export function ExtractorApp({ user }: Props) {
@@ -118,6 +118,7 @@ export function ExtractorApp({ user }: Props) {
       setOverlaySizeDp(status.overlaySizeDp);
       setOverlayOpacity(status.overlayOpacity);
       setOverlayLocked(status.overlayLocked);
+      setLastReturnPackage((current) => current ?? status.lastReturnPackage ?? null);
     } catch {
       setNativeStatus(null);
     }
@@ -457,11 +458,6 @@ export function ExtractorApp({ user }: Props) {
           providerHint: transfer.providerHint ?? undefined,
         });
         setToast("길안내 클릭 시점에 추출한 주소를 B폰 메인 앱으로 자동 전송했습니다.");
-        if (isNativeApp() && transfer.sourcePackage) {
-          window.setTimeout(() => {
-            void ExtractorBridge.openSourceApp({ packageName: transfer.sourcePackage ?? "" });
-          }, 900);
-        }
       } catch (error) {
         setError(error instanceof Error ? error.message : "자동 전송 실패");
         setDiagnostic(

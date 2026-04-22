@@ -12,6 +12,7 @@ export type ExtractorBridgeStatus = {
   notificationsEnabled: boolean;
   accessibilityEnabled: boolean;
   lastObservedAccessibilityPackage?: string | null;
+  lastReturnPackage?: string | null;
   customAccessibilityTargetPackages?: string[];
 };
 

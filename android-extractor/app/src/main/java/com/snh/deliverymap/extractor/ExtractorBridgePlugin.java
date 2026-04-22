@@ -61,6 +61,7 @@ public class ExtractorBridgePlugin extends Plugin {
         result.put("notificationsEnabled", NotificationManagerCompat.from(getContext()).areNotificationsEnabled());
         result.put("accessibilityEnabled", isAccessibilityEnabled());
         result.put("lastObservedAccessibilityPackage", ExtractorStateStore.getLastObservedAccessibilityPackage(getContext()));
+        result.put("lastReturnPackage", ExtractorStateStore.getLastReturnPackage(getContext()));
         result.put("customAccessibilityTargetPackages", new JSONArray(ExtractorStateStore.getCustomAccessibilityTargetPackages(getContext())));
         return result;
     }

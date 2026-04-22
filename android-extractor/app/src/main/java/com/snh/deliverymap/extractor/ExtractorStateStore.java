@@ -32,6 +32,7 @@ public class ExtractorStateStore {
     private static final String KEY_LAST_ACCESSIBILITY_ADDRESS = "last_accessibility_address";
     private static final String KEY_LAST_ACCESSIBILITY_DISPATCH_AT = "last_accessibility_dispatch_at";
     private static final String KEY_LAST_OBSERVED_ACCESSIBILITY_PACKAGE = "last_observed_accessibility_package";
+    private static final String KEY_LAST_RETURN_PACKAGE = "last_return_package";
     private static final String KEY_CUSTOM_ACCESSIBILITY_TARGET_PACKAGES = "custom_accessibility_target_packages";
     private static final int DEFAULT_OVERLAY_SIZE_DP = 64;
     private static final float DEFAULT_OVERLAY_OPACITY = 0.94f;
@@ -135,7 +136,7 @@ public class ExtractorStateStore {
         String sourcePackage,
         long detectedAt
     ) {
-        prefs(context)
+        SharedPreferences.Editor editor = prefs(context)
             .edit()
             .putString(KEY_PENDING_ACCESSIBILITY_ADDRESS, address)
             .putString(KEY_PENDING_ACCESSIBILITY_RAW_TEXT, rawText)
@@ -143,8 +144,11 @@ public class ExtractorStateStore {
             .putString(KEY_PENDING_ACCESSIBILITY_SOURCE_PACKAGE, sourcePackage)
             .putLong(KEY_PENDING_ACCESSIBILITY_DETECTED_AT, detectedAt)
             .putString(KEY_LAST_ACCESSIBILITY_ADDRESS, address)
-            .putLong(KEY_LAST_ACCESSIBILITY_DISPATCH_AT, detectedAt)
-            .apply();
+            .putLong(KEY_LAST_ACCESSIBILITY_DISPATCH_AT, detectedAt);
+        if (sourcePackage != null && !sourcePackage.trim().isEmpty()) {
+            editor.putString(KEY_LAST_RETURN_PACKAGE, sourcePackage.trim());
+        }
+        editor.apply();
     }
 
     public static boolean hasPendingAccessibilityTransfer(Context context) {
@@ -193,6 +197,10 @@ public class ExtractorStateStore {
 
     public static String getLastObservedAccessibilityPackage(Context context) {
         return prefs(context).getString(KEY_LAST_OBSERVED_ACCESSIBILITY_PACKAGE, null);
+    }
+
+    public static String getLastReturnPackage(Context context) {
+        return prefs(context).getString(KEY_LAST_RETURN_PACKAGE, null);
     }
 
     public static List<String> getCustomAccessibilityTargetPackages(Context context) {
