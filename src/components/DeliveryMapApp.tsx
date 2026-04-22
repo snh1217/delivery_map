@@ -349,7 +349,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [iosBrowserInfo] = useState(() => ({ isIos: detectIosLikeBrowser(), isIosChrome: detectIosChrome() }));
   const [isMobileLayout, setIsMobileLayout] = useState(false);
   const [resultPanelOpenMobile, setResultPanelOpenMobile] = useState(false);
-  const [mapPanelOpenMobile, setMapPanelOpenMobile] = useState(false);
   const [mapRenderKey, setMapRenderKey] = useState(0);
   const [developmentRequests, setDevelopmentRequests] = useState<DevelopmentRequestRow[]>([]);
   const [developmentRequestsLoading, setDevelopmentRequestsLoading] = useState(false);
@@ -598,7 +597,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       setIsMobileLayout(mobile);
       if (!mobile) {
         setResultPanelOpenMobile(true);
-        setMapPanelOpenMobile(true);
       }
       syncViewportCssVar();
       void loadIncomingOcrTransfers();
@@ -2455,23 +2453,33 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         </div>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-slate-800">네이버 지도</h2>
-            {isMobileLayout ? (
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-800">네이버 지도</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                출발지와 도착지, 추천 순서를 지도에서 바로 확인합니다.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                좌표 {orderedRouteStops.length}개
+              </span>
+              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-[11px] font-medium text-cyan-800">
+                길찾기 {routeableStops.length}개
+              </span>
               <button
                 type="button"
-                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
-                onClick={() => setMapPanelOpenMobile((prev) => !prev)}
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700"
+                onClick={() => {
+                  setMapDeferred(false);
+                  setMapRenderKey((prev) => prev + 1);
+                }}
               >
-                {mapPanelOpenMobile ? "접기" : "펼치기"}
+                지도 새로고침
               </button>
-            ) : null}
-          </div>
-          {isMobileLayout && !mapPanelOpenMobile ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-600">
-              지도가 길어서 기본 접힘 상태입니다. 필요할 때 펼쳐서 확인하세요.
             </div>
-          ) : iosSafeMode && mapDeferred ? (
+          </div>
+          {iosSafeMode && mapDeferred ? (
             <div className="flex min-h-[42vh] items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
               <div className="max-w-sm text-center">
                 <p className="text-sm font-medium text-slate-700">지도 로드를 지연하고 있습니다.</p>
@@ -2483,7 +2491,6 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   className="mt-3 h-11 rounded-lg bg-cyan-700 px-4 text-sm font-medium text-white"
                   onClick={() => {
                     setMapDeferred(false);
-                    setMapPanelOpenMobile(true);
                   }}
                 >
                   지도 로드하기
