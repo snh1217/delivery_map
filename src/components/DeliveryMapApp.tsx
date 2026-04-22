@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS: SettingsState = {
   autoSearch: false,
   viewMode: "segment",
   navigationApp: "naver",
+  incomingTransferMode: "list",
 };
 
 function getNavigationAppLabel(app: SettingsState["navigationApp"]) {
@@ -111,6 +112,7 @@ function sanitizeSettings(raw: Partial<SettingsState> | null | undefined): Setti
     viewMode: raw?.viewMode === "all" ? "all" : "segment",
     navigationApp:
       raw?.navigationApp === "kakao" || raw?.navigationApp === "kakaonavi" ? raw.navigationApp : "naver",
+    incomingTransferMode: raw?.incomingTransferMode === "navigate" ? "navigate" : "list",
   };
 }
 
@@ -912,18 +914,13 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     );
   };
 
-  const onNavigate = useCallback((id: string) => {
-    const row = rows.find((item) => item.id === id);
-    if (!row?.coord) {
-      return;
-    }
-
+  const openNavigationToDestination = useCallback((destination: LatLng, name: string) => {
     if (settings.navigationApp === "kakaonavi") {
       if (!kakaoNaviCapability.supported) {
         setLastAutoRemovedMessage("카카오내비를 현재 사용할 수 없습니다. 관리자에게 문의하세요.");
-        return;
+        return false;
       }
-      void openKakaoNaviDirections(origin, row.coord, row.label ?? row.input)
+      void openKakaoNaviDirections(origin, destination, name)
         .then((result) => {
           if (result.links) {
             window.setTimeout(() => setStoreModal(result.links), 1200);
@@ -933,27 +930,37 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           setLastAutoRemovedMessage(error instanceof Error ? error.message : "카카오내비 실행 실패");
           setStoreModal(createKakaoNaviInstallLinks());
         });
-      return;
+      return true;
     }
 
     if (settings.navigationApp === "kakao") {
-      const result = openKakaoMapDirections(origin, row.coord, row.label ?? row.input);
+      const result = openKakaoMapDirections(origin, destination, name);
       if (result.usedAppScheme) {
         window.setTimeout(() => setStoreModal(result.links), 1300);
       }
-      return;
+      return true;
     }
 
-    const result = openNaverDirections(origin, row.coord, row.label ?? row.input);
+    const result = openNaverDirections(origin, destination, name);
     if (result.usedAppScheme) {
       window.setTimeout(() => setStoreModal(result.links), 1300);
     }
-  }, [kakaoNaviCapability.supported, origin, rows, settings.navigationApp]);
+    return true;
+  }, [kakaoNaviCapability.supported, origin, settings.navigationApp]);
+
+  const onNavigate = useCallback((id: string) => {
+    const row = rows.find((item) => item.id === id);
+    if (!row?.coord) {
+      return;
+    }
+
+    openNavigationToDestination(row.coord, row.label ?? row.input);
+  }, [openNavigationToDestination, rows]);
 
   const applyAddressToRowAndSearch = useCallback(async (
     id: string,
     address: string,
-    options?: { onResolved?: (rowId: string, label: string) => void },
+    options?: { onResolved?: (rowId: string, resolved: GeocodeItem, fallbackLabel: string) => void },
   ) => {
     const normalized = address.trim();
     if (!normalized) return null;
@@ -977,14 +984,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     );
     const resolved = await resolveRowAddress(id, normalized);
     if (resolved) {
-      options?.onResolved?.(id, resolved.title || normalized);
+      options?.onResolved?.(id, resolved, normalized);
     }
     return resolved;
   }, [resolveRowAddress]);
 
   const addDestinationFromAddress = useCallback(async (
     address: string,
-    options?: { onResolved?: (rowId: string, label: string) => void },
+    options?: { onResolved?: (rowId: string, resolved: GeocodeItem, fallbackLabel: string) => void },
   ) => {
     const normalized = address.trim();
     if (!normalized) {
@@ -1010,7 +1017,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     await new Promise((resolve) => window.setTimeout(resolve, 0));
     await resolveRowAddress(newRow.id, normalized).then((resolved) => {
       if (resolved) {
-        options?.onResolved?.(newRow.id, resolved.title || normalized);
+        options?.onResolved?.(newRow.id, resolved, normalized);
       }
     });
     setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
@@ -1039,10 +1046,34 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         return;
       }
 
-      await addDestinationFromAddress(target.normalized_address ?? target.extracted_text);
+      const shouldNavigateAfterApply = settings.incomingTransferMode === "navigate";
+      let didOpenNavigation = false;
+      await addDestinationFromAddress(target.normalized_address ?? target.extracted_text, {
+        onResolved: (_rowId, resolved, fallbackLabel) => {
+          if (!shouldNavigateAfterApply) {
+            return;
+          }
+          didOpenNavigation = openNavigationToDestination(
+            { lat: resolved.lat, lon: resolved.lon },
+            resolved.title || fallbackLabel,
+          );
+        },
+      });
       await updateIncomingOcrTransferStatus(id, "consume");
+      if (didOpenNavigation) {
+        setLastAutoRemovedMessage(
+          `받은 주소를 도착지에 반영하고 ${getNavigationAppLabel(settings.navigationApp)} 길찾기를 실행했습니다.`,
+        );
+      }
     },
-    [addDestinationFromAddress, incomingOcrTransfers, updateIncomingOcrTransferStatus],
+    [
+      addDestinationFromAddress,
+      incomingOcrTransfers,
+      openNavigationToDestination,
+      settings.incomingTransferMode,
+      settings.navigationApp,
+      updateIncomingOcrTransferStatus,
+    ],
   );
 
   const onDismissIncomingOcrTransfer = useCallback(
@@ -2150,7 +2181,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                       <div>
                         <h2 className="text-sm font-semibold text-slate-800">받은 주소 자동 적용</h2>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
-                          켜 두면 A폰에서 보낸 첫 번째 주소를 빈 도착지 또는 새 도착지 row에 자동 반영합니다.
+                          켜 두면 A폰에서 보낸 주소를 아래 A/B 처리 방식대로 자동 처리합니다. 끄면 받은 주소 카드에서 직접 적용합니다.
                         </p>
                       </div>
                       <button
@@ -2168,12 +2199,45 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-                      <div>
-                        <h2 className="text-sm font-semibold text-slate-800">받은 주소 처리 방식</h2>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">
-                          받은 주소는 자동으로 도착지에만 반영합니다. 이후 전체 길찾기나 개별 길찾기는 사용자가 직접 선택하도록 유지해 원하지 않는 자동 실행을 막습니다.
-                        </p>
-                      </div>
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-800">받은 주소 처리 방식</h2>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">
+                        A폰에서 길찾기로 보낸 주소를 B폰에서 어떻게 처리할지 선택합니다.
+                      </p>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                          settings.incomingTransferMode === "list"
+                            ? "bg-slate-950 text-white"
+                            : "border border-slate-300 bg-white text-slate-700"
+                        }`}
+                        onClick={() => {
+                          setAutoApplyIncomingTransfers(true);
+                          setSettings((prev) => sanitizeSettings({ ...prev, incomingTransferMode: "list" }));
+                        }}
+                      >
+                        A설정: 목록으로 받기
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-xl px-3 py-2 text-xs font-semibold ${
+                          settings.incomingTransferMode === "navigate"
+                            ? "bg-cyan-700 text-white"
+                            : "border border-slate-300 bg-white text-slate-700"
+                        }`}
+                        onClick={() => {
+                          setAutoApplyIncomingTransfers(true);
+                          setSettings((prev) => sanitizeSettings({ ...prev, incomingTransferMode: "navigate" }));
+                        }}
+                      >
+                        B설정: 바로 길찾기
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                      B설정은 자동 적용을 켜고, 지오코딩이 끝난 뒤 기본 길찾기 앱({getNavigationAppLabel(settings.navigationApp)})을 자동 실행합니다.
+                    </p>
                   </div>
                 </div>
               </section>

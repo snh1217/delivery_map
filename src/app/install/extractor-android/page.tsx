@@ -31,6 +31,7 @@ const t = {
   step3: "B\ud3f0\uc73c\ub85c \uc804\uc1a1",
 };
 const changeLog = [
+  "B폰 메인 앱에서 A설정(목록으로 받기) / B설정(기본 길찾기 앱으로 바로 실행) 선택 지원",
   "주소 전송 후 퀵화면 이동 버튼이 깜빡이지 않도록 자동 강제 복귀를 제거하고 마지막 퀵앱 복귀 대상을 저장",
   "퀵앱 버튼 텍스트가 접근성에 직접 노출되지 않는 경우를 위해 퀵앱 화면 문맥 fallback 복구",
   "카카오톡 차단과 정확한 내비 앱 패키지 제한은 유지하면서 길안내/위치보기 동작 복구",
@@ -46,7 +47,7 @@ const changeLog = [
   "주소 전송 후 원래 퀵앱 화면으로 돌아가는 복귀 플래그 보강",
   "\uad8c\ud55c \uc124\uc815 \ub3c4\uc6b0\ubbf8 \ucd94\uac00: \uc624\ubc84\ub808\uc774, \uc811\uadfc\uc131, \uc54c\ub9bc \uad8c\ud55c\uc744 \uc21c\uc11c\ub300\ub85c \uc548\ub0b4",
   "\uc811\uadfc\uc131 \uc790\ub3d9 \ucd94\ucd9c \uc548\uc815\ud654 \ubc0f \uae30\uc874 OCR \ucea1\ucc98 fallback \uc720\uc9c0",
-  "B\ud3f0\uc740 \ubc1b\uc740 \uc8fc\uc18c\ub97c \ub3c4\ucc29\uc9c0\uc5d0\ub9cc \ubc18\uc601\ud558\uace0, \uae38\ucc3e\uae30\ub294 \uc0ac\uc6a9\uc790\uac00 \uc9c1\uc811 \uc2e4\ud589",
+  "B폰은 설정에 따라 받은 주소를 도착지 목록에만 반영하거나 기본 길찾기 앱으로 바로 실행",
 ];
 
 export const metadata = {
@@ -126,7 +127,7 @@ export default function ExtractorAndroidInstallPage() {
         <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Step 3</div>
           <div className="mt-2 text-base font-semibold text-slate-900">{t.step3}</div>
-          <p className="mt-2 text-sm leading-6 text-slate-600">같은 계정이면 B폰 메인 앱의 도착지 목록으로 주소가 들어갑니다. 길찾기는 B폰에서 직접 선택합니다.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">같은 계정이면 B폰 메인 앱으로 주소가 들어갑니다. B폰의 받은 주소 처리 방식에서 목록 반영 또는 기본 길찾기 앱 자동 실행을 선택할 수 있습니다.</p>
         </div>
       </section>
     </main>

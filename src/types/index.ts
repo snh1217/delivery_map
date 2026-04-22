@@ -43,6 +43,7 @@ export type SettingsState = {
   autoSearch: boolean;
   viewMode: "segment" | "all";
   navigationApp: "naver" | "kakao" | "kakaonavi";
+  incomingTransferMode: "list" | "navigate";
 };
 
 export type DongCentroid = {
