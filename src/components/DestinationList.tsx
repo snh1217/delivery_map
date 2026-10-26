@@ -49,6 +49,10 @@ type Props = {
   onChangeCallOriginInput: (id: string, value: string) => void;
   onUseCurrentLocationForCall: (id: string) => void;
   onResolveCallOrigin: (id: string) => void;
+  favoriteCount?: number;
+  favoriteRowIds?: Set<string>;
+  onToggleFavorite?: (id: string) => void;
+  onOpenFavorites?: () => void;
 };
 
 export function DestinationList({
@@ -90,6 +94,10 @@ export function DestinationList({
   onChangeCallOriginInput,
   onUseCurrentLocationForCall,
   onResolveCallOrigin,
+  favoriteCount = 0,
+  favoriteRowIds,
+  onToggleFavorite,
+  onOpenFavorites,
 }: Props) {
   const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
 
@@ -103,7 +111,16 @@ export function DestinationList({
           </h2>
           <p className="app-caption">주소를 붙여넣으면 핵심 주소만 자동 추출됩니다 · ↑↓로 순서 변경</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex">
+        <div className={`grid gap-2 sm:flex ${onOpenFavorites ? "grid-cols-3" : "grid-cols-2"}`}>
+          {onOpenFavorites ? (
+            <button
+              type="button"
+              className="app-btn h-10 border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+              onClick={onOpenFavorites}
+            >
+              ★ 즐겨찾기{favoriteCount > 0 ? ` ${favoriteCount}` : ""}
+            </button>
+          ) : null}
           <button type="button" className="app-btn app-btn-secondary h-10" onClick={onReset}>
             초기화
           </button>
@@ -260,6 +277,8 @@ export function DestinationList({
             onChangeCallOriginInput={onChangeCallOriginInput}
             onUseCurrentLocationForCall={onUseCurrentLocationForCall}
             onResolveCallOrigin={onResolveCallOrigin}
+            isFavorite={favoriteRowIds?.has(row.id) ?? false}
+            onToggleFavorite={onToggleFavorite}
           />
         ))}
       </div>

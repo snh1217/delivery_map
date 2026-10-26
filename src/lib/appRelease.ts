@@ -9,6 +9,17 @@ export type AppRelease = {
 
 export const APP_RELEASES: AppRelease[] = [
   {
+    version: "2026.10.27",
+    date: "2026-10-27",
+    title: "주소 즐겨찾기 보관함",
+    notes: [
+      "도착지 카드의 ☆ 버튼으로 자주 가는 주소를 즐겨찾기에 저장할 수 있습니다.",
+      "'★ 즐겨찾기' 보관함에서 검색하고, 눌러서 바로 도착지로 추가합니다(다시 검색하지 않아 빠릅니다).",
+      "보관함에서 이름·상세(층/호)·메모를 편집하거나 삭제할 수 있고, 자주 쓴 순서로 정렬됩니다.",
+      "앱 자동 업데이트 시 입력 중이던 도착지 목록이 사라지지 않도록 개선했습니다.",
+    ],
+  },
+  {
     version: "2026.10.26",
     date: "2026-10-26",
     title: "주소 자동 인식 · 새 디자인",
@@ -22,5 +33,8 @@ export const APP_RELEASES: AppRelease[] = [
 ];
 
 export const CURRENT_RELEASE = APP_RELEASES[0];
+
+// 자동 업데이트로 새로고침하기 직전에 발생하는 이벤트(작업 중인 화면 상태 저장용)
+export const APP_BEFORE_UPDATE_RELOAD_EVENT = "delivery-map:before-update-reload";
 
 export const APP_BUILD_ID = process.env.NEXT_PUBLIC_APP_BUILD_ID || "dev";

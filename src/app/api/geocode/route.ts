@@ -1,7 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { getAllowedSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { fetchNaverApiJson, NAVER_MAPS_API_BASES } from "@/lib/naverApi";
 
 export async function GET(request: NextRequest) {
+  if (!(await getAllowedSessionUser())) {
+    return unauthorizedResponse();
+  }
+
   const query = request.nextUrl.searchParams.get("query")?.trim();
   if (!query) {
     return NextResponse.json({ message: "query가 필요합니다." }, { status: 400 });
