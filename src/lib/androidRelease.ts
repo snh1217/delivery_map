@@ -1,6 +1,6 @@
 // GitHub Releases에 올라간 최신 Android APK 정보를 조회합니다.
 // .github/workflows/android-release.yml 이 build.gradle 버전으로 릴리스를 자동 생성합니다.
-const RELEASES_API = "https://api.github.com/repos/snh1217/delivery_map/releases?per_page=10";
+const RELEASES_API = "https://api.github.com/repos/snh1217/delivery_map/releases?per_page=50";
 const MAIN_APK_PATTERN = /^delivery-map-.*\.apk$/i;
 
 export type AndroidReleaseInfo = {

@@ -93,7 +93,10 @@ jobs:
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          if ! printf '%s' "$KEYSTORE_BASE64" | tr -d ' \r\n\t' | base64 -d > "$RUNNER_TEMP/release.jks" 2>/dev/null; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 값이 올바른 base64가 아닙니다. PC에서 scripts/android/Export-KeystoreForGithub.ps1 로 만든 값을 그대로 붙여넣어 주세요."
+            exit 1
+          fi
           export RELEASE_STORE_FILE="$RUNNER_TEMP/release.jks"
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
