@@ -13,6 +13,7 @@ import { NativePermissionStatus } from "@/components/app/NativePermissionStatus"
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { parseAddressInput } from "@/lib/addressInput";
+import { normalizeFavoriteText } from "@/lib/favoriteSearch";
 import { APP_BEFORE_UPDATE_RELOAD_EVENT, CURRENT_RELEASE } from "@/lib/appRelease";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
@@ -927,9 +928,19 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     }
   }, []);
 
+  const favoritesRef = useRef<FavoriteAddressRow[]>([]);
+  const applyFavoriteToRowRef = useRef<((rowId: string, favorite: FavoriteAddressRow) => Promise<void>) | null>(null);
+
   const onSearch = useCallback(async (id: string) => {
     const row = rowsRef.current.find((item) => item.id === id);
     if (!row || !row.input.trim()) {
+      return;
+    }
+    // 입력한 이름이 즐겨찾기 이름과 정확히 같으면 저장된 주소를 바로 사용합니다.
+    const typed = normalizeFavoriteText(row.input);
+    const exact = favoritesRef.current.find((item) => normalizeFavoriteText(item.label) === typed);
+    if (exact && applyFavoriteToRowRef.current) {
+      await applyFavoriteToRowRef.current(id, exact);
       return;
     }
     await resolveRowAddress(id, row.input.trim());
@@ -1088,10 +1099,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [loadFavorites]);
 
   const favoriteByAddress = useMemo(() => new Map(favorites.map((item) => [item.address, item])), [favorites]);
-  const favoriteRowIds = useMemo(
-    () => new Set(rows.filter((row) => favoriteByAddress.has(favoriteKeyForRow(row))).map((row) => row.id)),
-    [favoriteByAddress, rows],
-  );
+  const favoriteLabelsByRow = useMemo(() => {
+    const map = new Map<string, string>();
+    rows.forEach((row) => {
+      const favorite = favoriteByAddress.get(favoriteKeyForRow(row));
+      if (favorite) map.set(row.id, favorite.label);
+    });
+    return map;
+  }, [favoriteByAddress, rows]);
 
   const onToggleFavorite = useCallback(
     async (rowId: string) => {
@@ -1108,12 +1123,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           return;
         }
         if (!key || !row.coord) return;
+        const name = window.prompt("즐겨찾기 이름을 입력하세요. (예: 이지메디컴)", key);
+        if (name === null) return;
         const response = await fetch("/api/favorites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             address: key,
-            label: key,
+            label: name.trim() || key,
             detail: row.inputDetail ?? null,
             lat: row.coord.lat,
             lon: row.coord.lon,
@@ -1123,7 +1140,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         if (!response.ok || !payload.row) throw new Error(payload.message ?? "즐겨찾기 저장에 실패했습니다.");
         const saved = payload.row;
         setFavorites((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
-        setIncomingTransferToast("즐겨찾기에 저장했습니다. 보관함에서 이름과 메모를 바꿀 수 있습니다.");
+        setIncomingTransferToast(`'${saved.label}'을(를) 즐겨찾기에 저장했습니다.`);
       } catch (error) {
         setIncomingTransferToast(error instanceof Error ? error.message : "즐겨찾기 처리에 실패했습니다.");
       }
@@ -1131,30 +1148,29 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     [favoriteByAddress],
   );
 
-  const onUseFavorite = useCallback(
-    async (favorite: FavoriteAddressRow) => {
-      setFavoritesOpen(false);
-      void fetch(`/api/favorites/${favorite.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ used: true }),
+  const markFavoriteUsed = useCallback((favorite: FavoriteAddressRow) => {
+    void fetch(`/api/favorites/${favorite.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ used: true }),
+    })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { row?: FavoriteAddressRow } | null) => {
+        const updated = payload?.row;
+        if (updated) setFavorites((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
       })
-        .then((response) => (response.ok ? response.json() : null))
-        .then((payload: { row?: FavoriteAddressRow } | null) => {
-          const updated = payload?.row;
-          if (updated) setFavorites((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-        })
-        .catch(() => {});
+      .catch(() => {});
+  }, []);
+
+  // 즐겨찾기를 특정 도착지 줄에 바로 채웁니다(저장된 좌표가 있으면 다시 검색하지 않음).
+  const onApplyFavoriteToRow = useCallback(
+    async (rowId: string, favorite: FavoriteAddressRow) => {
+      markFavoriteUsed(favorite);
+      const detail = favorite.detail ?? undefined;
 
       if (favorite.lat === null || favorite.lon === null) {
-        try {
-          const rowId = await addDestinationFromAddress(favorite.address);
-          if (favorite.detail) {
-            setRows((prev) => prev.map((item) => (item.id === rowId ? { ...item, inputDetail: favorite.detail ?? undefined } : item)));
-          }
-        } catch (error) {
-          setIncomingTransferToast(error instanceof Error ? error.message : "즐겨찾기 추가 실패");
-        }
+        await applyAddressToRowAndSearch(rowId, favorite.address);
+        setRows((prev) => prev.map((item) => (item.id === rowId ? { ...item, inputDetail: detail } : item)));
         return;
       }
 
@@ -1164,28 +1180,45 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         lat: favorite.lat,
         lon: favorite.lon,
       };
-      const fill = (row: DestinationRowState): DestinationRowState => ({
-        ...applyGeocode({ ...row, geocodeItems: [geocodeItem] }, geocodeItem, 0),
-        input: favorite.address,
-        inputDetail: favorite.detail ?? undefined,
-      });
+      setRows((prev) =>
+        prev.map((item) =>
+          item.id === rowId
+            ? {
+                ...applyGeocode({ ...item, geocodeItems: [geocodeItem] }, geocodeItem, 0),
+                input: favorite.address,
+                inputDetail: detail,
+              }
+            : item,
+        ),
+      );
+    },
+    [applyAddressToRowAndSearch, markFavoriteUsed],
+  );
 
-      const reusableRow = rowsRef.current.find(isReusableEmptyRow);
-      if (reusableRow) {
-        setRows((prev) => prev.map((item) => (item.id === reusableRow.id ? fill(item) : item)));
-        setPendingFocusRowId(reusableRow.id);
-      } else if (rowsRef.current.length >= MAX_DESTINATIONS) {
-        setIncomingTransferToast(`도착지는 최대 ${MAX_DESTINATIONS}개까지 추가할 수 있습니다.`);
-        return;
-      } else {
-        const newRow = fill(createRow());
+  const onUseFavorite = useCallback(
+    async (favorite: FavoriteAddressRow) => {
+      setFavoritesOpen(false);
+      let targetRowId = rowsRef.current.find(isReusableEmptyRow)?.id;
+      if (!targetRowId) {
+        if (rowsRef.current.length >= MAX_DESTINATIONS) {
+          setIncomingTransferToast(`도착지는 최대 ${MAX_DESTINATIONS}개까지 추가할 수 있습니다.`);
+          return;
+        }
+        const newRow = createRow();
+        targetRowId = newRow.id;
         setRows((prev) => [...prev, newRow]);
-        setPendingFocusRowId(newRow.id);
       }
+      setPendingFocusRowId(targetRowId);
+      await onApplyFavoriteToRow(targetRowId, favorite);
       setIncomingTransferToast(`즐겨찾기 '${favorite.label}'을(를) 도착지에 추가했습니다.`);
     },
-    [addDestinationFromAddress],
+    [onApplyFavoriteToRow],
   );
+
+  useEffect(() => {
+    favoritesRef.current = favorites;
+    applyFavoriteToRowRef.current = onApplyFavoriteToRow;
+  }, [favorites, onApplyFavoriteToRow]);
 
   const onUpdateFavorite = useCallback(async (id: string, patch: { label: string; detail: string; memo: string }) => {
     const response = await fetch(`/api/favorites/${id}`, {
@@ -2420,7 +2453,9 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
             <DestinationList
               favoriteCount={favorites.length}
-              favoriteRowIds={favoriteRowIds}
+              favorites={favorites}
+              favoriteLabelsByRow={favoriteLabelsByRow}
+              onApplyFavoriteToRow={(rowId, favorite) => void onApplyFavoriteToRow(rowId, favorite)}
               onToggleFavorite={sessionUser?.isAllowed ? (id) => void onToggleFavorite(id) : undefined}
               onOpenFavorites={
                 sessionUser?.isAllowed

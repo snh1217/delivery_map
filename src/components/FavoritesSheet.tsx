@@ -176,7 +176,7 @@ export function FavoritesSheet({ favorites, loading, error, canAddMore, onClose,
                       ) : null}
                     </div>
                     {item.label !== item.address ? (
-                      <div className="mt-0.5 truncate text-xs text-slate-600">{item.address}</div>
+                      <div className="mt-0.5 truncate text-xs text-slate-600">- {item.address}</div>
                     ) : null}
                     {item.detail || item.memo ? (
                       <div className="mt-1 flex flex-wrap gap-1">
