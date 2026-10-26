@@ -310,3 +310,18 @@ export type OcrTransferRow = {
   updated_at: string;
   consumed_at: string | null;
 };
+
+export type FavoriteAddressRow = {
+  id: string;
+  owner_phone: string;
+  label: string;
+  address: string;
+  detail: string | null;
+  memo: string | null;
+  lat: number | null;
+  lon: number | null;
+  use_count: number;
+  last_used_at: string | null;
+  created_at: string;
+  updated_at: string;
+};

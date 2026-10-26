@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DestinationList } from "@/components/DestinationList";
+import { FavoritesSheet } from "@/components/FavoritesSheet";
 import { EarningsFab } from "@/components/EarningsFab";
 import { EarningsStatsFab } from "@/components/EarningsStatsFab";
 import { ResultPanel } from "@/components/ResultPanel";
@@ -12,7 +13,7 @@ import { NativePermissionStatus } from "@/components/app/NativePermissionStatus"
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
 import { parseAddressInput } from "@/lib/addressInput";
-import { CURRENT_RELEASE } from "@/lib/appRelease";
+import { APP_BEFORE_UPDATE_RELOAD_EVENT, CURRENT_RELEASE } from "@/lib/appRelease";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
 import { addNativeResumeListener } from "@/lib/native/app";
@@ -44,6 +45,7 @@ import type { OcrTransferRow } from "@/types";
 import type {
   DevelopmentRequestRow,
   DestinationRowState,
+  FavoriteAddressRow,
   GeocodeItem,
   LatLng,
   RouteCallEstimateResult,
@@ -291,6 +293,10 @@ function applyGeocode(row: DestinationRowState, item: GeocodeItem, index: number
   };
 }
 
+function favoriteKeyForRow(row: DestinationRowState) {
+  return (row.label ?? row.input).replace(/\s+/g, " ").trim();
+}
+
 function isReusableEmptyRow(row: DestinationRowState) {
   return !row.input.trim() && !row.coord && row.geocodeItems.length === 0;
 }
@@ -356,6 +362,10 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   const [developmentRequestsError, setDevelopmentRequestsError] = useState<string | null>(null);
   const [incomingOcrTransfers, setIncomingOcrTransfers] = useState<OcrTransferRow[]>([]);
   const [incomingTransferToast, setIncomingTransferToast] = useState<string | null>(null);
+  const [favorites, setFavorites] = useState<FavoriteAddressRow[]>([]);
+  const [favoritesOpen, setFavoritesOpen] = useState(false);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [favoritesError, setFavoritesError] = useState<string | null>(null);
   const [autoApplyIncomingTransfers, setAutoApplyIncomingTransfers] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -440,6 +450,33 @@ export function DeliveryMapApp({ sessionUser }: Props) {
       handoffPending: false,
     });
   }, []);
+
+  // 자동 업데이트(새로고침) 직전에 작업 중인 도착지 목록을 저장해 재시작 후 복원합니다.
+  useEffect(() => {
+    const onBeforeUpdateReload = () => {
+      persistCurrentRouteUiSnapshot({
+        rows: rowsRef.current,
+        undoStack: rowsUndoStackRef.current,
+        message: lastAutoRemovedMessage,
+        manualOrder: manualRecommendationRowOrder,
+        roadOrder: roadRecommendedOrder,
+        recommendationMode,
+        activeBatchIndex: activeRouteBatchIndex,
+        highlightedRowIndex,
+        handoffPending: true,
+      });
+    };
+    window.addEventListener(APP_BEFORE_UPDATE_RELOAD_EVENT, onBeforeUpdateReload);
+    return () => window.removeEventListener(APP_BEFORE_UPDATE_RELOAD_EVENT, onBeforeUpdateReload);
+  }, [
+    activeRouteBatchIndex,
+    highlightedRowIndex,
+    lastAutoRemovedMessage,
+    manualRecommendationRowOrder,
+    persistCurrentRouteUiSnapshot,
+    recommendationMode,
+    roadRecommendedOrder,
+  ]);
 
   useEffect(() => {
     originRef.current = origin;
@@ -1024,6 +1061,153 @@ export function DeliveryMapApp({ sessionUser }: Props) {
     setLastAutoRemovedMessage("OCR 주소로 도착지 1건을 추가하고 자동 검색을 시작했습니다.");
     return newRow.id;
   }, [applyAddressToRowAndSearch, resolveRowAddress]);
+
+  const loadFavorites = useCallback(async () => {
+    if (!sessionUser?.isAllowed) {
+      setFavorites([]);
+      return;
+    }
+    setFavoritesLoading(true);
+    try {
+      const response = await fetch("/api/favorites", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as { rows?: FavoriteAddressRow[]; message?: string };
+      if (!response.ok) {
+        throw new Error(payload.message ?? "즐겨찾기를 불러오지 못했습니다.");
+      }
+      setFavorites(Array.isArray(payload.rows) ? payload.rows : []);
+      setFavoritesError(null);
+    } catch (error) {
+      setFavoritesError(error instanceof Error ? error.message : "즐겨찾기를 불러오지 못했습니다.");
+    } finally {
+      setFavoritesLoading(false);
+    }
+  }, [sessionUser?.isAllowed]);
+
+  useEffect(() => {
+    void loadFavorites();
+  }, [loadFavorites]);
+
+  const favoriteByAddress = useMemo(() => new Map(favorites.map((item) => [item.address, item])), [favorites]);
+  const favoriteRowIds = useMemo(
+    () => new Set(rows.filter((row) => favoriteByAddress.has(favoriteKeyForRow(row))).map((row) => row.id)),
+    [favoriteByAddress, rows],
+  );
+
+  const onToggleFavorite = useCallback(
+    async (rowId: string) => {
+      const row = rowsRef.current.find((item) => item.id === rowId);
+      if (!row) return;
+      const key = favoriteKeyForRow(row);
+      const existing = favoriteByAddress.get(key);
+      try {
+        if (existing) {
+          const response = await fetch(`/api/favorites/${existing.id}`, { method: "DELETE" });
+          if (!response.ok) throw new Error("즐겨찾기 삭제에 실패했습니다.");
+          setFavorites((prev) => prev.filter((item) => item.id !== existing.id));
+          setIncomingTransferToast("즐겨찾기에서 삭제했습니다.");
+          return;
+        }
+        if (!key || !row.coord) return;
+        const response = await fetch("/api/favorites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            address: key,
+            label: key,
+            detail: row.inputDetail ?? null,
+            lat: row.coord.lat,
+            lon: row.coord.lon,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as { row?: FavoriteAddressRow; message?: string };
+        if (!response.ok || !payload.row) throw new Error(payload.message ?? "즐겨찾기 저장에 실패했습니다.");
+        const saved = payload.row;
+        setFavorites((prev) => [saved, ...prev.filter((item) => item.id !== saved.id)]);
+        setIncomingTransferToast("즐겨찾기에 저장했습니다. 보관함에서 이름과 메모를 바꿀 수 있습니다.");
+      } catch (error) {
+        setIncomingTransferToast(error instanceof Error ? error.message : "즐겨찾기 처리에 실패했습니다.");
+      }
+    },
+    [favoriteByAddress],
+  );
+
+  const onUseFavorite = useCallback(
+    async (favorite: FavoriteAddressRow) => {
+      setFavoritesOpen(false);
+      void fetch(`/api/favorites/${favorite.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ used: true }),
+      })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload: { row?: FavoriteAddressRow } | null) => {
+          const updated = payload?.row;
+          if (updated) setFavorites((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+        })
+        .catch(() => {});
+
+      if (favorite.lat === null || favorite.lon === null) {
+        try {
+          const rowId = await addDestinationFromAddress(favorite.address);
+          if (favorite.detail) {
+            setRows((prev) => prev.map((item) => (item.id === rowId ? { ...item, inputDetail: favorite.detail ?? undefined } : item)));
+          }
+        } catch (error) {
+          setIncomingTransferToast(error instanceof Error ? error.message : "즐겨찾기 추가 실패");
+        }
+        return;
+      }
+
+      const geocodeItem: GeocodeItem = {
+        title: favorite.address,
+        address: favorite.address,
+        lat: favorite.lat,
+        lon: favorite.lon,
+      };
+      const fill = (row: DestinationRowState): DestinationRowState => ({
+        ...applyGeocode({ ...row, geocodeItems: [geocodeItem] }, geocodeItem, 0),
+        input: favorite.address,
+        inputDetail: favorite.detail ?? undefined,
+      });
+
+      const reusableRow = rowsRef.current.find(isReusableEmptyRow);
+      if (reusableRow) {
+        setRows((prev) => prev.map((item) => (item.id === reusableRow.id ? fill(item) : item)));
+        setPendingFocusRowId(reusableRow.id);
+      } else if (rowsRef.current.length >= MAX_DESTINATIONS) {
+        setIncomingTransferToast(`도착지는 최대 ${MAX_DESTINATIONS}개까지 추가할 수 있습니다.`);
+        return;
+      } else {
+        const newRow = fill(createRow());
+        setRows((prev) => [...prev, newRow]);
+        setPendingFocusRowId(newRow.id);
+      }
+      setIncomingTransferToast(`즐겨찾기 '${favorite.label}'을(를) 도착지에 추가했습니다.`);
+    },
+    [addDestinationFromAddress],
+  );
+
+  const onUpdateFavorite = useCallback(async (id: string, patch: { label: string; detail: string; memo: string }) => {
+    const response = await fetch(`/api/favorites/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    const payload = (await response.json().catch(() => ({}))) as { row?: FavoriteAddressRow; message?: string };
+    if (!response.ok || !payload.row) {
+      throw new Error(payload.message ?? "저장에 실패했습니다.");
+    }
+    const updated = payload.row;
+    setFavorites((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+  }, []);
+
+  const onDeleteFavorite = useCallback(async (id: string) => {
+    const response = await fetch(`/api/favorites/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error("삭제에 실패했습니다.");
+    }
+    setFavorites((prev) => prev.filter((item) => item.id !== id));
+  }, []);
 
   const updateIncomingOcrTransferStatus = useCallback(
     async (id: string, action: "consume" | "dismiss") => {
@@ -2221,7 +2405,31 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </section>
             ) : null}
 
+            {favoritesOpen ? (
+              <FavoritesSheet
+                favorites={favorites}
+                loading={favoritesLoading}
+                error={favoritesError}
+                canAddMore={rows.length < MAX_DESTINATIONS || rows.some(isReusableEmptyRow)}
+                onClose={() => setFavoritesOpen(false)}
+                onUse={(favorite) => void onUseFavorite(favorite)}
+                onUpdate={onUpdateFavorite}
+                onDelete={onDeleteFavorite}
+              />
+            ) : null}
+
             <DestinationList
+              favoriteCount={favorites.length}
+              favoriteRowIds={favoriteRowIds}
+              onToggleFavorite={sessionUser?.isAllowed ? (id) => void onToggleFavorite(id) : undefined}
+              onOpenFavorites={
+                sessionUser?.isAllowed
+                  ? () => {
+                      setFavoritesOpen(true);
+                      void loadFavorites();
+                    }
+                  : undefined
+              }
               rows={rows}
               origin={origin}
               autoSearch={settings.autoSearch}

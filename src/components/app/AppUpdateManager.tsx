@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { APP_BUILD_ID, CURRENT_RELEASE, type AppRelease } from "@/lib/appRelease";
+import { APP_BEFORE_UPDATE_RELOAD_EVENT, APP_BUILD_ID, CURRENT_RELEASE, type AppRelease } from "@/lib/appRelease";
 import { addNativeResumeListener } from "@/lib/native/app";
 
 const SEEN_RELEASE_KEY = "delivery_map_seen_release_v1";
@@ -79,6 +79,7 @@ export function AppUpdateManager() {
       setProgress(Math.round(ratio * 100));
       if (ratio >= 1) {
         window.clearInterval(timer);
+        window.dispatchEvent(new Event(APP_BEFORE_UPDATE_RELOAD_EVENT));
         window.location.reload();
       }
     }, 50);

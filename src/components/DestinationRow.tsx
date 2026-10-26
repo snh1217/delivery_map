@@ -46,6 +46,8 @@ type Props = {
   onChangeCallOriginInput: (id: string, value: string) => void;
   onUseCurrentLocationForCall: (id: string) => void;
   onResolveCallOrigin: (id: string) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (id: string) => void;
 };
 
 const VOICE_SILENCE_TIMEOUT_MS = 900;
@@ -140,6 +142,8 @@ export function DestinationRow({
   onChangeCallOriginInput,
   onUseCurrentLocationForCall,
   onResolveCallOrigin,
+  isFavorite = false,
+  onToggleFavorite,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -399,6 +403,21 @@ export function DestinationRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {onToggleFavorite ? (
+            <button
+              type="button"
+              className={`app-btn h-8 w-8 px-0 text-base ${
+                isFavorite ? "text-amber-500 hover:bg-amber-50" : "text-slate-300 hover:bg-slate-100 hover:text-amber-500"
+              }`}
+              onClick={() => onToggleFavorite(row.id)}
+              disabled={!isFavorite && !row.coord}
+              aria-pressed={isFavorite}
+              aria-label={isFavorite ? "즐겨찾기에서 삭제" : "즐겨찾기에 저장"}
+              title={isFavorite ? "즐겨찾기에서 삭제" : row.coord ? "즐겨찾기에 저장" : "검색 후 저장할 수 있습니다"}
+            >
+              {isFavorite ? "★" : "☆"}
+            </button>
+          ) : null}
           <button
             type="button"
             className="app-btn app-btn-secondary h-8 w-8 px-0 text-xs"

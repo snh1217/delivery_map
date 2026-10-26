@@ -1,4 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { getAllowedSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { fetchNaverApiJson, NAVER_MAPS_API_BASES } from "@/lib/naverApi";
 
 function parsePoint(request: NextRequest, prefix: "start" | "goal") {
@@ -17,6 +18,10 @@ function parsePoint(request: NextRequest, prefix: "start" | "goal") {
 }
 
 export async function GET(request: NextRequest) {
+  if (!(await getAllowedSessionUser())) {
+    return unauthorizedResponse();
+  }
+
   const start = parsePoint(request, "start");
   const goal = parsePoint(request, "goal");
   const option = request.nextUrl.searchParams.get("option")?.trim() || "trafast";

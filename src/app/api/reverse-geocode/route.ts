@@ -1,7 +1,12 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { getAllowedSessionUser, unauthorizedResponse } from "@/lib/auth/session";
 import { fetchNaverApiJson, NAVER_MAPS_API_BASES } from "@/lib/naverApi";
 
 export async function GET(request: NextRequest) {
+  if (!(await getAllowedSessionUser())) {
+    return unauthorizedResponse();
+  }
+
   const lat = request.nextUrl.searchParams.get("lat")?.trim();
   const lon = request.nextUrl.searchParams.get("lon")?.trim();
   const orders = request.nextUrl.searchParams.get("orders")?.trim() || "roadaddr,addr";
