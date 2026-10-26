@@ -52,7 +52,7 @@ jobs:
       - name: Build debug APK (compile check)
         if: github.event_name == 'pull_request'
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
 
       - name: Upload debug APK
         if: github.event_name == 'pull_request'
@@ -95,6 +95,7 @@ jobs:
         run: |
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
           export RELEASE_STORE_FILE="$RUNNER_TEMP/release.jks"
+          chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/delivery-map-${{ steps.version.outputs.name }}.apk"
 
