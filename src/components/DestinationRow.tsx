@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { parseAddressInput } from "@/lib/addressInput";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import { getMicrophonePermissionState, requestMicrophonePermission } from "@/lib/native/permissions";
@@ -29,7 +30,7 @@ type Props = {
   canMoveUp: boolean;
   canMoveDown: boolean;
   onMoveRow: (id: string, direction: "up" | "down") => void;
-  onChangeInput: (id: string, value: string) => void;
+  onChangeInput: (id: string, value: string, detail?: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
   onSelectCandidate: (id: string, index: number) => void;
@@ -367,27 +368,40 @@ export function DestinationRow({
   return (
     <div
       ref={rootRef}
-      className={`rounded-xl border p-3 transition ${
-        highlighted ? "border-cyan-400 bg-cyan-50/50 shadow-sm" : "border-slate-200"
+      className={`app-card overflow-hidden transition ${
+        highlighted ? "ring-2 ring-cyan-500/60" : ""
       }`}
     >
-      <div className="mb-2 flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-slate-700">도착지 {index + 1}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {highlighted ? (
-              <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] text-cyan-800">추천 선택</span>
-            ) : null}
-            {row.status === "resolved" ? (
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">좌표 확인됨</span>
-            ) : null}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3.5 py-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[13px] font-bold ${
+              row.status === "resolved" ? "bg-cyan-700 text-white" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {index + 1}
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-slate-800">도착지 {index + 1}</div>
+            <div className="flex flex-wrap items-center gap-1">
+              {row.status === "resolved" ? (
+                <span className="app-chip bg-emerald-50 text-emerald-700">● 좌표 확인</span>
+              ) : row.status === "loading" ? (
+                <span className="app-chip bg-slate-100 text-slate-600">검색 중</span>
+              ) : row.status === "error" ? (
+                <span className="app-chip bg-rose-50 text-rose-600">검색 실패</span>
+              ) : (
+                <span className="app-chip bg-slate-50 text-slate-400">{row.input.trim() ? "검색 전" : "미입력"}</span>
+              )}
+              {highlighted ? <span className="app-chip bg-cyan-50 text-cyan-800">추천 선택</span> : null}
+            </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            className="h-8 w-9 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+            className="app-btn app-btn-secondary h-8 w-8 px-0 text-xs"
             onClick={() => onMoveRow(row.id, "up")}
             disabled={!canMoveUp}
             aria-label={`도착지 ${index + 1} 위로 이동`}
@@ -396,30 +410,47 @@ export function DestinationRow({
           </button>
           <button
             type="button"
-            className="h-8 w-9 rounded-md border border-slate-300 bg-white text-xs disabled:opacity-40"
+            className="app-btn app-btn-secondary h-8 w-8 px-0 text-xs"
             onClick={() => onMoveRow(row.id, "down")}
             disabled={!canMoveDown}
             aria-label={`도착지 ${index + 1} 아래로 이동`}
           >
             ↓
           </button>
+          <button
+            type="button"
+            className="app-btn h-8 w-8 px-0 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+            onClick={() => onDelete(row.id)}
+            aria-label={`도착지 ${index + 1} 삭제`}
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       </div>
 
-      <p className="mb-2 text-xs text-slate-500">예시: `강서구 마곡동`, `서울 강서구 마곡동 123-4` (입력 후 검색/적용)</p>
-
-      <div className="grid gap-2">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+      <div className="grid gap-2.5 p-3.5">
+        <div className="relative">
           <input
             ref={inputRef}
-            className="h-12 rounded-lg border border-slate-300 px-3 text-sm"
-            placeholder="주소 또는 구/동 입력"
+            className="app-input h-12 w-full pr-12"
+            placeholder="주소 붙여넣기 또는 구/동 입력"
             value={row.input}
             onChange={(event) => {
               clearPendingVoiceAutoSearch();
               setVoicePreviewText(null);
               setVoiceError(null);
               onChangeInput(row.id, event.target.value);
+            }}
+            onPaste={(event) => {
+              const parsed = parseAddressInput(event.clipboardData.getData("text"));
+              if (!parsed.changed) return;
+              event.preventDefault();
+              clearPendingVoiceAutoSearch();
+              setVoicePreviewText(null);
+              setVoiceError(null);
+              onChangeInput(row.id, parsed.query, parsed.detail ?? "");
             }}
             onKeyDown={(event) => {
               if (event.key === "Enter" && row.input.trim() && row.status !== "loading") {
@@ -428,121 +459,134 @@ export function DestinationRow({
               }
             }}
           />
-
           <button
             type="button"
-            className={`relative h-12 rounded-lg px-3 text-xs font-medium ${
-              isListening
-                ? "border border-rose-300 bg-rose-50 text-rose-700"
-                : "border border-slate-300 bg-white text-slate-700"
-            } disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`absolute right-1.5 top-1.5 inline-flex h-9 w-9 items-center justify-center rounded-lg transition ${
+              isListening ? "bg-rose-500 text-white" : "text-slate-500 hover:bg-slate-100"
+            } disabled:cursor-not-allowed disabled:opacity-40`}
             onClick={toggleVoiceInput}
             disabled={!canUseVoiceInput && !isListening}
+            aria-label={isListening ? "음성 입력 중지" : "음성 입력 시작"}
             title={canUseVoiceInput ? "한 번 탭해 음성 입력 시작/중지" : "이 환경에서는 음성 입력을 사용할 수 없습니다."}
           >
-            <span className="inline-flex items-center gap-1">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  isListening ? "animate-pulse bg-rose-500" : "bg-slate-400"
-                }`}
-              />
-              {isListening ? "듣는 중" : "음성입력"}
-            </span>
+            <svg
+              viewBox="0 0 24 24"
+              className={`h-[18px] w-[18px] ${isListening ? "animate-pulse" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+            </svg>
           </button>
         </div>
 
+        {row.inputDetail ? (
+          <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-600">
+            <span className="font-semibold text-slate-500">상세</span>
+            <span className="min-w-0 flex-1 truncate text-slate-800">{row.inputDetail}</span>
+            <button
+              type="button"
+              className="text-slate-400 hover:text-slate-600"
+              onClick={() => onChangeInput(row.id, row.input, "")}
+              aria-label="상세 주소 지우기"
+            >
+              ✕
+            </button>
+          </div>
+        ) : null}
+
         {isListening ? (
-          <div className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
-            <div className="font-medium">듣는 중입니다. 주소를 말해 주세요.</div>
-            <div className="mt-1 text-cyan-700">
-              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 침묵 감지 후 자동 종료됩니다."}
+          <div className="rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs text-cyan-900">
+            <div className="font-semibold">듣는 중입니다. 주소를 말해 주세요.</div>
+            <div className="mt-0.5 text-cyan-700">
+              {voiceInterimText ? `인식 중: ${voiceInterimText}` : "말이 끝나면 자동으로 종료됩니다."}
             </div>
           </div>
         ) : null}
 
         {voicePreviewText ? (
           <p className="text-xs text-emerald-700">
-            음성 인식 미리보기: <span className="font-medium">{voicePreviewText}</span>
-            {!voiceLowConfidence ? " (0.5초 후 자동 검색)" : " (내용 확인 후 검색/적용 권장)"}
+            음성 인식: <span className="font-semibold">{voicePreviewText}</span>
+            {!voiceLowConfidence ? " · 잠시 후 자동 검색" : " · 확인 후 검색을 눌러 주세요"}
           </p>
         ) : null}
 
         {voiceError ? (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2">
+          <div className="flex items-center justify-between gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
             <p className="text-xs text-rose-700">{voiceError}</p>
             <button
               type="button"
-              className="mt-2 h-8 rounded-lg border border-rose-300 bg-white px-2 text-xs text-rose-700"
+              className="app-btn app-btn-danger h-8 shrink-0 px-2.5 text-xs"
               onClick={() => void beginVoiceInput()}
               disabled={isListening || !canUseVoiceInput}
             >
-              {micPermissionState === "denied" ? "권한 다시 요청" : "다시 시도"}
+              {micPermissionState === "denied" ? "권한 요청" : "다시 시도"}
             </button>
           </div>
         ) : null}
 
-        {!canUseVoiceInput ? (
-          <p className="text-xs text-slate-500">
-            {isNativeApp()
-              ? "앱에서 마이크 권한과 음성 인식 지원이 필요합니다. 지원되지 않으면 텍스트 입력을 사용해 주세요."
-              : "브라우저에서 마이크 권한과 음성 인식 지원이 필요합니다. 모바일 Chrome/Edge를 권장합니다."}
-          </p>
-        ) : (
-          <p className="text-xs text-slate-500">음성 입력: 탭하여 시작 → 말하기 → 침묵 감지 자동 종료 → 자동 검색/적용</p>
-        )}
-
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className={`grid gap-2 ${canNavigate ? "grid-cols-2" : "grid-cols-1"}`}>
           <button
             type="button"
-            className="h-12 rounded-lg bg-slate-900 px-3 text-sm font-medium text-white disabled:opacity-50"
+            className={`app-btn h-12 ${canNavigate ? "app-btn-secondary" : "app-btn-primary"}`}
             disabled={!row.input.trim() || row.status === "loading"}
             onClick={runSearchNow}
           >
-            {row.status === "loading" ? "검색 중..." : "검색/적용"}
-          </button>
-          <button
-            type="button"
-            className="h-12 rounded-lg border border-rose-300 px-3 text-sm font-medium text-rose-600"
-            onClick={() => onDelete(row.id)}
-          >
-            삭제
+            {row.status === "loading" ? "검색 중..." : canNavigate ? "다시 검색" : "검색 / 적용"}
           </button>
           {canNavigate ? (
-            <button
-              type="button"
-              className="hidden h-12 rounded-lg border border-slate-300 px-3 text-sm sm:block"
-              onClick={() => onNavigate(row.id)}
-            >
-              길찾기
+            <button type="button" className="app-btn app-btn-brand h-12" onClick={() => onNavigate(row.id)}>
+              길찾기 · {getNavigationAppLabel(preferredNavigationApp)}
             </button>
           ) : null}
         </div>
-      </div>
 
-      {row.geocodeItems.length > 1 ? (
-        <div className="mt-2">
-          <label className="mb-1 block text-xs text-slate-600">검색 후보 (Top 5)</label>
-          <select
-            className="h-10 w-full rounded-lg border border-slate-300 px-2 text-sm"
-            value={row.selectedIndex}
-            onChange={(event) => onSelectCandidate(row.id, Number(event.target.value))}
-          >
-            {row.geocodeItems.map((item, itemIndex) => (
-              <option key={`${row.id}-${itemIndex}`} value={itemIndex}>
-                {item.title} | {item.address}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
+        {row.geocodeItems.length > 1 ? (
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold text-slate-500">검색 후보 {row.geocodeItems.length}건</label>
+            <select
+              className="app-input h-10 w-full px-2 text-sm"
+              value={row.selectedIndex}
+              onChange={(event) => onSelectCandidate(row.id, Number(event.target.value))}
+            >
+              {row.geocodeItems.map((item, itemIndex) => (
+                <option key={`${row.id}-${itemIndex}`} value={itemIndex}>
+                  {item.title} | {item.address}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
-      {row.label ? <p className="mt-1 text-xs text-slate-600">선택 주소: {row.label}</p> : null}
-      {row.coord ? (
-        <p className="mt-1 text-xs text-slate-500">
-          좌표: {row.coord.lat.toFixed(5)}, {row.coord.lon.toFixed(5)}
-        </p>
-      ) : null}
-      {row.error ? <p className="mt-1 text-xs text-rose-600">{row.error}</p> : null}
+        {row.label ? (
+          <div className="flex items-start gap-2 rounded-xl bg-cyan-50/60 px-3 py-2">
+            <svg viewBox="0 0 24 24" className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" fill="currentColor" aria-hidden="true">
+              <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5Z" />
+            </svg>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-slate-800">{row.label}</div>
+              {row.coord ? (
+                <div className="text-[11px] text-slate-500">
+                  {row.coord.lat.toFixed(5)}, {row.coord.lon.toFixed(5)}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+        {row.error ? <p className="text-xs font-medium text-rose-600">{row.error}</p> : null}
+
+        {!canUseVoiceInput && !row.input ? (
+          <p className="app-caption">
+            {isNativeApp()
+              ? "음성 입력을 쓰려면 앱 마이크 권한이 필요합니다."
+              : "음성 입력은 모바일 Chrome/Edge에서 지원됩니다."}
+          </p>
+        ) : null}
 
       {canUseAttachment ? (
         <DestinationAttachment
@@ -561,7 +605,7 @@ export function DestinationRow({
         />
       ) : null}
 
-      <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
         <button
           type="button"
           className="flex w-full items-start justify-between gap-3 text-left"
@@ -570,10 +614,10 @@ export function DestinationRow({
         >
           <div className="min-w-0">
             <div className="text-xs font-semibold text-slate-700">콜 시간 계산</div>
-            <p className="mt-1 text-[11px] leading-5 text-slate-500">{callSummaryText}</p>
+            <p className="mt-0.5 text-[11px] leading-5 text-slate-500">{callSummaryText}</p>
           </div>
-          <span className="shrink-0 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
-            {callPanelOpen ? "접기" : "열기"}
+          <span className={`mt-0.5 shrink-0 text-slate-400 transition ${callPanelOpen ? "rotate-180" : ""}`} aria-hidden="true">
+            ▾
           </span>
         </button>
 
@@ -587,7 +631,7 @@ export function DestinationRow({
               <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                 <input
                   type="text"
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  className="app-input h-10 text-sm"
                   placeholder="출발지 주소 입력"
                   value={row.callOriginInput}
                   onChange={(event) => onChangeCallOriginInput(row.id, event.target.value)}
@@ -601,14 +645,14 @@ export function DestinationRow({
                 <div className="grid grid-cols-2 gap-2 sm:contents">
                   <button
                     type="button"
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    className="app-btn app-btn-secondary h-10 text-xs"
                     onClick={() => onUseCurrentLocationForCall(row.id)}
                   >
                     현재 위치
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs disabled:opacity-50"
+                    className="app-btn app-btn-secondary h-10 text-xs"
                     onClick={() => onResolveCallOrigin(row.id)}
                     disabled={row.callOriginStatus === "loading"}
                   >
@@ -627,21 +671,21 @@ export function DestinationRow({
               <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
                 <input
                   type="time"
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                  className="app-input h-10 text-sm"
                   value={row.callTime}
                   onChange={(event) => onChangeCallTime(row.id, event.target.value)}
                 />
                 <div className="grid grid-cols-2 gap-2 sm:contents">
                   <button
                     type="button"
-                    className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                    className="app-btn app-btn-secondary h-10 text-xs"
                     onClick={() => onUseCurrentCallTime(row.id)}
                   >
                     지금
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-lg bg-cyan-700 px-3 text-xs font-medium text-white disabled:opacity-50"
+                    className="app-btn app-btn-brand h-10 text-xs"
                     onClick={() => onComputeCallEstimate(row.id)}
                     disabled={!row.coord || !row.callOriginCoord || row.callEstimateLoading}
                   >
@@ -700,52 +744,37 @@ export function DestinationRow({
       </div>
 
       {canNavigate ? (
-        <>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              className="h-11 rounded-lg bg-cyan-700 px-3 text-sm font-medium text-white"
-              onClick={() => onNavigate(row.id)}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            className="app-btn h-10 border border-amber-200 bg-amber-50 text-xs text-amber-800 hover:bg-amber-100"
+            onClick={() => onNavigateKakao(row.id)}
+          >
+            카카오맵 길찾기
+          </button>
+          {naverLinks ? (
+            <a
+              className="app-btn app-btn-secondary h-10 text-xs"
+              href={detectPlatform() === "desktop" ? naverLinks.desktopWeb : naverLinks.mobileWeb}
+              target="_blank"
+              rel="noreferrer"
             >
-              기본 앱 길찾기 ({getNavigationAppLabel(preferredNavigationApp)})
-            </button>
-            {naverLinks ? (
-              <a
-                className="flex h-11 items-center justify-center rounded-lg border border-slate-300 px-3 text-sm"
-                href={detectPlatform() === "desktop" ? naverLinks.desktopWeb : naverLinks.mobileWeb}
-                target="_blank"
-                rel="noreferrer"
-              >
-                네이버 웹 열기
-              </a>
-            ) : null}
-          </div>
-
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <button
-              type="button"
-              className="h-11 rounded-lg border border-amber-300 bg-amber-50 px-3 text-sm font-medium text-amber-800"
-              onClick={() => onNavigateKakao(row.id)}
+              네이버 웹
+            </a>
+          ) : null}
+          {kakaoLinks ? (
+            <a
+              className="app-btn app-btn-secondary col-span-2 h-9 text-[11px] font-medium text-slate-500"
+              href={kakaoLinks.mobileWeb}
+              target="_blank"
+              rel="noreferrer"
             >
-              카카오맵 길찾기
-            </button>
-            {kakaoLinks ? (
-              <a
-                className="flex h-11 items-center justify-center rounded-lg border border-amber-300 bg-white px-3 text-sm text-amber-800"
-                href={kakaoLinks.mobileWeb}
-                target="_blank"
-                rel="noreferrer"
-              >
-                카카오맵 웹 열기
-              </a>
-            ) : null}
-          </div>
-
-          <p className="mt-2 text-[11px] text-slate-500">
-            좌표가 확정되면 기본 앱({getNavigationAppLabel(preferredNavigationApp)}) 또는 네이버/카카오 길찾기를 사용할 수 있습니다.
-          </p>
-        </>
+              카카오맵 웹에서 열기
+            </a>
+          ) : null}
+        </div>
       ) : null}
+      </div>
     </div>
   );
 }

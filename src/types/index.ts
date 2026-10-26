@@ -17,6 +17,7 @@ export type GeocodeItem = {
 export type DestinationRowState = {
   id: string;
   input: string;
+  inputDetail?: string;
   status: "idle" | "loading" | "resolved" | "error";
   error?: string;
   geocodeItems: GeocodeItem[];

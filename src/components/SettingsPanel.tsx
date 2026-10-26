@@ -71,17 +71,17 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
     : "확인 중";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <section className="app-card p-4">
       <details className="group" open={false}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-slate-800">설정</h2>
+            <h2 className="app-section-title">설정</h2>
             <p className="mt-0.5 text-xs text-slate-500">
               팬 반각 {settings.halfAngleDeg}도 / 버퍼 {settings.forwardBufferKm}km / 뒤 꼬리 {settings.backwardTailKm}km /
               기본 길찾기 {navAppLabel(settings.navigationApp)}
             </p>
           </div>
-          <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">펼치기</span>
+          <span className="shrink-0 text-xs text-slate-400 transition group-open:rotate-180">▾</span>
         </summary>
 
         <div className="mt-3 border-t border-slate-100 pt-3">
@@ -93,7 +93,7 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
             <label className="text-sm text-slate-700">
               팬 반각(도)
               <input
-                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
+                className="app-input mt-1 h-11 w-full px-2.5"
                 type="number"
                 inputMode="numeric"
                 min={5}
@@ -107,7 +107,7 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
             <label className="text-sm text-slate-700">
               전방 버퍼(km)
               <input
-                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
+                className="app-input mt-1 h-11 w-full px-2.5"
                 type="number"
                 inputMode="decimal"
                 step="0.5"
@@ -121,7 +121,7 @@ export function SettingsPanel({ settings, kakaoNaviStatus, onChange }: Props) {
             <label className="text-sm text-slate-700">
               뒤 꼬리(km)
               <input
-                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-2"
+                className="app-input mt-1 h-11 w-full px-2.5"
                 type="number"
                 inputMode="decimal"
                 step="0.5"

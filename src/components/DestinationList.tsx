@@ -30,7 +30,7 @@ type Props = {
   onNavigateAll: () => void;
   onUndoRouteRemoval: () => void;
   onMoveRow: (id: string, direction: "up" | "down") => void;
-  onChangeInput: (id: string, value: string) => void;
+  onChangeInput: (id: string, value: string, detail?: string) => void;
   onSearch: (id: string) => void;
   onDelete: (id: string) => void;
   onSelectCandidate: (id: string, index: number) => void;
@@ -94,19 +94,22 @@ export function DestinationList({
   const isKakaoFamily = routeProviderLabel === "카카오" || routeProviderLabel === "카카오내비";
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+    <section className="app-card p-3.5 sm:p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">도착지 목록 (출발지는 자동)</h2>
-          <p className="text-xs text-slate-500">최대 20개까지 추가 가능 · ↑↓ 버튼으로 순서를 직접 바꿀 수 있습니다.</p>
+          <h2 className="app-section-title flex items-center gap-2">
+            도착지
+            <span className="app-chip bg-slate-100 text-slate-600">{rows.length}/20</span>
+          </h2>
+          <p className="app-caption">주소를 붙여넣으면 핵심 주소만 자동 추출됩니다 · ↑↓로 순서 변경</p>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex">
-          <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white px-3 text-sm" onClick={onReset}>
+          <button type="button" className="app-btn app-btn-secondary h-10" onClick={onReset}>
             초기화
           </button>
           <button
             type="button"
-            className="h-11 rounded-lg bg-cyan-700 px-4 text-sm font-medium text-white disabled:opacity-50"
+            className="app-btn app-btn-brand h-10 px-4"
             onClick={onAdd}
             disabled={rows.length >= 20}
           >
@@ -115,7 +118,7 @@ export function DestinationList({
         </div>
       </div>
 
-      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <div className="mb-3 rounded-xl bg-slate-50 p-2.5">
         <div className="flex flex-col gap-2">
           {incomingOcrTransfers.length > 0 ? (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
@@ -135,14 +138,14 @@ export function DestinationList({
                     <div className="mt-2 flex gap-2">
                       <button
                         type="button"
-                        className="h-9 flex-1 rounded-lg bg-emerald-700 px-3 text-xs font-medium text-white"
+                        className="app-btn h-9 flex-1 bg-emerald-700 text-xs text-white"
                         onClick={() => onApplyIncomingOcrTransfer?.(transfer.id)}
                       >
                         도착지로 추가
                       </button>
                       <button
                         type="button"
-                        className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs"
+                        className="app-btn app-btn-secondary h-9 text-xs"
                         onClick={() => onDismissIncomingOcrTransfer?.(transfer.id)}
                       >
                         닫기
@@ -154,7 +157,7 @@ export function DestinationList({
             </div>
           ) : null}
 
-          <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600">
+          <div className="rounded-lg bg-white px-3 py-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-200/70">
             전체 길찾기 좌표 확정 {resolvedCount}개 / {routeProviderLabel} 자동 전달 {routeableCount}개(최대 {routeMaxStops}개)
             {skippedCountForAllRoute > 0 ? ` · 나머지 ${skippedCountForAllRoute}개는 분할 길찾기 사용` : ""}
           </div>
@@ -168,7 +171,7 @@ export function DestinationList({
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button
               type="button"
-              className="h-12 rounded-xl bg-slate-900 px-4 text-sm font-medium text-white disabled:opacity-50"
+              className="app-btn app-btn-primary h-12 px-4"
               onClick={onNavigateAll}
               disabled={routeableCount === 0}
             >

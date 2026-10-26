@@ -11,6 +11,8 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { NativePermissionStatus } from "@/components/app/NativePermissionStatus";
 import centroidsRaw from "@/data/dong_centroids.json";
 import { normalizePhoneNumber } from "@/lib/auth/phone";
+import { parseAddressInput } from "@/lib/addressInput";
+import { CURRENT_RELEASE } from "@/lib/appRelease";
 import { normalizeDongCentroids } from "@/lib/dong";
 import { calculateSegments, makeFinalDongDisplayEntries, makeFinalDongDisplayList, recommendVisitOrder } from "@/lib/geo";
 import { addNativeResumeListener } from "@/lib/native/app";
@@ -67,7 +69,6 @@ const SETTINGS_STORAGE_KEY = "delivery_map_settings_v1";
 const ROUTE_UNDO_STORAGE_KEY = "delivery_map_route_undo_v1";
 const IOS_SAFE_MODE_STORAGE_KEY = "delivery_map_ios_safe_mode_v1";
 const OCR_TRANSFER_AUTO_APPLY_STORAGE_KEY = "delivery_map_ocr_transfer_auto_apply_v1";
-const MAIN_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const EXTRACTOR_APP_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.13-extractor";
 const ATTACHMENT_ALLOWED_PHONES = new Set(
   ["01037986217", "01031446217"]
@@ -830,7 +831,8 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   }, [origin, rows]);
 
   const resolveRowAddress = useCallback(async (id: string, input: string) => {
-    const trimmed = input.trim();
+    const parsed = parseAddressInput(input);
+    const trimmed = parsed.query.trim();
     if (!trimmed) {
       return null;
     }
@@ -840,6 +842,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         item.id === id
           ? {
               ...item,
+              ...(parsed.changed ? { input: trimmed, inputDetail: parsed.detail ?? item.inputDetail } : null),
               status: "loading",
               error: undefined,
               callEstimate: null,
@@ -1930,60 +1933,49 @@ export function DeliveryMapApp({ sessionUser }: Props) {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 px-2 py-3 pb-28 sm:px-4 sm:py-4 sm:pb-32 lg:pb-4">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-800">퀵배달 메이커</h1>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
-                Quick + Delivery
-              </span>
-              <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">
-                최신 v{MAIN_APP_LATEST_VERSION}
-              </span>
-              <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-                추출기 v{EXTRACTOR_APP_LATEST_VERSION}
-              </span>
+    <main className="min-h-screen px-2 pb-28 sm:px-4 sm:pb-32 lg:pb-4">
+      <header className="sticky top-0 z-40 -mx-2 mb-3 border-b border-slate-200/70 bg-white/85 px-3 pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))] backdrop-blur-md sm:-mx-4 sm:px-5">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-600 to-teal-700 text-white shadow-sm">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 11 21 3l-8 18-2-8-8-2Z" />
+              </svg>
             </div>
-            {showApkInstallShortcut ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href="/install/extractor-android"
-                  className="inline-flex h-9 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  구역 추출기 설치
-                </a>
-                <a
-                  href="/extractor"
-                  className="inline-flex h-9 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition hover:bg-amber-100"
-                >
-                  구역 추출기 웹
-                </a>
-                <a
-                  href="/install/android"
-                  className="inline-flex h-9 items-center gap-1 rounded-full border border-cyan-200 bg-cyan-50 px-3 text-xs font-semibold text-cyan-800 transition hover:bg-cyan-100"
-                >
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="h-4 w-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M12 3v11" />
-                    <path d="m8 10 4 4 4-4" />
-                    <path d="M5 20h14" />
-                  </svg>
-                  APK 설치
-                </a>
+            <div className="min-w-0">
+              <h1 className="truncate text-[17px] font-extrabold tracking-tight text-slate-900">퀵배달 메이커</h1>
+              <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${locationWatching ? "bg-emerald-500" : "bg-slate-300"}`}
+                  aria-hidden="true"
+                />
+                {locationWatching ? "현재 위치 실시간 동기화" : "위치 동기화 대기"}
+                <span className="text-slate-300">·</span>v{CURRENT_RELEASE.version}
               </div>
-            ) : null}
+            </div>
           </div>
-          <p className="mt-1 text-xs text-slate-500">퀵/배달 경유지 구설정 · 팬 권역 · 길찾기 자동 생성</p>
+          {showApkInstallShortcut ? (
+            <div className="flex shrink-0 items-center gap-1.5">
+              <a href="/extractor" className="app-btn app-btn-secondary hidden h-9 text-xs sm:inline-flex">
+                구역 추출기 v{EXTRACTOR_APP_LATEST_VERSION}
+              </a>
+              <a href="/install/extractor-android" className="app-btn app-btn-secondary hidden h-9 text-xs sm:inline-flex">
+                추출기 설치
+              </a>
+              <a href="/install/android" className="app-btn app-btn-primary h-9 text-xs">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 3v11" />
+                  <path d="m8 10 4 4 4-4" />
+                  <path d="M5 20h14" />
+                </svg>
+                APK
+              </a>
+            </div>
+          ) : null}
+        </div>
+      </header>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 sm:gap-4">
+        <section className="app-card p-3.5 sm:p-4">
           {bootClientErrors.length > 0 ? (
             <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <div className="font-medium">초기 로딩 중 오류가 감지되었습니다.</div>
@@ -2010,12 +2002,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </div>
             </div>
           ) : null}
-          <div className="mt-3">
-            <IosPwaHint />
-          </div>
-          <div className="mt-2 inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-medium text-cyan-800">
-            출발지(고정): 내 현재 위치
-          </div>
+          <IosPwaHint />
           {iosBrowserInfo.isIos ? (
             <div className="mt-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2046,27 +2033,22 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               </p>
             </div>
           ) : null}
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span
-              className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium ${
-                locationWatching
-                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                  : "border border-slate-200 bg-slate-50 text-slate-600"
-              }`}
-            >
-              {locationWatching ? "실시간 위치 자동 동기화 중" : "자동 위치 동기화 대기 중"}
-            </span>
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-slate-500">출발지 (고정)</div>
+              <div className="truncate text-sm font-semibold text-slate-900">내 현재 위치 (GPS)</div>
+              <div className="text-[11px] text-slate-400">권한 거부 시 서울시청 기준</div>
+            </div>
             <button
               type="button"
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-700 disabled:opacity-50"
+              className="app-btn app-btn-secondary h-9 shrink-0 text-xs"
               onClick={() => syncCurrentLocation(false)}
               disabled={locationSyncing}
             >
-              {locationSyncing ? "재확인 중..." : "수동 재확인"}
+              {locationSyncing ? "확인 중..." : "위치 재확인"}
             </button>
           </div>
-          <p className="mt-1 text-sm text-slate-600">출발지: 내 현재 위치(GPS), 권한 거부 시 서울시청 좌표</p>
-          <details className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs leading-5 text-slate-700">
+          <details className="mt-2 rounded-xl border border-slate-200 px-3 py-2 text-xs leading-5 text-slate-700">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">
@@ -2077,9 +2059,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
                   승인: {sessionUser?.isAllowed ? "허용" : "미허용"}
                 </span>
               </div>
-              <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] text-slate-600">
-                펼치기/접기
-              </span>
+              <span className="text-[11px] text-slate-400">계정 · 기록 ▾</span>
             </summary>
 
             <div className="mt-2 border-t border-slate-200 pt-2">
@@ -2172,7 +2152,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
         <div className="grid gap-3 lg:grid-cols-[1.5fr_1fr] lg:gap-4">
           <div className="space-y-3">
             {sessionUser?.isAllowed ? (
-              <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <section className="app-card p-3">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2266,13 +2246,14 @@ export function DeliveryMapApp({ sessionUser }: Props) {
               undoRouteMessage={lastAutoRemovedMessage}
               onUndoRouteRemoval={undoLastAutoRemove}
               onMoveRow={onMoveRow}
-              onChangeInput={(id, value) =>
+              onChangeInput={(id, value, detail) =>
                 setRows((prev) =>
                   prev.map((item) =>
                     item.id === id
                       ? {
                           ...item,
                           input: value,
+                          inputDetail: detail !== undefined ? detail : value.trim() ? item.inputDetail : undefined,
                           status: "idle",
                           error: undefined,
                           geocodeItems: [],
@@ -2316,7 +2297,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
 
           <div className="space-y-3">
             {isMobileLayout ? (
-              <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <section className="app-card p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h2 className="text-base font-semibold text-slate-800">결과</h2>
@@ -2427,7 +2408,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
             )}
 
             {dailyRouteRuns[0] ? (
-              <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <section className="app-card p-4">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-slate-800">최근 저장된 동 리스트</h3>
                   <span className="text-xs text-slate-500">
@@ -2452,7 +2433,7 @@ export function DeliveryMapApp({ sessionUser }: Props) {
           </div>
         </div>
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <section className="app-card p-3">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-base font-semibold text-slate-800">네이버 지도</h2>

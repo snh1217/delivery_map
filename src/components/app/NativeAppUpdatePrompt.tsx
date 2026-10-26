@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import { AppUpdater, isAppUpdaterAvailable, isDirectApkUrl } from "@/lib/native/appUpdater";
 import { isNativeApp } from "@/lib/native/runtime";
 
 const MAIN_LATEST_VERSION = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const MAIN_APK_URL = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "/install/android";
 const MAIN_PLAY_URL = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
-const MAIN_UPDATED_AT = "2026-04-14";
+const MAIN_UPDATED_AT = process.env.NEXT_PUBLIC_ANDROID_UPDATED_AT?.trim() || "2026-10-26";
 const EXTRACTOR_LATEST_VERSION = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_LATEST_VERSION?.trim() || "1.0.13-extractor";
 const EXTRACTOR_APK_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_APK_URL?.trim() || "/install/extractor-android";
 const EXTRACTOR_PLAY_URL = process.env.NEXT_PUBLIC_EXTRACTOR_ANDROID_PLAY_URL?.trim() || "";
@@ -32,12 +33,17 @@ export function NativeAppUpdatePrompt() {
   const pathname = usePathname();
   const [currentVersion, setCurrentVersion] = useState("");
   const [open, setOpen] = useState(false);
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "installing" | "permission" | "error">("idle");
+  const [downloadPercent, setDownloadPercent] = useState(0);
+  // GitHub Releases에서 받아온 최신 APK 정보(없으면 환경변수 값 사용)
+  const [mainRelease, setMainRelease] = useState<{ version: string; apkUrl: string; publishedAt: string | null } | null>(null);
 
   const isExtractorPath = pathname?.startsWith("/extractor") || pathname?.startsWith("/install/extractor-android");
-  const latestVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : MAIN_LATEST_VERSION;
+  const mainApkUrl = mainRelease?.apkUrl || MAIN_APK_URL;
+  const latestVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : mainRelease?.version || MAIN_LATEST_VERSION;
   const downloadUrl = isExtractorPath
     ? EXTRACTOR_PLAY_URL || EXTRACTOR_APK_URL || "/install/extractor-android"
-    : MAIN_PLAY_URL || MAIN_APK_URL || "/install/android";
+    : MAIN_PLAY_URL || mainApkUrl || "/install/android";
   const dismissedKey = isExtractorPath
     ? "delivery_map_native_update_dismissed_extractor_v1"
     : "delivery_map_native_update_dismissed_main_v1";
@@ -45,18 +51,58 @@ export function NativeAppUpdatePrompt() {
   const body = isExtractorPath
     ? "구역 추출기 최신 버전을 설치하면 권한 설정 도우미와 접근성 주소 추출이 더 안정적으로 동작합니다."
     : "최신 버전을 설치하면 기능 수정과 안정화가 함께 반영됩니다.";
-  const updatedAt = isExtractorPath ? EXTRACTOR_UPDATED_AT : MAIN_UPDATED_AT;
+  const updatedAt = isExtractorPath
+    ? EXTRACTOR_UPDATED_AT
+    : mainRelease?.publishedAt?.slice(0, 10) || MAIN_UPDATED_AT;
   const highlights = isExtractorPath
     ? ["권한 설정 도우미 추가", "접근성 주소 추출 안정화", "OCR 캡처 fallback 유지"]
-    : ["앱 권한 요청 보강", "길찾기 복귀 화면 안정화", "모바일 입력 흐름 최적화"];
+    : ["앱 안에서 업데이트 자동 다운로드/설치", "붙여넣은 주소 자동 인식", "새 디자인 적용"];
+  const canAutoInstall = !isExtractorPath && isDirectApkUrl(mainApkUrl);
+
+  const startAutoInstall = useCallback(async (apkUrl: string) => {
+    if (!isAppUpdaterAvailable()) return false;
+    setDownloadState("downloading");
+    setDownloadPercent(0);
+    const listener = await AppUpdater.addListener("downloadProgress", (event) => {
+      setDownloadPercent(event.percent);
+    });
+    try {
+      await AppUpdater.downloadAndInstall({ url: apkUrl });
+      setDownloadState("installing");
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      setDownloadState(code.includes("INSTALL_PERMISSION_REQUIRED") ? "permission" : "error");
+    } finally {
+      void listener.remove();
+    }
+    return true;
+  }, []);
 
   useEffect(() => {
-    if (!isNativeApp() || !latestVersion) return;
+    if (!isNativeApp()) return;
 
     let mounted = true;
 
     const load = async () => {
       try {
+        let targetVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : MAIN_LATEST_VERSION;
+        let targetApkUrl = MAIN_APK_URL;
+        if (!isExtractorPath) {
+          try {
+            const response = await fetch(`/api/app-version?ts=${Date.now()}`, { cache: "no-store" });
+            const data = (await response.json()) as {
+              android?: { version: string; apkUrl: string; publishedAt: string | null } | null;
+            };
+            if (data.android?.version && data.android.apkUrl) {
+              targetVersion = data.android.version;
+              targetApkUrl = data.android.apkUrl;
+              if (mounted) setMainRelease(data.android);
+            }
+          } catch {
+            // 조회 실패 시 환경변수 값 사용
+          }
+        }
+
         const { App } = await import("@capacitor/app");
         const info = await App.getInfo();
         if (!mounted) return;
@@ -65,10 +111,13 @@ export function NativeAppUpdatePrompt() {
         setCurrentVersion(version);
 
         const dismissedVersion = window.localStorage.getItem(dismissedKey) || "";
-        if (dismissedVersion === latestVersion) return;
+        if (!targetVersion || dismissedVersion === targetVersion) return;
 
-        if (!version || compareVersions(latestVersion, version) > 0) {
+        if (!version || compareVersions(targetVersion, version) > 0) {
           setOpen(true);
+          if (!isExtractorPath && isDirectApkUrl(targetApkUrl)) {
+            void startAutoInstall(targetApkUrl);
+          }
         }
       } catch {
         // Native version lookup can fail on older WebView builds. The prompt is optional.
@@ -80,7 +129,7 @@ export function NativeAppUpdatePrompt() {
     return () => {
       mounted = false;
     };
-  }, [dismissedKey, latestVersion]);
+  }, [dismissedKey, isExtractorPath, startAutoInstall]);
 
   if (!open || !isNativeApp() || !latestVersion) {
     return null;
@@ -114,6 +163,32 @@ export function NativeAppUpdatePrompt() {
             ))}
           </ul>
         </div>
+        {downloadState !== "idle" ? (
+          <div className="mt-3 rounded-2xl border border-emerald-100 bg-white p-3">
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <span>
+                {downloadState === "downloading"
+                  ? "업데이트 파일 다운로드 중"
+                  : downloadState === "installing"
+                    ? "설치 화면에서 '업데이트'를 눌러 주세요"
+                    : downloadState === "permission"
+                      ? "설치 권한이 필요합니다"
+                      : "자동 다운로드에 실패했습니다"}
+              </span>
+              {downloadState === "downloading" ? <span className="text-emerald-700">{downloadPercent}%</span> : null}
+            </div>
+            {downloadState === "downloading" ? (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-emerald-50">
+                <div className="h-full rounded-full bg-emerald-600 transition-[width]" style={{ width: `${downloadPercent}%` }} />
+              </div>
+            ) : null}
+            {downloadState === "permission" ? (
+              <p className="mt-1 text-[11px] leading-5 text-slate-500">
+                설정에서 &lsquo;이 출처 허용&rsquo;을 켠 뒤 돌아와 다시 시도해 주세요.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -125,12 +200,34 @@ export function NativeAppUpdatePrompt() {
           >
             나중에
           </button>
-          <a
-            href={downloadUrl}
-            className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm"
-          >
-            지금 업데이트
-          </a>
+          {downloadState === "permission" ? (
+            <button
+              type="button"
+              className="h-11 rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm"
+              onClick={() => {
+                void AppUpdater.openInstallPermissionSettings();
+                setDownloadState("idle");
+              }}
+            >
+              권한 설정 열기
+            </button>
+          ) : canAutoInstall && isAppUpdaterAvailable() ? (
+            <button
+              type="button"
+              className="h-11 rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
+              disabled={downloadState === "downloading"}
+              onClick={() => void startAutoInstall(mainApkUrl)}
+            >
+              {downloadState === "downloading" ? "다운로드 중..." : downloadState === "idle" ? "지금 업데이트" : "다시 시도"}
+            </button>
+          ) : (
+            <a
+              href={downloadUrl}
+              className="inline-flex h-11 items-center justify-center rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm"
+            >
+              지금 업데이트
+            </a>
+          )}
         </div>
       </div>
     </div>

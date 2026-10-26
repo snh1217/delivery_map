@@ -1,18 +1,25 @@
-const apkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
+import { fetchLatestAndroidRelease } from "@/lib/androidRelease";
+
+const envApkUrl = process.env.NEXT_PUBLIC_ANDROID_APK_URL?.trim() || "";
 const playUrl = process.env.NEXT_PUBLIC_ANDROID_PLAY_URL?.trim() || "";
-const latestVersion = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
-const updatedAt = "2026-04-19";
+const envLatestVersion = process.env.NEXT_PUBLIC_ANDROID_LATEST_VERSION?.trim() || "1.0.1";
 const changeLog = [
-  "외부 길찾기 복귀 후 최신 상태 복원 강화",
-  "받은 주소 자동 적용/자동 길안내 옵션 정리",
-  "모바일 UI 및 네이티브 권한 흐름 안정화",
+  "앱 안에서 업데이트 자동 다운로드/설치",
+  "붙여넣은 주소에서 핵심 주소만 자동 검색",
+  "화면 디자인 개선",
 ];
+
+export const revalidate = 300;
 
 export const metadata = {
   title: "퀵배달 메이커 | Android 설치 안내",
 };
 
-export default function AndroidInstallPage() {
+export default async function AndroidInstallPage() {
+  const release = await fetchLatestAndroidRelease();
+  const apkUrl = release?.apkUrl || envApkUrl;
+  const latestVersion = release?.version || envLatestVersion;
+  const updatedAt = release?.publishedAt?.slice(0, 10) || "2026-10-26";
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col gap-6 px-4 py-10">
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
