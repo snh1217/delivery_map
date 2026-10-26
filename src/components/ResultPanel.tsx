@@ -98,10 +98,10 @@ export function ResultPanel({
   };
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-4">
+    <section className="app-card p-4 lg:sticky lg:top-20">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-lg font-semibold text-slate-800">결과</h2>
+          <h2 className="app-section-title">결과</h2>
           <p className="text-xs text-slate-500">추천 순서, 동 리스트, 개발 요청</p>
         </div>
         <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">전체 {finalDongList.length}개</span>

@@ -5,11 +5,13 @@ import android.os.Bundle;
 
 import com.getcapacitor.BridgeActivity;
 import com.snh.deliverymap.extractor.ExtractorBridgePlugin;
+import com.snh.deliverymap.update.AppUpdaterPlugin;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ExtractorBridgePlugin.class);
+        registerPlugin(AppUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
         handleExtractorIntent(getIntent());
     }
