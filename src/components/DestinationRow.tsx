@@ -1,8 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { parseAddressInput } from "@/lib/addressInput";
+import { findFavoriteSuggestions } from "@/lib/favoriteSearch";
 import { createKakaoMapDirectionLinks } from "@/lib/kakaoDeepLink";
 import { createNaverDirectionLinks, detectPlatform } from "@/lib/naverDeepLink";
 import { getMicrophonePermissionState, requestMicrophonePermission } from "@/lib/native/permissions";
@@ -13,7 +14,7 @@ import {
   supportsMicrophoneCapture,
   type SpeechResultPayload,
 } from "@/lib/speech/recognizer";
-import type { DestinationRowState, LatLng } from "@/types";
+import type { DestinationRowState, FavoriteAddressRow, LatLng } from "@/types";
 
 const DestinationAttachment = dynamic(
   () => import("@/components/destinations/DestinationAttachment").then((m) => m.DestinationAttachment),
@@ -46,7 +47,9 @@ type Props = {
   onChangeCallOriginInput: (id: string, value: string) => void;
   onUseCurrentLocationForCall: (id: string) => void;
   onResolveCallOrigin: (id: string) => void;
-  isFavorite?: boolean;
+  favoriteLabel?: string | null;
+  favorites?: FavoriteAddressRow[];
+  onApplyFavorite?: (rowId: string, favorite: FavoriteAddressRow) => void;
   onToggleFavorite?: (id: string) => void;
 };
 
@@ -142,9 +145,12 @@ export function DestinationRow({
   onChangeCallOriginInput,
   onUseCurrentLocationForCall,
   onResolveCallOrigin,
-  isFavorite = false,
+  favoriteLabel = null,
+  favorites,
+  onApplyFavorite,
   onToggleFavorite,
 }: Props) {
+  const isFavorite = Boolean(favoriteLabel);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const onSearchRef = useRef(onSearch);
@@ -161,6 +167,14 @@ export function DestinationRow({
   const [voiceLowConfidence, setVoiceLowConfidence] = useState(false);
   const [micPermissionState, setMicPermissionState] = useState<"granted" | "prompt" | "denied" | "unsupported" | "unknown">("unknown");
   const [callPanelOpen, setCallPanelOpen] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+
+  // 입력 중인 글자와 맞는 즐겨찾기 후보(말풍선)
+  const favoriteSuggestions = useMemo(() => {
+    if (!favorites?.length || !onApplyFavorite || row.status === "resolved") return [];
+    return findFavoriteSuggestions(favorites, row.input);
+  }, [favorites, onApplyFavorite, row.input, row.status]);
+  const hasFavoriteSuggestions = favoriteSuggestions.length > 0;
 
   const canNavigate = Boolean(row.coord);
   const speechSupported = isSpeechRecognitionSupported();
@@ -216,7 +230,7 @@ export function DestinationRow({
   }, []);
 
   useEffect(() => {
-    if (!autoSearch || !row.input.trim() || isListening) return;
+    if (!autoSearch || !row.input.trim() || isListening || hasFavoriteSuggestions) return;
     if (skipNextAutoSearchRef.current) {
       skipNextAutoSearchRef.current = false;
       return;
@@ -224,7 +238,7 @@ export function DestinationRow({
 
     const timer = window.setTimeout(() => onSearchRef.current(row.id), 600);
     return () => window.clearTimeout(timer);
-  }, [autoSearch, isListening, row.id, row.input]);
+  }, [autoSearch, hasFavoriteSuggestions, isListening, row.id, row.input]);
 
   const clearPendingVoiceAutoSearch = () => {
     if (autoSearchTimerRef.current !== null) {
@@ -397,6 +411,7 @@ export function DestinationRow({
               ) : (
                 <span className="app-chip bg-slate-50 text-slate-400">{row.input.trim() ? "검색 전" : "미입력"}</span>
               )}
+              {favoriteLabel ? <span className="app-chip max-w-[10rem] truncate bg-amber-50 text-amber-700">★ {favoriteLabel}</span> : null}
               {highlighted ? <span className="app-chip bg-cyan-50 text-cyan-800">추천 선택</span> : null}
             </div>
           </div>
@@ -462,6 +477,8 @@ export function DestinationRow({
               setVoiceError(null);
               onChangeInput(row.id, event.target.value);
             }}
+            onFocus={() => setInputFocused(true)}
+            onBlur={() => setInputFocused(false)}
             onPaste={(event) => {
               const parsed = parseAddressInput(event.clipboardData.getData("text"));
               if (!parsed.changed) return;
@@ -503,6 +520,41 @@ export function DestinationRow({
             </svg>
           </button>
         </div>
+
+        {inputFocused && hasFavoriteSuggestions ? (
+          <div className="relative z-20 -mt-1">
+            <div className="absolute left-3 -top-1.5 h-3 w-3 rotate-45 border-l border-t border-amber-200 bg-white" aria-hidden="true" />
+            <div className="overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-lg" role="listbox" aria-label="즐겨찾기 후보">
+              <div className="border-b border-amber-100 bg-amber-50/70 px-3 py-1.5 text-[11px] font-semibold text-amber-800">
+                ★ 즐겨찾기에서 선택
+              </div>
+              {favoriteSuggestions.map((favorite) => (
+                <button
+                  key={favorite.id}
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className="flex w-full items-start gap-2 border-b border-slate-100 px-3 py-2.5 text-left last:border-b-0 active:bg-amber-50"
+                  onPointerDown={(event) => event.preventDefault()}
+                  onClick={() => {
+                    setInputFocused(false);
+                    clearPendingVoiceAutoSearch();
+                    onApplyFavorite?.(row.id, favorite);
+                  }}
+                >
+                  <span className="mt-0.5 text-amber-500" aria-hidden="true">★</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-slate-900">{favorite.label}</span>
+                    {favorite.label !== favorite.address ? (
+                      <span className="block truncate text-xs text-slate-500">- {favorite.address}</span>
+                    ) : null}
+                  </span>
+                  {favorite.detail ? <span className="app-chip mt-0.5 shrink-0 bg-cyan-50 text-cyan-800">{favorite.detail}</span> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {row.inputDetail ? (
           <div className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-xs text-slate-600">

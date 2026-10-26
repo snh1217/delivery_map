@@ -1,7 +1,7 @@
 "use client";
 
 import { DestinationRow } from "@/components/DestinationRow";
-import type { DestinationRowState, LatLng, OcrTransferRow } from "@/types";
+import type { DestinationRowState, FavoriteAddressRow, LatLng, OcrTransferRow } from "@/types";
 
 export type RouteBatchButton = {
   key: string;
@@ -50,7 +50,9 @@ type Props = {
   onUseCurrentLocationForCall: (id: string) => void;
   onResolveCallOrigin: (id: string) => void;
   favoriteCount?: number;
-  favoriteRowIds?: Set<string>;
+  favorites?: FavoriteAddressRow[];
+  favoriteLabelsByRow?: Map<string, string>;
+  onApplyFavoriteToRow?: (rowId: string, favorite: FavoriteAddressRow) => void;
   onToggleFavorite?: (id: string) => void;
   onOpenFavorites?: () => void;
 };
@@ -95,7 +97,9 @@ export function DestinationList({
   onUseCurrentLocationForCall,
   onResolveCallOrigin,
   favoriteCount = 0,
-  favoriteRowIds,
+  favorites,
+  favoriteLabelsByRow,
+  onApplyFavoriteToRow,
   onToggleFavorite,
   onOpenFavorites,
 }: Props) {
@@ -277,7 +281,9 @@ export function DestinationList({
             onChangeCallOriginInput={onChangeCallOriginInput}
             onUseCurrentLocationForCall={onUseCurrentLocationForCall}
             onResolveCallOrigin={onResolveCallOrigin}
-            isFavorite={favoriteRowIds?.has(row.id) ?? false}
+            favoriteLabel={favoriteLabelsByRow?.get(row.id) ?? null}
+            favorites={favorites}
+            onApplyFavorite={onApplyFavoriteToRow}
             onToggleFavorite={onToggleFavorite}
           />
         ))}
