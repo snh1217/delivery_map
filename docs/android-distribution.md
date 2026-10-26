@@ -68,3 +68,24 @@
 2. 내부 사용자 테스트
 3. Google Play Internal testing
 4. 문제 없으면 정식 출시
+
+## 7. 자동 APK 배포 (GitHub Actions)
+
+`.github/workflows/android-release.yml`이 `main`에 Android 변경이 들어오면 서명된 APK를 빌드해
+GitHub Release(`v{versionName}`)에 `delivery-map-{versionName}.apk`로 올립니다.
+앱과 `/install/android` 페이지는 이 Release를 자동으로 조회하므로 Vercel 환경변수를 바꿀 필요가 없습니다.
+
+### 최초 1회: 서명 시크릿 등록
+저장소 Settings > Secrets and variables > Actions 에 다음 4개를 등록합니다.
+
+| 이름 | 값 |
+| --- | --- |
+| `ANDROID_KEYSTORE_BASE64` | `scripts/android/Export-KeystoreForGithub.ps1` 실행 결과(클립보드) |
+| `ANDROID_KEYSTORE_PASSWORD` | `RELEASE_STORE_PASSWORD` 값 |
+| `ANDROID_KEY_ALIAS` | `RELEASE_KEY_ALIAS` 값 |
+| `ANDROID_KEY_PASSWORD` | `RELEASE_KEY_PASSWORD` 값 |
+
+등록 후 Actions 탭 > Android APK > Run workflow 로 바로 배포할 수 있습니다.
+
+### 다음 버전 배포
+`android/app/build.gradle`의 `versionCode`/`versionName`을 올려 `main`에 반영하면 자동으로 새 Release가 만들어집니다.

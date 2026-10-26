@@ -35,12 +35,15 @@ export function NativeAppUpdatePrompt() {
   const [open, setOpen] = useState(false);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "installing" | "permission" | "error">("idle");
   const [downloadPercent, setDownloadPercent] = useState(0);
+  // GitHub Releases에서 받아온 최신 APK 정보(없으면 환경변수 값 사용)
+  const [mainRelease, setMainRelease] = useState<{ version: string; apkUrl: string; publishedAt: string | null } | null>(null);
 
   const isExtractorPath = pathname?.startsWith("/extractor") || pathname?.startsWith("/install/extractor-android");
-  const latestVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : MAIN_LATEST_VERSION;
+  const mainApkUrl = mainRelease?.apkUrl || MAIN_APK_URL;
+  const latestVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : mainRelease?.version || MAIN_LATEST_VERSION;
   const downloadUrl = isExtractorPath
     ? EXTRACTOR_PLAY_URL || EXTRACTOR_APK_URL || "/install/extractor-android"
-    : MAIN_PLAY_URL || MAIN_APK_URL || "/install/android";
+    : MAIN_PLAY_URL || mainApkUrl || "/install/android";
   const dismissedKey = isExtractorPath
     ? "delivery_map_native_update_dismissed_extractor_v1"
     : "delivery_map_native_update_dismissed_main_v1";
@@ -48,13 +51,15 @@ export function NativeAppUpdatePrompt() {
   const body = isExtractorPath
     ? "구역 추출기 최신 버전을 설치하면 권한 설정 도우미와 접근성 주소 추출이 더 안정적으로 동작합니다."
     : "최신 버전을 설치하면 기능 수정과 안정화가 함께 반영됩니다.";
-  const updatedAt = isExtractorPath ? EXTRACTOR_UPDATED_AT : MAIN_UPDATED_AT;
+  const updatedAt = isExtractorPath
+    ? EXTRACTOR_UPDATED_AT
+    : mainRelease?.publishedAt?.slice(0, 10) || MAIN_UPDATED_AT;
   const highlights = isExtractorPath
     ? ["권한 설정 도우미 추가", "접근성 주소 추출 안정화", "OCR 캡처 fallback 유지"]
     : ["앱 안에서 업데이트 자동 다운로드/설치", "붙여넣은 주소 자동 인식", "새 디자인 적용"];
-  const canAutoInstall = !isExtractorPath && isDirectApkUrl(MAIN_APK_URL);
+  const canAutoInstall = !isExtractorPath && isDirectApkUrl(mainApkUrl);
 
-  const startAutoInstall = useCallback(async () => {
+  const startAutoInstall = useCallback(async (apkUrl: string) => {
     if (!isAppUpdaterAvailable()) return false;
     setDownloadState("downloading");
     setDownloadPercent(0);
@@ -62,7 +67,7 @@ export function NativeAppUpdatePrompt() {
       setDownloadPercent(event.percent);
     });
     try {
-      await AppUpdater.downloadAndInstall({ url: MAIN_APK_URL });
+      await AppUpdater.downloadAndInstall({ url: apkUrl });
       setDownloadState("installing");
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
@@ -74,12 +79,30 @@ export function NativeAppUpdatePrompt() {
   }, []);
 
   useEffect(() => {
-    if (!isNativeApp() || !latestVersion) return;
+    if (!isNativeApp()) return;
 
     let mounted = true;
 
     const load = async () => {
       try {
+        let targetVersion = isExtractorPath ? EXTRACTOR_LATEST_VERSION : MAIN_LATEST_VERSION;
+        let targetApkUrl = MAIN_APK_URL;
+        if (!isExtractorPath) {
+          try {
+            const response = await fetch(`/api/app-version?ts=${Date.now()}`, { cache: "no-store" });
+            const data = (await response.json()) as {
+              android?: { version: string; apkUrl: string; publishedAt: string | null } | null;
+            };
+            if (data.android?.version && data.android.apkUrl) {
+              targetVersion = data.android.version;
+              targetApkUrl = data.android.apkUrl;
+              if (mounted) setMainRelease(data.android);
+            }
+          } catch {
+            // 조회 실패 시 환경변수 값 사용
+          }
+        }
+
         const { App } = await import("@capacitor/app");
         const info = await App.getInfo();
         if (!mounted) return;
@@ -88,12 +111,12 @@ export function NativeAppUpdatePrompt() {
         setCurrentVersion(version);
 
         const dismissedVersion = window.localStorage.getItem(dismissedKey) || "";
-        if (dismissedVersion === latestVersion) return;
+        if (!targetVersion || dismissedVersion === targetVersion) return;
 
-        if (!version || compareVersions(latestVersion, version) > 0) {
+        if (!version || compareVersions(targetVersion, version) > 0) {
           setOpen(true);
-          if (canAutoInstall) {
-            void startAutoInstall();
+          if (!isExtractorPath && isDirectApkUrl(targetApkUrl)) {
+            void startAutoInstall(targetApkUrl);
           }
         }
       } catch {
@@ -106,7 +129,7 @@ export function NativeAppUpdatePrompt() {
     return () => {
       mounted = false;
     };
-  }, [canAutoInstall, dismissedKey, latestVersion, startAutoInstall]);
+  }, [dismissedKey, isExtractorPath, startAutoInstall]);
 
   if (!open || !isNativeApp() || !latestVersion) {
     return null;
@@ -193,7 +216,7 @@ export function NativeAppUpdatePrompt() {
               type="button"
               className="h-11 rounded-2xl bg-emerald-600 px-3 text-sm font-semibold text-white shadow-sm disabled:opacity-60"
               disabled={downloadState === "downloading"}
-              onClick={() => void startAutoInstall()}
+              onClick={() => void startAutoInstall(mainApkUrl)}
             >
               {downloadState === "downloading" ? "다운로드 중..." : downloadState === "idle" ? "지금 업데이트" : "다시 시도"}
             </button>
