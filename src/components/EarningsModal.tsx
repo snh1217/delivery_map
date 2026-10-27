@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EarningsTargetSelect } from "@/components/EarningsTargetSelect";
 import {
   calcNet,
@@ -74,6 +74,10 @@ export function EarningsModal({ open, onClose }: Props) {
 
   const [pendingLoadedRow, setPendingLoadedRow] = useState<DailyEarningRow | null>(null);
   const [showLoadConflictPrompt, setShowLoadConflictPrompt] = useState(false);
+  // 저장은 하루치 전체를 덮어쓰므로, 현재 대상의 오늘 저장분을 불러온 뒤에만 저장을 허용합니다.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const linesRef = useRef(lines);
+  linesRef.current = lines;
 
   const selectedTarget = useMemo(() => {
     if (selectedTargetValue === "self") {
@@ -82,6 +86,72 @@ export function EarningsModal({ open, onClose }: Props) {
     const target = targets.find((item) => item.id === selectedTargetValue);
     return { targetName: target?.target_name ?? "", targetId: target?.id ?? null };
   }, [selectedTargetValue, targets]);
+
+  const targetKey = `${selectedTarget.targetName}|${selectedTarget.targetId ?? ""}`;
+  const isTargetLoaded = loadedKey === targetKey;
+  const targetKeyRef = useRef(targetKey);
+  targetKeyRef.current = targetKey;
+  const autoLoadedKeyRef = useRef<string | null>(null);
+
+  const loadToday = useCallback(
+    async (auto: boolean) => {
+      if (!selectedTarget.targetName) {
+        if (!auto) setError("대상을 먼저 선택하세요.");
+        return;
+      }
+
+      const key = `${selectedTarget.targetName}|${selectedTarget.targetId ?? ""}`;
+      setError(null);
+      setLoadingToday(true);
+      try {
+        const params = new URLSearchParams({ target: selectedTarget.targetName });
+        if (selectedTarget.targetId) params.set("targetId", selectedTarget.targetId);
+        const response = await fetch(`/api/earnings/today?${params.toString()}`, { cache: "no-store" });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => ({}))) as { message?: string };
+          throw new Error(payload.message ?? "오늘 운임 불러오기 실패");
+        }
+        const payload = (await response.json()) as { row: DailyEarningRow | null };
+        // 응답 전에 대상을 바꿨다면 이전 대상의 결과는 버립니다.
+        if (targetKeyRef.current !== key) return;
+        const hasDraft = linesRef.current.some((line) => parseAmount(line.amountText) > 0);
+
+        if (!payload.row) {
+          setLoadedKey(key);
+          if (!auto) setToastMessage("오늘 저장된 운임이 없습니다.");
+          return;
+        }
+
+        if (hasDraft) {
+          setPendingLoadedRow(payload.row);
+          setShowLoadConflictPrompt(true);
+          return;
+        }
+
+        setLines(normalizeSavedItemsToLines(Array.isArray(payload.row.items) ? payload.row.items : []));
+        setLoadedKey(key);
+        setToastMessage(auto ? "오늘 저장된 운임을 불러왔습니다." : "오늘 운임을 불러왔습니다.");
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? `${loadError.message} · 저장 전에 '오늘 운임 불러오기'를 다시 눌러 주세요.`
+            : "오늘 운임 불러오기 실패",
+        );
+      } finally {
+        setLoadingToday(false);
+      }
+    },
+    [selectedTarget.targetId, selectedTarget.targetName],
+  );
+
+  // 열 때와 대상을 바꿀 때 오늘 저장된 운임을 자동으로 불러옵니다.
+  useEffect(() => {
+    if (!open || targetsLoading) return;
+    if (selectedTargetValue !== "self" && !selectedTarget.targetId) return;
+    if (autoLoadedKeyRef.current === targetKey) return;
+    autoLoadedKeyRef.current = targetKey;
+    void loadToday(true);
+  }, [loadToday, open, selectedTarget.targetId, selectedTargetValue, targetKey, targetsLoading]);
 
   const parsedItems = useMemo(() => lines.map(lineToItem).filter((item): item is DailyEarningItem => Boolean(item)), [lines]);
   const totalAmount = useMemo(() => sumNet(parsedItems), [parsedItems]);
@@ -99,6 +169,8 @@ export function EarningsModal({ open, onClose }: Props) {
     setToastMessage(null);
     setPendingLoadedRow(null);
     setShowLoadConflictPrompt(false);
+    setLoadedKey(null);
+    autoLoadedKeyRef.current = null;
   };
 
   useEffect(() => {
@@ -142,7 +214,6 @@ export function EarningsModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const hasExistingDraft = lines.some((line) => parseAmount(line.amountText) > 0);
 
   const applyLoadedRow = (row: DailyEarningRow, mode: "merge" | "overwrite") => {
     const loadedLines = normalizeSavedItemsToLines(Array.isArray(row.items) ? row.items : []);
@@ -156,49 +227,17 @@ export function EarningsModal({ open, onClose }: Props) {
     });
     setPendingLoadedRow(null);
     setShowLoadConflictPrompt(false);
+    setLoadedKey(targetKey);
     setToastMessage("오늘 운임을 불러왔습니다.");
-  };
-
-  const onLoadToday = async () => {
-    if (!selectedTarget.targetName) {
-      setError("대상을 먼저 선택하세요.");
-      return;
-    }
-
-    setError(null);
-    setLoadingToday(true);
-    try {
-      const params = new URLSearchParams({ target: selectedTarget.targetName });
-      if (selectedTarget.targetId) params.set("targetId", selectedTarget.targetId);
-      const response = await fetch(`/api/earnings/today?${params.toString()}`, { cache: "no-store" });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => ({}))) as { message?: string };
-        throw new Error(payload.message ?? "오늘 운임 불러오기 실패");
-      }
-      const payload = (await response.json()) as { row: DailyEarningRow | null };
-      if (!payload.row) {
-        setToastMessage("오늘 저장된 운임이 없습니다.");
-        return;
-      }
-
-      if (hasExistingDraft) {
-        setPendingLoadedRow(payload.row);
-        setShowLoadConflictPrompt(true);
-        return;
-      }
-
-      setLines(normalizeSavedItemsToLines(Array.isArray(payload.row.items) ? payload.row.items : []));
-      setToastMessage("오늘 운임을 불러왔습니다.");
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "오늘 운임 불러오기 실패");
-    } finally {
-      setLoadingToday(false);
-    }
   };
 
   const onSave = async () => {
     if (!selectedTarget.targetName) {
       setError("대상을 먼저 선택하세요.");
+      return;
+    }
+    if (!isTargetLoaded) {
+      setError("오늘 저장된 운임을 먼저 불러와야 저장할 수 있습니다. '오늘 운임 불러오기'를 눌러 주세요.");
       return;
     }
     if (parsedItems.length === 0) {
@@ -366,10 +405,10 @@ export function EarningsModal({ open, onClose }: Props) {
           </div>
 
           <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white text-sm disabled:opacity-50" onClick={() => void onLoadToday()} disabled={loadingToday || saving}>
+            <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white text-sm disabled:opacity-50" onClick={() => void loadToday(false)} disabled={loadingToday || saving}>
               {loadingToday ? "불러오는 중..." : "오늘 운임 불러오기"}
             </button>
-            <button type="button" className="h-11 rounded-lg bg-cyan-700 text-sm font-medium text-white disabled:opacity-50" onClick={() => void onSave()} disabled={saving}>
+            <button type="button" className="h-11 rounded-lg bg-cyan-700 text-sm font-medium text-white disabled:opacity-50" onClick={() => void onSave()} disabled={saving || loadingToday || !isTargetLoaded}>
               {saving ? "저장 중..." : "저장"}
             </button>
             <button type="button" className="h-11 rounded-lg border border-slate-300 bg-white text-sm" onClick={onClose} disabled={saving}>
@@ -386,14 +425,14 @@ export function EarningsModal({ open, onClose }: Props) {
             <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
               <h4 className="text-sm font-semibold text-slate-800">오늘 운임 불러오기</h4>
               <p className="mt-1 text-xs leading-5 text-slate-600">
-                현재 입력값이 있습니다. 불러온 데이터를 덮어쓸지, 현재 입력에 합칠지 선택하세요.
+                오늘 이미 저장된 운임이 있습니다. 지금 입력한 값과 합칠지, 저장된 값만 불러올지 선택하세요. 선택해야 저장할 수 있습니다.
               </p>
               <div className="mt-3 grid gap-2">
                 <button type="button" className="h-10 rounded-lg bg-cyan-700 text-sm font-medium text-white" onClick={() => applyLoadedRow(pendingLoadedRow, "merge")}>
                   합치기 (기본)
                 </button>
                 <button type="button" className="h-10 rounded-lg border border-slate-300 bg-white text-sm" onClick={() => applyLoadedRow(pendingLoadedRow, "overwrite")}>
-                  덮어쓰기
+                  저장된 값만 불러오기
                 </button>
                 <button
                   type="button"
